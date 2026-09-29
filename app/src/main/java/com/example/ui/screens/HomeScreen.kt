@@ -208,7 +208,7 @@ fun HomeScreen(
                             shadowElevation = 3.dp
                         ) {
                             Image(
-                                painter = painterResource(id = R.drawable.facefeed_logo_1789791030932),
+                                painter = painterResource(id = R.drawable.ic_facefeed_logo),
                                 contentDescription = "FaceFeed Logo",
                                 modifier = Modifier
                                     .fillMaxSize()

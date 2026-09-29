@@ -67,7 +67,7 @@ fun FaceFeedTopBar(
                 ) {
                     // FaceFeed Emblem (Squircle matching user's logo)
                     Image(
-                        painter = painterResource(id = R.drawable.facefeed_logo_1789791030932),
+                        painter = painterResource(id = R.drawable.ic_facefeed_logo),
                         contentDescription = "FaceFeed Logo",
                         modifier = Modifier
                             .size(38.dp)

@@ -3,6 +3,6 @@
     <item
         android:width="72dp"
         android:height="72dp"
-        android:drawable="@drawable/facefeed_logo_1789791030932"
+        android:drawable="@drawable/ic_facefeed_logo"
         android:gravity="center" />
 </layer-list>

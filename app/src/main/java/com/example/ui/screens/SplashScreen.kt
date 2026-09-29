@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -33,24 +35,12 @@ fun SplashScreen(
 ) {
     var isVisible by remember { mutableStateOf(false) }
 
-    // Auto navigate after 2.5 seconds
+    // Auto navigate after 2.8 seconds
     LaunchedEffect(Unit) {
         isVisible = true
-        delay(2500)
+        delay(2800)
         onTimeout()
     }
-
-    // Infinite pulsing animation for subtle modern feel
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val alphaAnim by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "alpha"
-    )
 
     Box(
         modifier = Modifier
@@ -67,74 +57,110 @@ fun SplashScreen(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(animationSpec = tween(600)) + scaleIn(
-                initialScale = 0.88f,
+            enter = fadeIn(animationSpec = tween(500)) + scaleIn(
+                initialScale = 0.85f,
                 animationSpec = tween(600, easing = FastOutSlowInEasing)
             )
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp)
+                    .padding(vertical = 48.dp, horizontal = 24.dp)
             ) {
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(0.6f))
 
-                // 1. App Icon with curved rounded corners & soft elevation shadow
-                Surface(
-                    modifier = Modifier
-                        .size(190.dp)
-                        .shadow(
-                            elevation = 16.dp,
-                            shape = RoundedCornerShape(44.dp),
-                            spotColor = Color.Black.copy(alpha = 0.22f)
-                        ),
-                    shape = RoundedCornerShape(44.dp),
-                    color = BangladeshGreen
+                // Center Block: Logo, Brand Name, Welcome Bangladesh, Niyon Islam Sohag
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.facefeed_logo_1789791030932),
-                        contentDescription = "FaceFeed Icon",
+                    // 1. App Icon Squircle (Bangladesh Green, Red Circle, White F Dove)
+                    Surface(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(44.dp)),
-                        contentScale = ContentScale.Crop
+                            .size(200.dp)
+                            .shadow(
+                                elevation = 18.dp,
+                                shape = RoundedCornerShape(46.dp),
+                                spotColor = Color(0x33000000)
+                            ),
+                        shape = RoundedCornerShape(46.dp),
+                        color = BangladeshGreen
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_facefeed_logo),
+                            contentDescription = "FaceFeed App Logo",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(46.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(36.dp))
+
+                    // 2. FaceFeed App Name in bold Facebook Blue (#1877F2)
+                    Text(
+                        text = "FaceFeed",
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Black,
+                        color = FacebookBlue,
+                        letterSpacing = (-0.5).sp,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // 3. Welcome Bangladesh 🇧🇩
+                    Text(
+                        text = "Welcome Bangladesh 🇧🇩",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1C1E21),
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // 4. Creator Name: Niyon Islam Sohag
+                    Text(
+                        text = "Niyon Islam Sohag",
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF65676B),
+                        textAlign = TextAlign.Center
                     )
                 }
 
-                Spacer(modifier = Modifier.height(42.dp))
-
-                // 2. FaceFeed App Name in bold Facebook Blue (#1877F2)
-                Text(
-                    text = "FaceFeed",
-                    fontSize = 50.sp,
-                    fontWeight = FontWeight.Black,
-                    color = FacebookBlue,
-                    letterSpacing = (-0.5).sp
-                )
-
-                Spacer(modifier = Modifier.height(26.dp))
-
-                // 3. Welcome Bangladesh 🇧🇩
-                Text(
-                    text = "Welcome Bangladesh 🇧🇩",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.Black
-                )
-
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // 4. Creator Name: Niyon Islam Sohag
-                Text(
-                    text = "Niyon Islam Sohag",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = Color(0xFF757575)
-                )
-
                 Spacer(modifier = Modifier.weight(1f))
+
+                // Bottom Footer: Facebook style "from Niyon Islam Sohag" & loading bar
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        color = FacebookBlue,
+                        strokeWidth = 3.dp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "from",
+                        fontSize = 12.sp,
+                        color = Color(0xFF8A8D91)
+                    )
+                    Text(
+                        text = "FACEFEED",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 2.sp,
+                        color = FacebookBlue
+                    )
+                }
             }
         }
     }
