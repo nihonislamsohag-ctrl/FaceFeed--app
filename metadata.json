@@ -1,0 +1,6 @@
+{
+  "name": "FaceFeed",
+  "description": "FaceFeed social networking app with splash screen, stories, posts with 10 photos & reactions, short/long videos, audio/video calling, messaging, friend request system, and 4-language support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FaceFeed - Android App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: #f0f2f5; color: #1c1e21; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px; }
+    .card { background: #ffffff; max-width: 500px; width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 24px; text-align: center; margin-top: 20px; }
+    .logo { width: 80px; height: 80px; border-radius: 20px; background: linear-gradient(135deg, #1877F2, #0d5ec4); display: flex; align-items: center; justify-content: center; color: white; font-size: 36px; font-weight: bold; margin: 0 auto 16px; box-shadow: 0 4px 10px rgba(24,119,242,0.3); }
+    h1 { color: #1877f2; font-size: 26px; margin-bottom: 8px; }
+    p { color: #65676b; font-size: 15px; line-height: 1.5; margin-bottom: 20px; }
+    .badge { display: inline-block; background: #e7f3ff; color: #1877f2; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
+    .info-box { background: #f7f8fa; border: 1px solid #e4e6eb; border-radius: 8px; padding: 14px; text-align: left; margin-top: 20px; font-size: 14px; }
+    .info-box h3 { color: #050505; font-size: 15px; margin-bottom: 8px; }
+    .info-box ol { padding-left: 20px; color: #65676b; }
+    .info-box li { margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">F</div>
+    <h1>FaceFeed Android App</h1>
+    <div class="badge">অ্যান্ড্রয়েড অ্যাপ প্যাকেজ (Kotlin/Compose)</div>
+    <p>ভাই, এটি একটি সম্পূর্ণ তৈরি অ্যান্ড্রয়েড অ্যাপ। নিচে সরাসরি ডাউনলোড বাটনে চাপ দিয়ে আসল APK ফাইলটি ডাউনলোড করে ফোনে ইনস্টল করে নিন।</p>
+    
+    <a href="/FaceFeed.apk" download="FaceFeed.apk" class="btn" style="background: #1877f2; color: #ffffff; padding: 16px 24px; font-size: 18px; font-weight: bold; border-radius: 10px; display: block; text-decoration: none; box-shadow: 0 4px 12px rgba(24,119,242,0.4); margin-bottom: 20px;">
+      📥 সরাসরি FaceFeed.apk ডাউনলোড করুন (25 MB)
+    </a>
+
+    <div class="info-box">
+      <h3>📁 ফাইল লোকেশন নির্দেশিকা:</h3>
+      <ol>
+        <li><strong>মেইন কোড ফাইল:</strong> <code>app/src/main/java/com/example/MainActivity.kt</code></li>
+        <li><strong>অ্যাপ স্ক্রিনসমূহ:</strong> <code>app/src/main/java/com/example/ui/screens/</code></li>
+        <li><strong>অ্যাপ লেআউট ও ডিজাইন:</strong> Jetpack Compose দিয়ে তৈরি।</li>
+      </ol>
+    </div>
+
+    <div class="info-box" style="margin-top: 14px;">
+      <h3>📱 কীভাবে অ্যাপ ইন্সটল করবেন:</h3>
+      <ol>
+        <li>Google AI Studio স্ক্রিনের উপরে <strong>Export ➜ Download APK</strong> তে ক্লিক করুন।</li>
+        <li>ডাউনলোড হওয়া <strong>app-debug.apk</strong> ফাইলটি ফোনে নিয়ে Install করুন।</li>
+      </ol>
+    </div>
+  </div>
+</body>
+</html>
