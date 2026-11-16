@@ -1,0 +1,373 @@
+{
+  "entities": {
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Owner-only user account profile including PII such as email and birthDate",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "bio": { "type": "string" },
+        "note": { "type": "string" },
+        "gender": { "type": "string" },
+        "country": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "fcmToken": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "fullName", "username", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public non-PII user profile searchable by profile link",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "bio": { "type": "string" },
+        "note": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "fullName", "username", "createdAt", "updatedAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Social feed posts with cloud-synced reactionCounts, commentCount, shareCount and cursor timestamps",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "userName": { "type": "string" },
+        "authorFullName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorIsVerified": { "type": "boolean" },
+        "timestamp": { "type": "string" },
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "caption": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "videoUrl": { "type": "string" },
+        "isVideo": { "type": "boolean" },
+        "isReel": { "type": "boolean" },
+        "videoTitle": { "type": "string" },
+        "reachViews": { "type": "string" },
+        "shareCount": { "type": "number" },
+        "commentCount": { "type": "number" },
+        "reactionCounts": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "authorId", "text", "createdAt", "updatedAt"]
+    },
+    "Reaction": {
+      "title": "Reaction",
+      "description": "Per-user reaction record on a post, comment, or comment reply",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "reactionType": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "reactionType", "updatedAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Post comment with cloud-synced reactionCounts",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorFullName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "reactionCounts": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["postId", "authorId", "text", "createdAt", "updatedAt"]
+    },
+    "CommentReply": {
+      "title": "CommentReply",
+      "description": "Reply to a comment with cloud-synced reactionCounts",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string" },
+        "commentId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorFullName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "reactionCounts": { "type": "object" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["postId", "commentId", "authorId", "text", "createdAt", "updatedAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "User story item",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorFullName": { "type": "string" },
+        "authorUsername": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "caption": { "type": "string" },
+        "musicTrack": { "type": "string" },
+        "musicArtist": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["authorId", "mediaUrl", "createdAt", "updatedAt"]
+    },
+    "Conversation": {
+      "title": "Conversation",
+      "description": "ChatFilm conversation thread restricted to participants",
+      "type": "object",
+      "properties": {
+        "createdBy": { "type": "string" },
+        "title": { "type": "string" },
+        "isGroup": { "type": "boolean" },
+        "lastMessage": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["createdBy", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Message inside a ChatFilm conversation with denormalized participantIds",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "text": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "isMediaVideo": { "type": "boolean" },
+        "isAudioVoice": { "type": "boolean" },
+        "audioDurationSeconds": { "type": "number" },
+        "timestamp": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["conversationId", "senderId", "text", "createdAt", "updatedAt"]
+    },
+    "SocialGroup": {
+      "title": "SocialGroup",
+      "description": "Community group",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "memberCount": { "type": "number" },
+        "isPrivate": { "type": "boolean" },
+        "creatorName": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["creatorId", "name", "updatedAt"]
+    },
+    "SocialPage": {
+      "title": "SocialPage",
+      "description": "Creator or community page",
+      "type": "object",
+      "properties": {
+        "creatorId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "coverUrl": { "type": "string" },
+        "followerCount": { "type": "number" },
+        "isVerified": { "type": "boolean" },
+        "creatorName": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["creatorId", "name", "updatedAt"]
+    },
+    "MusicTrack": {
+      "title": "MusicTrack",
+      "description": "Community and uploaded music tracks",
+      "type": "object",
+      "properties": {
+        "uploaderId": { "type": "string" },
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "views": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "audioUrl": { "type": "string" },
+        "lyrics": { "type": "string" },
+        "category": { "type": "string" },
+        "duration": { "type": "string" },
+        "isTrending": { "type": "boolean" },
+        "addedBy": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uploaderId", "title", "artist", "createdAt", "updatedAt"]
+    },
+    "VideoBoost": {
+      "title": "VideoBoost",
+      "description": "User video boost campaign",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "postId": { "type": "string" },
+        "budget": { "type": "number" },
+        "days": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "postId", "status", "createdAt", "updatedAt"]
+    },
+    "HangoutRoom": {
+      "title": "HangoutRoom",
+      "description": "Live party room",
+      "type": "object",
+      "properties": {
+        "hostId": { "type": "string" },
+        "hostName": { "type": "string" },
+        "title": { "type": "string" },
+        "onlineCount": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["hostId", "title", "updatedAt"]
+    },
+    "LudoRoom": {
+      "title": "LudoRoom",
+      "description": "Ludo multiplayer match room",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string" },
+        "hostId": { "type": "string" },
+        "hostName": { "type": "string" },
+        "turnColor": { "type": "string" },
+        "diceValue": { "type": "number" },
+        "isDiceRolled": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["WAITING", "PLAYING", "FINISHED"] },
+        "lastUpdated": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["roomId", "hostId", "status", "updatedAt"]
+    },
+    "CallSignal": {
+      "title": "CallSignal",
+      "description": "Real-time Agora audio/video call signaling between caller and callee",
+      "type": "object",
+      "properties": {
+        "callId": { "type": "string" },
+        "callerId": { "type": "string" },
+        "callerName": { "type": "string" },
+        "callerAvatar": { "type": "string" },
+        "calleeId": { "type": "string" },
+        "calleeName": { "type": "string" },
+        "channelName": { "type": "string" },
+        "callType": { "type": "string", "enum": ["AUDIO", "VIDEO", "GROUP"] },
+        "groupName": { "type": "string" },
+        "status": { "type": "string", "enum": ["RINGING", "ACCEPTED", "DECLINED", "ENDED"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["callId", "callerId", "calleeId", "channelName", "callType", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserPrivate",
+      "description": "Private user account and PII profile scoped by userId"
+    },
+    "/public_profiles/{userId}": {
+      "schema": "PublicProfile",
+      "description": "Public non-PII profile directory for profile links"
+    },
+    "/posts/{postId}": {
+      "schema": "Post",
+      "description": "Paginated social feed posts"
+    },
+    "/posts/{postId}/reactions/{userId}": {
+      "schema": "Reaction",
+      "description": "Per-user reactions on a post"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on a post"
+    },
+    "/posts/{postId}/comments/{commentId}/reactions/{userId}": {
+      "schema": "Reaction",
+      "description": "Per-user reactions on a comment"
+    },
+    "/posts/{postId}/comments/{commentId}/replies/{replyId}": {
+      "schema": "CommentReply",
+      "description": "Replies under a comment"
+    },
+    "/posts/{postId}/comments/{commentId}/replies/{replyId}/reactions/{userId}": {
+      "schema": "Reaction",
+      "description": "Per-user reactions on a comment reply"
+    },
+    "/stories/{storyId}": {
+      "schema": "Story",
+      "description": "Community stories"
+    },
+    "/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Participant-scoped ChatFilm conversations"
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Participant-scoped chat messages"
+    },
+    "/groups/{groupId}": {
+      "schema": "SocialGroup",
+      "description": "Social groups"
+    },
+    "/pages/{pageId}": {
+      "schema": "SocialPage",
+      "description": "Social pages"
+    },
+    "/music_tracks/{trackId}": {
+      "schema": "MusicTrack",
+      "description": "Music tracks for audio player, posts, and reels"
+    },
+    "/video_boosts/{boostId}": {
+      "schema": "VideoBoost",
+      "description": "User-owned video boost campaigns"
+    },
+    "/hangout_rooms/{roomId}": {
+      "schema": "HangoutRoom",
+      "description": "Live party hangout rooms"
+    },
+    "/ludo_rooms/{roomId}": {
+      "schema": "LudoRoom",
+      "description": "Multiplayer Ludo rooms"
+    },
+    "/call_signals/{callId}": {
+      "schema": "CallSignal",
+      "description": "Real-time Agora audio/video call signaling documents"
+    }
+  }
+}

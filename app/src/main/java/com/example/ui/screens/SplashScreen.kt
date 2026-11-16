@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
 import com.example.ui.theme.BangladeshGreen
+import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import kotlinx.coroutines.delay
 
@@ -35,10 +36,10 @@ fun SplashScreen(
 ) {
     var isVisible by remember { mutableStateOf(false) }
 
-    // Auto navigate after 2.8 seconds
+    // Auto navigate after 1.8 seconds
     LaunchedEffect(Unit) {
         isVisible = true
-        delay(2800)
+        delay(1800)
         onTimeout()
     }
 
@@ -57,9 +58,9 @@ fun SplashScreen(
     ) {
         AnimatedVisibility(
             visible = isVisible,
-            enter = fadeIn(animationSpec = tween(500)) + scaleIn(
-                initialScale = 0.85f,
-                animationSpec = tween(600, easing = FastOutSlowInEasing)
+            enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                initialScale = 0.9f,
+                animationSpec = tween(500, easing = FastOutSlowInEasing)
             )
         ) {
             Column(
@@ -67,9 +68,9 @@ fun SplashScreen(
                 verticalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(vertical = 48.dp, horizontal = 24.dp)
+                    .padding(vertical = 36.dp, horizontal = 24.dp)
             ) {
-                Spacer(modifier = Modifier.weight(0.6f))
+                Spacer(modifier = Modifier.weight(0.7f))
 
                 // Center Block: Logo, Brand Name, Welcome Bangladesh, Niyon Islam Sohag
                 Column(
@@ -79,13 +80,13 @@ fun SplashScreen(
                     // 1. App Icon Squircle (Bangladesh Green, Red Circle, White F Dove)
                     Surface(
                         modifier = Modifier
-                            .size(200.dp)
+                            .size(92.dp)
                             .shadow(
-                                elevation = 18.dp,
-                                shape = RoundedCornerShape(46.dp),
-                                spotColor = Color(0x33000000)
+                                elevation = 10.dp,
+                                shape = RoundedCornerShape(22.dp),
+                                spotColor = Color(0x22000000)
                             ),
-                        shape = RoundedCornerShape(46.dp),
+                        shape = RoundedCornerShape(22.dp),
                         color = BangladeshGreen
                     ) {
                         Image(
@@ -93,40 +94,51 @@ fun SplashScreen(
                             contentDescription = "FaceFeed App Logo",
                             modifier = Modifier
                                 .fillMaxSize()
-                                .clip(RoundedCornerShape(46.dp)),
+                                .clip(RoundedCornerShape(22.dp)),
                             contentScale = ContentScale.Crop
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(36.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                    // 2. FaceFeed App Name in bold Facebook Blue (#1877F2)
-                    Text(
-                        text = "FaceFeed",
-                        fontSize = 48.sp,
-                        fontWeight = FontWeight.Black,
-                        color = FacebookBlue,
-                        letterSpacing = (-0.5).sp,
-                        textAlign = TextAlign.Center
-                    )
+                    // 2. FotoFilm App Name in bold Green & Red
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Foto",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Black,
+                            color = BangladeshGreen,
+                            letterSpacing = (-0.5).sp
+                        )
+                        Text(
+                            text = "Film",
+                            fontSize = 34.sp,
+                            fontWeight = FontWeight.Black,
+                            color = BangladeshRed,
+                            letterSpacing = (-0.5).sp
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // 3. Welcome Bangladesh 🇧🇩
                     Text(
                         text = "Welcome Bangladesh 🇧🇩",
-                        fontSize = 26.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1C1E21),
                         textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // 4. Creator Name: Niyon Islam Sohag
                     Text(
                         text = "Niyon Islam Sohag",
-                        fontSize = 21.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF65676B),
                         textAlign = TextAlign.Center
@@ -135,14 +147,14 @@ fun SplashScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Bottom Footer: Facebook style "from Niyon Islam Sohag" & loading bar
+                // Bottom Footer: "from FOTOFILM" & green loading bar
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(28.dp),
-                        color = FacebookBlue,
+                        color = BangladeshGreen,
                         strokeWidth = 3.dp
                     )
 
@@ -153,13 +165,22 @@ fun SplashScreen(
                         fontSize = 12.sp,
                         color = Color(0xFF8A8D91)
                     )
-                    Text(
-                        text = "FACEFEED",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 2.sp,
-                        color = FacebookBlue
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "FOTO",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp,
+                            color = BangladeshGreen
+                        )
+                        Text(
+                            text = "FILM",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = 2.sp,
+                            color = BangladeshRed
+                        )
+                    }
                 }
             }
         }

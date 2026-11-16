@@ -51,14 +51,32 @@ data class User(
     val instagramHandle: String = "niyonislamsohag",
     val website: String = "niyonislamsohag.com",
     val joinedDate: String = "Joined May 2020",
+    val relationshipStatus: String = "Single",
+    val accountCreationDate: String = "০১/০১/২০২৬ (1/1/2026)",
     val isAccountActive: Boolean = true,
     val isFidaVerifiedFreeGranted: Boolean = false,
     val suspensionReason: String? = null,
+    val suspensionDuration: String? = null,
+    val suspensionDate: String? = null,
+    val suspensionCustomNote: String? = null,
     val avatarFrame: String? = null
 ) {
     val isMaxFriendsReached: Boolean
         get() = friendCount >= 5000
 }
+
+data class UserSuspensionRecord(
+    val id: String,
+    val userId: String,
+    val userName: String,
+    val userUsername: String,
+    val userAvatar: String,
+    val durationText: String, // যেমন: "৭ দিনের"
+    val durationIndex: Int, // 1 to 10
+    val reasonNote: String, // লেখার অপশন - অপরাধ বিবরণ
+    val suspendedDateFormatted: String, // তারিখ সহ
+    val isSuspendedActive: Boolean = true // অন / অফ বাটন
+)
 
 data class GalleryMediaItem(
     val id: String,
@@ -81,6 +99,78 @@ data class AdminSlot(
     val user: User?,
     val roleTitle: String = "সহকারী অ্যাডমিন",
     val isSuperAdmin: Boolean = false,
-    val assignedDate: String = "২০ মে, ২০২৬"
+    val assignedDate: String = "০১/০১/২০২৬ (1/1/2026)"
+)
+
+data class CyberOffenderReport(
+    val id: String,
+    val userId: String,
+    val userName: String,
+    val userUsername: String,
+    val userAvatar: String,
+    val reportedComment: String,
+    val targetPostTitle: String,
+    val timestamp: String = "০১/০১/২০২৬ (1/1/2026)",
+    val nationalId: String = "১৯৯৪২৬৯২০১৯২৮৩৭৪",
+    val phoneNumber: String = "+৮৮০ ১৭১২-৩৪৫৬৭৮",
+    val ipAddress: String = "103.205.71.18",
+    val deviceModel: String = "Samsung Galaxy A52 (Android 14)",
+    val location: String = "ঢাকা, বাংলাদেশ (আইপি ট্রেসড)",
+    val legalViolation: String = "সাইবার নিরাপত্তা আইন ২০২৩ ধারা ২৫ ও ২৯ (অনলাইন মানহানি, কুরুচিপূর্ণ মন্তব্য ও সাইবার অবমাননা)",
+    val status: String = "UNDER_REVIEW" // "UNDER_REVIEW", "LEGAL_NOTICE_SENT", "PERMANENT_BANNED"
+)
+
+data class AppUpdateBroadcast(
+    val id: String,
+    val version: String,
+    val title: String,
+    val description: String,
+    val appLogoUrl: String = "",
+    val ownerAvatar: String = "",
+    val ownerName: String = "Niyon Islam Sohag",
+    val releaseDate: String = "০১/০১/২০২৬ (1/1/2026)",
+    val isActive: Boolean = true
+)
+
+data class GrantInstanceDetail(
+    val instanceNumber: Int, // ১, ২, ৩ ...
+    val date: String, // যেমন: "০৫ অক্টোবর ২০২৬"
+    val month: String, // যেমন: "অক্টোবর ২০২৬"
+    val time: String = "১০:১৫ AM",
+    val note: String = "৩,০০০ কোটা থেকে প্রধান ওনার কর্তৃক অনুমোদিত"
+)
+
+data class FreeVerifiedGrantRecord(
+    val id: String,
+    val recipientUserId: String,
+    val recipientName: String,
+    val recipientUsername: String,
+    val recipientAvatar: String,
+    val grantCountTimes: Int, // ১ জনকে কতো বার দিছি (যেমন: ২ বার, ৩ বার)
+    val grantMonth: String, // কোন মাসে দিছি (যেমন: "অক্টোবর ২০২৬", "সেপ্টেম্বর ২০২৬")
+    val grantDateFormatted: String, // তারিখ সহ (যেমন: "০৫ অক্টোবর ২০২৬, সকাল ১০:১৫ AM")
+    val historyInstances: List<GrantInstanceDetail> = emptyList(),
+    val quotaDeducted: Int = 1,
+    val remarks: String = "৩,০০০ ফ্রী কোটা থেকে সরাসরি অনুমোদিত"
+)
+
+data class VerificationInstanceRecord(
+    val instanceNumber: Int,
+    val date: String, // যেমন: "০২ অক্টোবর ২০২৬"
+    val month: String, // যেমন: "অক্টোবর ২০২৬"
+    val time: String = "১১:৪৫ AM",
+    val source: String = "প্রধান প্রতিষ্ঠাতা ও ওনার নিয়ন ইসলাম সোহাগ",
+    val method: String = "ফ্রী কোটা অনুমোদন"
+)
+
+data class UserVerificationAuditEntry(
+    val id: String,
+    val userId: String,
+    val userName: String,
+    val userUsername: String,
+    val userAvatar: String, // তারিখ ও প্রোফাইল আইকন সহ
+    val totalTimesVerifiedTaken: Int, // আমার কাছ থেকে ১ জনে কতো বার ভেরিফাই নিছে (যেমন: ৩ বার)
+    val currentBadgeStatus: String = "সক্রিয় ভেরিফাইড 🔵",
+    val historyInstances: List<VerificationInstanceRecord> = emptyList()
 )
 

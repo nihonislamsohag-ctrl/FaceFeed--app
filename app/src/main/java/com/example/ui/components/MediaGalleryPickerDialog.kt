@@ -1,9 +1,12 @@
 package com.example.ui.components
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,10 +40,12 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.SampleData
 import com.example.model.GalleryMediaItem
+import com.example.model.PostAudioTrack
 import com.example.model.Translations
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
+import com.example.util.AppSoundManager
 import com.example.viewmodel.FaceFeedViewModel
 import com.example.viewmodel.MediaPickerTarget
 
@@ -130,9 +135,16 @@ fun MediaGalleryPickerDialog(
     )
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            AppSoundManager.stopAudio()
+            onDismiss()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        BackHandler {
+            AppSoundManager.stopAudio()
+            onDismiss()
+        }
         Surface(
             modifier = Modifier
                 .fillMaxSize()
@@ -155,19 +167,34 @@ fun MediaGalleryPickerDialog(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Clear Back Button to Exit
-                            IconButton(
-                                onClick = onDismiss,
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.surface)
+                            // Clear Back Button to Exit (ব্যাগ বাটন)
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = BangladeshRed.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, BangladeshRed.copy(alpha = 0.3f)),
+                                modifier = Modifier.clickable {
+                                    AppSoundManager.stopAudio()
+                                    onDismiss()
+                                }
                             ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back / বের হয়ে যান",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back / বের হয়ে যান",
+                                        tint = BangladeshRed,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "ব্যাক",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BangladeshRed
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(10.dp))
@@ -416,9 +443,20 @@ fun MediaGalleryPickerDialog(
                                 onOpenFilePicker = {
                                     singleFilePicker.launch("image/*")
                                 },
-                                onPublish = {
+                                onPublish = { selectedAudio ->
                                     val storyMedia = selectedMediaUrl ?: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"
-                                    viewModel.addStory(storyMedia, postCaption.ifBlank { "FaceFeed Story ✨" })
+                                    AppSoundManager.stopAudio()
+                                    viewModel.addStory(
+                                        mediaUrl = storyMedia,
+                                        caption = postCaption.ifBlank { "FotoFilm Story ✨" },
+                                        musicTrack = selectedAudio?.title,
+                                        musicArtist = selectedAudio?.artist,
+                                        audioUrl = selectedAudio?.audioUrl
+                                    )
+                                    onDismiss()
+                                },
+                                onDismiss = {
+                                    AppSoundManager.stopAudio()
                                     onDismiss()
                                 }
                             )
@@ -846,6 +884,52 @@ private fun VideoUploadContent(
 }
 
 @Composable
+private fun AudioEqualizerBars(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "equalizer")
+    val h1 by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(380, easing = LinearEasing), RepeatMode.Reverse),
+        label = "h1"
+    )
+    val h2 by infiniteTransition.animateFloat(
+        initialValue = 0.75f, targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(tween(520, easing = LinearEasing), RepeatMode.Reverse),
+        label = "h2"
+    )
+    val h3 by infiniteTransition.animateFloat(
+        initialValue = 0.3f, targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(tween(320, easing = LinearEasing), RepeatMode.Reverse),
+        label = "h3"
+    )
+    val h4 by infiniteTransition.animateFloat(
+        initialValue = 0.85f, targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(tween(460, easing = LinearEasing), RepeatMode.Reverse),
+        label = "h4"
+    )
+
+    Row(
+        modifier = modifier.height(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        val bars = listOf(h1, h2, h3, h4)
+        bars.forEach { heightFactor ->
+            val actualHeight = if (isPlaying) (18.dp * heightFactor).coerceAtLeast(3.dp) else 3.dp
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(actualHeight)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(BangladeshGreen)
+            )
+        }
+    }
+}
+
+@Composable
 private fun StoryCreatorContent(
     items: List<GalleryMediaItem>,
     selectedUrl: String?,
@@ -854,8 +938,52 @@ private fun StoryCreatorContent(
     onCaptionChange: (String) -> Unit,
     onOpenPhoneGallery: () -> Unit,
     onOpenFilePicker: () -> Unit,
-    onPublish: () -> Unit
+    onPublish: (PostAudioTrack?) -> Unit,
+    onDismiss: () -> Unit
 ) {
+    var selectedAudio by remember { mutableStateOf<PostAudioTrack?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("সব গান") }
+
+    val isAudioPlaying by AppSoundManager.isPlaying.collectAsState()
+    val playingTrackId by AppSoundManager.currentPlayingTrackId.collectAsState()
+    val playbackProgress by AppSoundManager.playbackProgress.collectAsState()
+
+    val categories = listOf(
+        "সব গান",
+        "গান",
+        "গজল",
+        "বাঁশির সুর",
+        "ডিজে গান",
+        "দেশাত্মবোধক",
+        "শুভ জন্মদিন",
+        "রবীন্দ্র সংগীত",
+        "লালনগীতি",
+        "দুঃখের গান",
+        "হিন্দি গান"
+    )
+
+    val filteredAudioTracks = remember(searchQuery, selectedCategory) {
+        SampleData.sampleAudioTracks.filter { track ->
+            val matchesCategory = when (selectedCategory) {
+                "সব গান" -> true
+                "গান" -> track.category.contains("গান") || track.category.contains("জেমস") || 
+                         track.category.contains("বাচ্চু") || track.category.contains("ব্যান্ড") ||
+                         track.category.contains("পপ") || track.category.contains("ফোক")
+                "গজল" -> track.category.contains("গজল") || track.category.contains("হামদ") || 
+                         track.category.contains("নাত") || track.category.contains("সুফি")
+                "বাঁশির সুর" -> track.category.contains("বাঁশি") || track.category.contains("Flute") || 
+                               track.category.contains("সুর")
+                else -> track.category.contains(selectedCategory, ignoreCase = true)
+            }
+            val matchesQuery = searchQuery.isBlank() ||
+                    track.title.contains(searchQuery, ignoreCase = true) ||
+                    track.artist.contains(searchQuery, ignoreCase = true) ||
+                    track.category.contains(searchQuery, ignoreCase = true)
+            matchesCategory && matchesQuery
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -949,18 +1077,524 @@ private fun StoryCreatorContent(
             shape = RoundedCornerShape(12.dp)
         )
 
+        // Selected Music Notification Banner if a track is attached
+        if (selectedAudio != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = BangladeshGreen.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, BangladeshGreen),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(BangladeshGreen),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "স্টোরি মিউজিক: ${selectedAudio?.title}",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${selectedAudio?.artist} • ${selectedAudio?.category}",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val isThisPlaying = isAudioPlaying && playingTrackId == selectedAudio?.id
+                        IconButton(
+                            onClick = {
+                                if (isThisPlaying) {
+                                    AppSoundManager.pauseAudio()
+                                } else {
+                                    selectedAudio?.let { AppSoundManager.playAudio(it) }
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                if (isThisPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                                contentDescription = "Play/Pause",
+                                tint = BangladeshGreen
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                if (playingTrackId == selectedAudio?.id) AppSoundManager.stopAudio()
+                                selectedAudio = null
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove Music",
+                                tint = BangladeshRed
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
 
-        Button(
-            onClick = onPublish,
+        // Action Buttons Row: Back / Exit Button & Primary Upload Button
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Icon(Icons.Default.Send, contentDescription = null)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("স্টোরিতে আপলোড করুন ✨", fontWeight = FontWeight.Bold)
+            // Back Button (ব্যাগ বাটন)
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = BangladeshRed),
+                border = BorderStroke(1.5.dp, BangladeshRed.copy(alpha = 0.7f))
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("বের হন / ব্যাক", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
+
+            // Upload Story Button
+            Button(
+                onClick = { onPublish(selectedAudio) },
+                modifier = Modifier
+                    .weight(1.6f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen)
+            ) {
+                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("স্টোরিতে আপলোড করুন ✨", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
         }
+
+        Spacer(modifier = Modifier.height(18.dp))
+
+        // =========================================================================
+        // Integrated Audio Player & Music Selector (গান, গজল, বাঁশির সুর)
+        // =========================================================================
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                // Section Title & Indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(FacebookBlue.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Headphones,
+                                contentDescription = null,
+                                tint = FacebookBlue,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "অডিও প্লেয়ার ও স্টোরি মিউজিক",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                "গান, গজল ও বাঁশির সুর স্টোরিতে যুক্ত করুন",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (isAudioPlaying) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = BangladeshGreen.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AudioEqualizerBars(isPlaying = true)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "বাজছে 🎶",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BangladeshGreen
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("গান, গজল বা বাঁশির সুর খুঁজুন...", fontSize = 12.sp) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotBlank()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Horizontal Category Chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    categories.forEach { cat ->
+                        val isCatSelected = selectedCategory == cat
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isCatSelected) BangladeshGreen else MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isCatSelected) BangladeshGreen else MaterialTheme.colorScheme.outlineVariant
+                            ),
+                            modifier = Modifier.clickable { selectedCategory = cat }
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 11.sp,
+                                fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isCatSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Active Mini Player Bar
+                if (isAudioPlaying && playingTrackId != null) {
+                    val playingTrack = SampleData.sampleAudioTracks.firstOrNull { it.id == playingTrackId }
+                    if (playingTrack != null) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, FacebookBlue.copy(alpha = 0.5f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AudioEqualizerBars(isPlaying = true)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(
+                                                text = playingTrack.title,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${playingTrack.artist} (${playingTrack.category})",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { AppSoundManager.pauseAudio() },
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Pause,
+                                                contentDescription = "Pause",
+                                                tint = FacebookBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { AppSoundManager.stopAudio() },
+                                            modifier = Modifier.size(30.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Stop,
+                                                contentDescription = "Stop",
+                                                tint = BangladeshRed,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Button(
+                                            onClick = {
+                                                selectedAudio = playingTrack
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Text("স্টোরিতে নিন", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = { playbackProgress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = FacebookBlue,
+                                    trackColor = FacebookBlue.copy(alpha = 0.2f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Audio Tracks List
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    filteredAudioTracks.forEach { track ->
+                        val isThisSelected = selectedAudio?.id == track.id
+                        val isThisPlaying = isAudioPlaying && playingTrackId == track.id
+
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (isThisPlaying) {
+                                        AppSoundManager.pauseAudio()
+                                    } else {
+                                        AppSoundManager.playAudio(track)
+                                    }
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isThisSelected) BangladeshGreen.copy(alpha = 0.12f)
+                                else if (isThisPlaying) FacebookBlue.copy(alpha = 0.08f)
+                                else MaterialTheme.colorScheme.surface
+                            ),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isThisSelected) BangladeshGreen
+                                else if (isThisPlaying) FacebookBlue
+                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Thumbnail with play button overlay
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        AsyncImage(
+                                            model = track.coverArtUrl ?: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150",
+                                            contentDescription = track.title,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(Color.Black.copy(alpha = 0.35f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.title,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = track.artist,
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant
+                                            ) {
+                                                Text(
+                                                    text = track.category,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Select / Attach button
+                                if (isThisSelected) {
+                                    FilledTonalButton(
+                                        onClick = {
+                                            selectedAudio = null
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = BangladeshGreen,
+                                            contentColor = Color.White
+                                        ),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("যুক্ত আছে ✓", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = {
+                                            selectedAudio = track
+                                            if (!isThisPlaying) {
+                                                AppSoundManager.playAudio(track)
+                                            }
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
+                                        modifier = Modifier.height(30.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("স্টোরিতে দিন", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Prominent Bottom Back / Exit Button (ব্যাগ বাটন)
+        OutlinedButton(
+            onClick = {
+                AppSoundManager.stopAudio()
+                onDismiss()
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = BangladeshRed),
+            border = BorderStroke(1.5.dp, BangladeshRed.copy(alpha = 0.7f))
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = BangladeshRed)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("বের হয়ে যান / ফিরে যান (Exit Story)", fontWeight = FontWeight.Bold, color = BangladeshRed, fontSize = 13.sp)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 }
 

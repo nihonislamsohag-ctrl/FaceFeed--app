@@ -15,16 +15,15 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /**
- * Facebook Official Style Blue Scalloped Verified Badge ("নিলা রংগের গোলে রেগ রেগ থাকবে ফেসবুক ঐ করে দেন বিতরে সাদা টিক থাকবে")
- * Features:
- * - 16-point scalloped / serrated rosette ridges ("গোলে রেগ রেগ")
- * - Vibrant Facebook Blue (#1877F2)
- * - Clean crisp white checkmark in the center
+ * Facebook Official Style Blue Verified Badge
+ * Vibrant Blue Scalloped Rosette (#1877F2) with crisp pure White checkmark inside.
  */
 @Composable
 fun FidaVerifiedBadge(
     modifier: Modifier = Modifier,
-    size: Dp = 16.dp
+    size: Dp = 16.dp,
+    badgeColor: Color = Color(0xFF1877F2),
+    isGreenRedCheck: Boolean = false
 ) {
     Canvas(modifier = modifier.size(size)) {
         val w = this.size.width
@@ -50,23 +49,32 @@ fun FidaVerifiedBadge(
         }
         path.close()
 
-        // Draw Facebook Blue Scalloped Rosette
+        // 1. Draw Vibrant Facebook Blue Scalloped Rosette (#1877F2)
         drawPath(
             path = path,
-            color = Color(0xFF1877F2)
+            color = badgeColor
         )
 
-        // Draw white checkmark inside
+        // Coordinates for crisp white checkmark inside the blue badge
+        val startX = cx - outerRadius * 0.36f
+        val startY = cy - outerRadius * 0.01f
+        val midX = cx - outerRadius * 0.09f
+        val midY = cy + outerRadius * 0.28f
+        val endX = cx + outerRadius * 0.38f
+        val endY = cy - outerRadius * 0.28f
+
+        val strokeWidth = outerRadius * 0.24f
+
         val checkPath = Path().apply {
-            moveTo(cx - outerRadius * 0.40f, cy - outerRadius * 0.02f)
-            lineTo(cx - outerRadius * 0.10f, cy + outerRadius * 0.32f)
-            lineTo(cx + outerRadius * 0.42f, cy - outerRadius * 0.32f)
+            moveTo(startX, startY)
+            lineTo(midX, midY)
+            lineTo(endX, endY)
         }
         drawPath(
             path = checkPath,
             color = Color.White,
             style = Stroke(
-                width = outerRadius * 0.28f,
+                width = strokeWidth,
                 cap = StrokeCap.Round,
                 join = StrokeJoin.Round
             )

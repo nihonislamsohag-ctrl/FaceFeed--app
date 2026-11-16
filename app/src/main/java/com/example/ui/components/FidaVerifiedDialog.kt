@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -32,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.User
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
@@ -46,7 +49,6 @@ fun FidaVerifiedDialog(
     val isVerified by viewModel.isFidaVerified.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val allUsers by viewModel.allAppUsers.collectAsState()
-    val freeQuotaRemaining by viewModel.freeVerifiedQuotaRemaining.collectAsState()
     val paidMonths by viewModel.paidMonths.collectAsState()
     val nidFrontUri by viewModel.nidFrontUri.collectAsState()
     val nidBackUri by viewModel.nidBackUri.collectAsState()
@@ -57,7 +59,6 @@ fun FidaVerifiedDialog(
     val isNiyon = viewModel.isCurrentUserNiyonIslamSohag()
 
     // Dialog states
-    var showFreeGrantPicker by remember { mutableStateOf(false) }
     var selectedMonthForPayment by remember { mutableStateOf<String?>(null) }
     var showPaymentSuccessDialog by remember { mutableStateOf<String?>(null) }
 
@@ -116,31 +117,6 @@ fun FidaVerifiedDialog(
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // Right Manager Fida shortcut (only visible for Niyon Islam Sohag)
-                        if (isNiyon) {
-                            FilledTonalButton(
-                                onClick = {
-                                    viewModel.openRightManagerFida()
-                                },
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = Color(0xFFFF4081).copy(alpha = 0.15f),
-                                    contentColor = Color(0xFFE91E63)
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.LocalFlorist,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Right Manager", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
                     }
                 }
 
@@ -212,101 +188,6 @@ fun FidaVerifiedDialog(
                                     checkedTrackColor = FacebookBlue
                                 )
                             )
-                        }
-                    }
-
-                    // =========================================================================
-                    // 1. NIYON ISLAM SOHAG EXCLUSIVE: 3,000 FREE VERIFIED QUOTA (এডমিন ফিচার)
-                    // =========================================================================
-                    if (isNiyon) {
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = FacebookBlue,
-                            shadowElevation = 2.dp,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CardGiftcard,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "৩,০০০ জনকে ফ্রীতে ভেরিফাইড দেওয়ার কোটা",
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 14.sp,
-                                            color = Color.White
-                                        )
-                                        Text(
-                                            text = "Niyon Islam Sohag হিসেবে আপনি নিজে ফ্রীতে ব্যাজ দিতে পারবেন",
-                                            fontSize = 11.sp,
-                                            color = Color.White.copy(alpha = 0.85f)
-                                        )
-                                    }
-
-                                    Surface(
-                                        color = Color.White,
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            Text(
-                                                text = "$freeQuotaRemaining",
-                                                fontWeight = FontWeight.Black,
-                                                fontSize = 15.sp,
-                                                color = FacebookBlue
-                                            )
-                                            Text(
-                                                text = "অবশিষ্ট",
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color.DarkGray
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Button(
-                                    onClick = { showFreeGrantPicker = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        Icons.Default.PersonAdd,
-                                        contentDescription = null,
-                                        tint = FacebookBlue,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "যেকোনো ব্যক্তিকে ফ্রী ভেরিফিকেশন দিন 🎁",
-                                        color = FacebookBlue,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
-                                    )
-                                }
-                            }
                         }
                     }
 
@@ -589,10 +470,55 @@ fun FidaVerifiedDialog(
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "মাসিক ৫০০ টাকা Niyon Islam Sohag-এর বিকাশ/নগদে জমা হবে",
+                                        text = "মাসিক ৫০০ টাকা Niyon Islam Sohag-এর বিকাশ (01842450605) বা নগদ (01842450605)-এ জমা হবে",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Official Payment Numbers Display Card
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // bKash Number
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFFE2136E),
+                                            modifier = Modifier.size(10.dp)
+                                        ) {}
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text("বিকাশ (bKash)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE2136E))
+                                            Text("01842450605", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                    }
+                                    VerticalDivider(modifier = Modifier.height(28.dp))
+                                    // Nagad Number
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFFF7941D),
+                                            modifier = Modifier.size(10.dp)
+                                        ) {}
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Column {
+                                            Text("নগদ (Nagad)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF7941D))
+                                            Text("01842450605", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                                        }
+                                    }
                                 }
                             }
 
@@ -682,77 +608,7 @@ fun FidaVerifiedDialog(
                     }
 
                     // =========================================================================
-                    // 4. RIGHT MANAGER FIDA OPTION (ফুল লোগো 🌸 - Niyon Islam Sohag শুধুমাত্র দেখতে পাবে)
-                    // =========================================================================
-                    if (isNiyon) {
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFFFF4081)),
-                            shadowElevation = 2.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.openRightManagerFida()
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Flower Logo (🌸)
-                                Box(
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            Brush.linearGradient(
-                                                listOf(Color(0xFFFF4081), Color(0xFFE91E63), Color(0xFFFF80AB))
-                                            )
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocalFlorist,
-                                        contentDescription = "Flower Logo",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.width(14.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "Right Manager Fida",
-                                            fontWeight = FontWeight.ExtraBold,
-                                            fontSize = 16.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("🌸", fontSize = 14.sp)
-                                    }
-                                    Text(
-                                        text = "কারা অ্যাপ চালাচ্ছে তাদের আইডি অন/অফ করার কন্ট্রোল প্যানেল",
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight,
-                                    contentDescription = null,
-                                    tint = Color(0xFFE91E63)
-                                )
-                            }
-                        }
-                    }
-
-                    // =========================================================================
-                    // 5. Fida Verified সুবিধাসমূহ (Benefits)
+                    // Fida Verified সুবিধাসমূহ (Benefits)
                     // =========================================================================
                     Spacer(modifier = Modifier.height(22.dp))
 
@@ -863,107 +719,6 @@ fun FidaVerifiedDialog(
     }
 
     // =========================================================================
-    // DIALOG 2: Niyon Islam Sohag Free Verified Quota Granting Picker Dialog
-    // =========================================================================
-    if (showFreeGrantPicker) {
-        AlertDialog(
-            onDismissRequest = { showFreeGrantPicker = false },
-            title = {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = FacebookBlue)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "ফ্রীতে Fida Verified দিন",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
-                        )
-                    }
-                    Text(
-                        text = "৩,০০০ কোটা থেকে অবশিষ্ট: $freeQuotaRemaining জন",
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "নিচের তালিকা থেকে যেকোনো বন্ধু বা ব্যবহারকারীকে ট্যাপ করে ফ্রীতে নীল ব্যাজ দিন:",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(allUsers.filter { it.id != currentUser.id }) { user ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (user.isVerified) FacebookBlue.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant,
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (user.isVerified) FacebookBlue else Color.Transparent
-                                ),
-                                modifier = Modifier
-                                    .width(100.dp)
-                                    .clickable {
-                                        if (!user.isVerified) {
-                                            viewModel.grantFreeVerified(user.id)
-                                        } else {
-                                            viewModel.revokeVerified(user.id)
-                                        }
-                                    }
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(8.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    AsyncImage(
-                                        model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                                        contentDescription = user.fullName,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = user.fullName,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Surface(
-                                        color = if (user.isVerified) FacebookBlue else MaterialTheme.colorScheme.outline,
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = if (user.isVerified) "ভেরিফাইড ✅" else "ফ্রী দিন 🎁",
-                                            fontSize = 9.sp,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showFreeGrantPicker = false }) {
-                    Text("সম্পন্ন")
-                }
-            }
-        )
-    }
-
-    // =========================================================================
     // DIALOG 3: NID Photo Upload / Camera Selector Dialog
     // =========================================================================
     if (showNidUploadSheet && currentNidTarget != null) {
@@ -1047,7 +802,16 @@ private fun BkashNagadPaymentDialog(
     var otpCode by remember { mutableStateOf("1234") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val gatewayColor = if (selectedGateway == "bKash") Color(0xFFE2136E) else Color(0xFFF7941D)
+    val gatewayColor = when (selectedGateway) {
+        "Nagad" -> Color(0xFFF7941D)
+        else -> Color(0xFFE2136E)
+    }
+
+    val recipientPhone = when (selectedGateway) {
+        "Nagad" -> "01734249971"
+        "Rocket" -> "01734249971"
+        else -> "01842450605"
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1076,15 +840,20 @@ private fun BkashNagadPaymentDialog(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = if (selectedGateway == "bKash") "bKash Payment 🌸" else "Nagad Payment 🔶",
+                            text = when (selectedGateway) {
+                                "Nagad" -> "নগদ পেমেন্ট (Nagad)"
+                                "Rocket" -> "রকেট পেমেন্ট (Rocket)"
+                                else -> "বিকাশ পেমেন্ট (bKash)"
+                            },
                             color = Color.White,
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 17.sp
                         )
                         Text(
-                            text = "প্রাপক: $recipientName (FaceFeed)",
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 12.sp
+                            text = "প্রাপক নম্বর: $recipientPhone ($recipientName)",
+                            color = Color.White.copy(alpha = 0.95f),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
@@ -1098,40 +867,49 @@ private fun BkashNagadPaymentDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Selector: bKash or Nagad
+                // Selector: Only bKash and Nagad ("সুদু বিকাশ ও নগোত")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Button(
-                        onClick = { selectedGateway = "bKash" },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedGateway == "bKash") Color(0xFFE2136E) else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            "বিকাশ (bKash)",
-                            color = if (selectedGateway == "bKash") Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Button(
-                        onClick = { selectedGateway = "Nagad" },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedGateway == "Nagad") Color(0xFFF7941D) else MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Text(
-                            "নগদ (Nagad)",
-                            color = if (selectedGateway == "Nagad") Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
+                    listOf(
+                        Triple("bKash", "বিকাশ", R.drawable.img_bkash_logo),
+                        Triple("Nagad", "নগদ", R.drawable.img_nagad_logo)
+                    ).forEach { (id, label, logoRes) ->
+                        val isSelected = selectedGateway == id
+                        val brandColor = if (id == "Nagad") Color(0xFFF7941D) else Color(0xFFE2136E)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) brandColor.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (isSelected) 2.dp else 1.dp,
+                                if (isSelected) brandColor else Color.Transparent
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { selectedGateway = id }
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Image(
+                                    painter = painterResource(id = logoRes),
+                                    contentDescription = label,
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                    color = if (isSelected) brandColor else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                     }
                 }
 

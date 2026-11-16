@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.Translations
 import com.example.model.User
+import com.example.ui.components.FidaVerifiedBadge
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
@@ -126,6 +128,7 @@ fun FriendsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable { viewModel.openUserProfile(reqUser) }
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -193,7 +196,8 @@ fun FriendsScreen(
             SuggestedFriendRow(
                 user = user,
                 strings = strings,
-                onAction = { viewModel.sendFriendRequestOrFollow(user) }
+                onAction = { viewModel.sendFriendRequestOrFollow(user) },
+                onUserClick = { viewModel.openUserProfile(user) }
             )
         }
 
@@ -207,7 +211,8 @@ fun FriendsScreen(
 fun SuggestedFriendRow(
     user: User,
     strings: com.example.model.AppTranslations,
-    onAction: () -> Unit
+    onAction: () -> Unit,
+    onUserClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
@@ -220,6 +225,7 @@ fun SuggestedFriendRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { onUserClick() }
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -261,12 +267,7 @@ fun SuggestedFriendRow(
                     )
                     if (user.isVerified) {
                         Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = "Verified",
-                            tint = FacebookBlue,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        FidaVerifiedBadge(size = 14.dp)
                     }
                 }
 

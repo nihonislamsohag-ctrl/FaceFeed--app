@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -52,6 +53,8 @@ fun FidaAIChatDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        BackHandler { onDismiss() }
+
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
@@ -112,6 +115,8 @@ fun FidaAIChatDialog(
                                     fontSize = 17.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                FidaVerifiedBadge(size = 16.dp)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
                                     color = Color(0xFF00C853).copy(alpha = 0.15f),
@@ -139,6 +144,113 @@ fun FidaAIChatDialog(
                                 contentDescription = "Advice",
                                 tint = Color(0xFFE91E63)
                             )
+                        }
+                    }
+                }
+
+                // ========================================================
+                // Top Question Input Bar (ফিদা এআই তে কোনো বিষয়ে প্রশ্ন লেখার জন্য উপরে উঠানো হয়েছে)
+                // ========================================================
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = androidx.compose.foundation.BorderStroke(1.2.dp, Color(0xFF8A2BE2).copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color(0xFF8A2BE2),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                TextField(
+                                    value = inputText,
+                                    onValueChange = { inputText = it },
+                                    placeholder = { Text("Fida AI-কে যেকোনো বিষয়ে প্রশ্ন লিখুন...", fontSize = 13.sp) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .heightIn(min = 44.dp, max = 90.dp),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = TextFieldDefaults.colors(
+                                        focusedContainerColor = Color.Transparent,
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedIndicatorColor = Color.Transparent,
+                                        unfocusedIndicatorColor = Color.Transparent
+                                    )
+                                )
+                                if (inputText.isNotBlank()) {
+                                    IconButton(
+                                        onClick = {
+                                            val msg = inputText
+                                            inputText = ""
+                                            viewModel.sendFidaAIMessage(msg)
+                                        },
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF8A2BE2))
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Send,
+                                            contentDescription = "Send",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Quick Prompt Suggestion Chips right below top question input
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val promptChips = listOf(
+                                "🌾 বাংলাদেশের ইতিহাস বলো",
+                                "💡 সুন্দর একটি স্ট্যাটাস লিখে দাও",
+                                "💖 ভালো ব্যবহারের উপদেশ দাও",
+                                "📱 FaceFeed ফিচারসমূহ কী কী?",
+                                "🟢 সবুজ ভেরিফাইড টিক কীভাবে পাব?"
+                            )
+                            promptChips.forEach { chipText ->
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                    border = androidx.compose.foundation.BorderStroke(0.6.dp, Color(0xFF8A2BE2).copy(alpha = 0.4f)),
+                                    modifier = Modifier.clickable {
+                                        viewModel.sendFidaAIMessage(chipText)
+                                    }
+                                ) {
+                                    Text(
+                                        text = chipText,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -238,38 +350,7 @@ fun FidaAIChatDialog(
                     }
                 }
 
-                // Quick Prompt Suggestion Chips
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val promptChips = listOf(
-                        "🌾 বাংলাদেশের ইতিহাস বলো",
-                        "💡 সুন্দর একটি স্ট্যাটাস লিখে দাও",
-                        "💖 ভালো ব্যবহারের উপদেশ দাও",
-                        "📱 FaceFeed ফিচারসমূহ কী কী?",
-                        "🟢 সবুজ ভেরিফাইড টিক কীভাবে পাব?"
-                    )
-                    promptChips.forEach { chipText ->
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.clickable {
-                                viewModel.sendFidaAIMessage(chipText)
-                            }
-                        ) {
-                            Text(
-                                text = chipText,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
+
 
                 // Bottom Input Bar
                 Surface(

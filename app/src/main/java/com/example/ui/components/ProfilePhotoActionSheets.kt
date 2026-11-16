@@ -754,6 +754,7 @@ fun SelectPhotoOnFaceFeedDialog(
 /**
  * 5. Full Screen High-Res Facebook-Style Photo Viewer (See Profile Picture / See Cover Photo)
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullScreenPhotoViewerDialog(
     title: String,
@@ -768,6 +769,9 @@ fun FullScreenPhotoViewerDialog(
     var likeCount by remember { mutableStateOf(472) }
     var showCommentField by remember { mutableStateOf(false) }
     var commentText by remember { mutableStateOf("") }
+    var showOptionsSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     Dialog(
@@ -779,47 +783,204 @@ fun FullScreenPhotoViewerDialog(
             color = Color.Black
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                // Top App Bar
+                // Top App Bar matching Screenshot 1 (✕, person icon, media icon, tag icon, 3 dots)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .statusBarsPadding()
                         .padding(horizontal = 8.dp, vertical = 8.dp)
                         .align(Alignment.TopCenter),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     IconButton(onClick = onDismiss) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
                             tint = Color.White
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = title,
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = authorName,
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 13.sp
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = {
+                            Toast.makeText(context, "👤 ছবিতে ট্যাগ করার সুবিধা সক্রিয়", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.AccountBox, contentDescription = "Tag", tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            Toast.makeText(context, "🖼️ ছবি মিডিয়া গ্যালারিতে সংরক্ষিত", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.Image, contentDescription = "Media", tint = Color.White)
+                        }
+                        IconButton(onClick = {
+                            Toast.makeText(context, "🏷️ ট্যাগ অপশন", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.Label, contentDescription = "Label", tint = Color.White)
+                        }
+                        // 3 dots icon -> Opens Screenshot 1 Bottom Sheet
+                        IconButton(onClick = { showOptionsSheet = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More Options", tint = Color.White)
+                        }
                     }
+                }
 
-                    IconButton(
-                        onClick = {
-                            Toast.makeText(context, "ছবি শেয়ার লিঙ্ক কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
-                            AppSoundManager.playReactionChime()
+                // Screenshot 1 Bottom Sheet
+                if (showOptionsSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showOptionsSheet = false },
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        dragHandle = {
+                            Surface(
+                                modifier = Modifier
+                                    .padding(vertical = 10.dp)
+                                    .width(42.dp)
+                                    .height(4.dp),
+                                shape = RoundedCornerShape(2.dp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            ) {}
                         }
                     ) {
-                        Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 32.dp)
+                        ) {
+                            // 1. Make profile picture (👤)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        Toast.makeText(context, "✅ ছবিটি আপনার প্রোফাইল ছবি হিসেবে সেট করা হয়েছে!", Toast.LENGTH_LONG).show()
+                                        showOptionsSheet = false
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(18.dp))
+                                Text("Make profile picture", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            }
+
+                            // 2. Make cover photo (🖼️)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        Toast.makeText(context, "✅ ছবিটি আপনার কভার ফটো হিসেবে সেট করা হয়েছে!", Toast.LENGTH_LONG).show()
+                                        showOptionsSheet = false
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Panorama, contentDescription = null, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(18.dp))
+                                Text("Make cover photo", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            }
+
+                            // 3. Delete (🗑️)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showOptionsSheet = false
+                                        showDeleteConfirmDialog = true
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(18.dp))
+                                Text("Delete", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Color.Red)
+                            }
+
+                            // 4. Save (⬇️)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        Toast.makeText(context, "📥 ছবিটি সফলভাবে ডিভাইসে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+                                        showOptionsSheet = false
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, tint = BangladeshGreen, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(18.dp))
+                                Text("Save", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            }
+
+                            // 5. Edit privacy (🔒)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showOptionsSheet = false
+                                        showPrivacyDialog = true
+                                    }
+                                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(18.dp))
+                                Text("Edit privacy", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
                     }
+                }
+
+                if (showDeleteConfirmDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteConfirmDialog = false },
+                        title = { Text("ছবিটি মুছে ফেলবেন?", fontWeight = FontWeight.Bold) },
+                        text = { Text("এই ছবিটি মুছে ফেললে তা প্রোফাইল থেকে আর প্রদর্শিত হবে না।") },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    Toast.makeText(context, "🗑️ ছবিটি মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                                    showDeleteConfirmDialog = false
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) {
+                                Text("মুছে ফেলুন")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                                Text("বাতিল")
+                            }
+                        }
+                    )
+                }
+
+                if (showPrivacyDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showPrivacyDialog = false },
+                        title = { Text("প্রাইভেসি নির্বাচন করুন", fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                listOf("Public (পাবলিক)", "Friends (বন্ধুরা)", "Only me (শুধুমাত্র আমি)").forEach { p ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                Toast.makeText(context, "প্রাইভেসি '$p' সেট করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                                showPrivacyDialog = false
+                                            }
+                                            .padding(vertical = 10.dp)
+                                    ) {
+                                        Text(p, fontSize = 14.sp)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { showPrivacyDialog = false }) {
+                                Text("বাতিল")
+                            }
+                        }
+                    )
                 }
 
                 // Centered Main Photo
@@ -1026,6 +1187,12 @@ fun FullScreenPhotoViewerDialog(
                         }
                     }
                 }
+
+                // User requested: যে কোনো ছবির নিচে Banner এই এড চালু করে দেন
+                StickyVideoBottomBanner(
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                    adUnitId = GoogleAdConfig.BANNER_ID
+                )
             }
         }
     }

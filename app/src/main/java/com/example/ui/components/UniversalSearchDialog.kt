@@ -59,21 +59,31 @@ fun UniversalSearchDialog(
         }
     }
 
-    val samplePeople = remember {
-        listOf(
+    val appUsers by viewModel.allAppUsers.collectAsState()
+    val linkedUser = remember(query, appUsers) {
+        if (query.contains("/u/") || query.startsWith("@")) {
+            viewModel.resolveUserFromProfileLink(query)
+        } else null
+    }
+
+    val samplePeople = remember(appUsers) {
+        (appUsers + listOf(
             User(id = "p1", fullName = "Niyon Islam Sohag", username = "niyonislamsohag", avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200", bio = "FaceFeed Creator 🇧🇩", isVerified = true),
             User(id = "p2", fullName = "Tahmid Hasan", username = "tahmid_dev", avatarUrl = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200", bio = "Android & Kotlin Dev"),
             User(id = "p3", fullName = "Fatima Rahman", username = "fatima_art", avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", bio = "Digital Artist & Blogger"),
             User(id = "p4", fullName = "Sabbir Ahmed", username = "sabbir_films", avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", bio = "Reels & Video Creator")
-        )
+        )).distinctBy { it.id }
     }
 
-    val filteredPeople = remember(cleanQuery, samplePeople) {
+    val filteredPeople = remember(cleanQuery, samplePeople, linkedUser) {
         if (cleanQuery.isEmpty()) emptyList()
-        else samplePeople.filter {
-            it.fullName.lowercase().contains(cleanQuery) ||
-            it.username.lowercase().contains(cleanQuery) ||
-            it.bio.lowercase().contains(cleanQuery)
+        else {
+            val matched = samplePeople.filter {
+                it.fullName.lowercase().contains(cleanQuery) ||
+                    it.username.lowercase().contains(cleanQuery) ||
+                    it.bio.lowercase().contains(cleanQuery)
+            }
+            if (linkedUser != null) (listOf(linkedUser) + matched).distinctBy { it.id } else matched
         }
     }
 
@@ -329,7 +339,7 @@ fun UniversalSearchDialog(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                viewModel.setTab(AppTab.PROFILE)
+                                                viewModel.openUserProfile(person)
                                                 onDismiss()
                                             }
                                     ) {
@@ -357,13 +367,7 @@ fun UniversalSearchDialog(
                                                     )
                                                     if (person.isVerified || (person.fullName == currentUser.fullName && isVerified)) {
                                                         Spacer(modifier = Modifier.width(4.dp))
-                                                        // Green Verified Badge!
-                                                        Icon(
-                                                            imageVector = Icons.Default.CheckCircle,
-                                                            contentDescription = "Verified",
-                                                            tint = BangladeshGreen,
-                                                            modifier = Modifier.size(16.dp)
-                                                        )
+                                                        FidaVerifiedBadge(size = 16.dp)
                                                     }
                                                 }
                                                 Text(

@@ -1,6 +1,12 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.view.SurfaceView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -16,31 +22,250 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import com.example.data.AgoraCallManager
+import com.example.data.AgoraRtcState
+import com.example.data.FirebaseManager
 import com.example.model.ActiveCallState
 import com.example.model.CallType
 import com.example.model.Translations
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
+import com.example.util.AppSoundManager
 import com.example.viewmodel.FaceFeedViewModel
+import kotlinx.coroutines.delay
+
+@Composable
+fun IncomingCallDialog(
+    signal: FirebaseManager.IncomingCallSignal,
+    onAccept: () -> Unit,
+    onDecline: () -> Unit
+) {
+    val context = LocalContext.current
+
+    LaunchedEffect(signal.callId) {
+        while (true) {
+            AppSoundManager.playNotificationChime()
+            AppSoundManager.triggerVibration(context)
+            delay(2200)
+        }
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "incoming_pulse")
+    val ringScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.24f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "ringScale"
+    )
+
+    Dialog(
+        onDismissRequest = onDecline,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color(0xFF0A1424), Color(0xFF102418), Color(0xFF0A101B))
+                    )
+                )
+                .padding(24.dp)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = 48.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = BangladeshGreen.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, BangladeshGreen)
+                    ) {
+                        Text(
+                            text = if (signal.callType == CallType.VIDEO) "📹 ইনকামিং ভিডিও কল (Agora HD)" else "📞 ইনকামিং অডিও কল (Agora HD)",
+                            color = Color(0xFF81C784),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(22.dp))
+                    Text(
+                        text = signal.callerName,
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "রিং হচ্ছে...",
+                        color = Color(0xFFCFD8DC),
+                        fontSize = 15.sp
+                    )
+                }
+
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size((150 * ringScale).dp)
+                            .clip(CircleShape)
+                            .background(BangladeshGreen.copy(alpha = 0.2f))
+                    )
+                    AsyncImage(
+                        model = signal.callerAvatar.ifBlank { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                        contentDescription = signal.callerName,
+                        modifier = Modifier
+                            .size(134.dp)
+                            .clip(CircleShape)
+                            .border(3.dp, BangladeshGreen, CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 36.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = onDecline,
+                            modifier = Modifier
+                                .size(68.dp)
+                                .clip(CircleShape)
+                                .background(BangladeshRed)
+                                .testTag("decline_incoming_call_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CallEnd,
+                                contentDescription = "কেটে দিন",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("কেটে দিন", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = onAccept,
+                            modifier = Modifier
+                                .size(68.dp)
+                                .clip(CircleShape)
+                                .background(BangladeshGreen)
+                                .testTag("accept_incoming_call_button")
+                        ) {
+                            Icon(
+                                imageVector = if (signal.callType == CallType.VIDEO) Icons.Default.Videocam else Icons.Default.Call,
+                                contentDescription = "গ্রহণ করুন",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("গ্রহণ করুন", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun CallingOverlay(
     activeCall: ActiveCallState,
     viewModel: FaceFeedViewModel
 ) {
+    val context = LocalContext.current
     val currentLang by viewModel.currentLanguage.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
+    val agoraState by AgoraCallManager.callState.collectAsState()
     val strings = Translations.get(currentLang)
+
+    val needsCamera = activeCall.callType != CallType.AUDIO
+    val channelName = remember(activeCall.channelName, activeCall.callType, activeCall.user?.id, activeCall.groupName, currentUser.id) {
+        if (activeCall.channelName.isNotBlank()) {
+            activeCall.channelName
+        } else if (activeCall.callType == CallType.GROUP) {
+            AgoraCallManager.sanitizeChannelName("ff_grp_${activeCall.groupName ?: "chatfilm"}")
+        } else {
+            AgoraCallManager.buildDirectCallChannel(currentUser.id, activeCall.user?.id ?: "friend")
+        }
+    }
+
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var permissionRequested by remember(channelName, activeCall.callType) { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasAudioPermission = results[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        hasCameraPermission = results[Manifest.permission.CAMERA] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    }
+
+    LaunchedEffect(channelName, activeCall.callType, hasAudioPermission, hasCameraPermission) {
+        val requiredPermissions = if (needsCamera) {
+            arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+        } else {
+            arrayOf(Manifest.permission.RECORD_AUDIO)
+        }
+        val missingAny = (!hasAudioPermission) || (needsCamera && !hasCameraPermission)
+        if (missingAny && !permissionRequested) {
+            permissionRequested = true
+            permissionLauncher.launch(requiredPermissions)
+        } else if (hasAudioPermission) {
+            AgoraCallManager.joinCall(
+                context = context,
+                channelName = channelName,
+                isVideoCall = needsCamera && hasCameraPermission,
+                startMuted = activeCall.isMuted
+            )
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            AgoraCallManager.leaveCall()
+        }
+    }
 
     val minutes = activeCall.durationSeconds / 60
     val seconds = activeCall.durationSeconds % 60
     val timerFormatted = String.format("%02d:%02d", minutes, seconds)
+    val needsPermissionFix = !hasAudioPermission || (needsCamera && !hasCameraPermission)
 
     Dialog(
         onDismissRequest = { viewModel.endCall() },
@@ -55,6 +280,7 @@ fun CallingOverlay(
                 CallType.AUDIO -> {
                     AudioCallContent(
                         activeCall = activeCall,
+                        agoraState = agoraState,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
@@ -63,6 +289,8 @@ fun CallingOverlay(
                 CallType.VIDEO -> {
                     VideoCallContent(
                         activeCall = activeCall,
+                        agoraState = agoraState,
+                        hasCameraPermission = hasCameraPermission,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
@@ -71,10 +299,49 @@ fun CallingOverlay(
                 CallType.GROUP -> {
                     GroupCallContent(
                         activeCall = activeCall,
+                        agoraState = agoraState,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
                     )
+                }
+            }
+
+            if (needsPermissionFix && permissionRequested) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFFB71C1C).copy(alpha = 0.94f),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp)
+                        .fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (needsCamera) "কল চালুর জন্য মাইক্রোফোন ও ক্যামেরা অনুমতি দিন" else "কল চালুর জন্য মাইক্রোফোন অনুমতি দিন",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                permissionLauncher.launch(
+                                    if (needsCamera) arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
+                                    else arrayOf(Manifest.permission.RECORD_AUDIO)
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("অনুমতি দিন", color = BangladeshRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
@@ -84,11 +351,11 @@ fun CallingOverlay(
 @Composable
 fun AudioCallContent(
     activeCall: ActiveCallState,
+    agoraState: AgoraRtcState,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
 ) {
-    // Pulse animation for audio call
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -100,6 +367,8 @@ fun AudioCallContent(
         label = "pulseScale"
     )
 
+    val isRemoteJoined = agoraState.remoteUids.isNotEmpty() || activeCall.isAccepted
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -107,7 +376,6 @@ fun AudioCallContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top info
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(top = 40.dp)
@@ -117,7 +385,7 @@ fun AudioCallContent(
                 color = BangladeshGreen.copy(alpha = 0.2f)
             ) {
                 Text(
-                    text = strings.audioCall,
+                    text = "${strings.audioCall} • Agora HD",
                     color = BangladeshGreen,
                     fontWeight = FontWeight.Bold,
                     fontSize = 13.sp,
@@ -133,14 +401,20 @@ fun AudioCallContent(
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (activeCall.durationSeconds > 0) timerFormatted else strings.calling,
-                color = if (activeCall.durationSeconds > 0) Color(0xFF31A24C) else Color.LightGray,
+                text = if (isRemoteJoined && activeCall.durationSeconds > 0) timerFormatted else strings.calling,
+                color = if (isRemoteJoined) Color(0xFF31A24C) else Color.LightGray,
                 fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "🎙️ ${agoraState.statusText}",
+                color = Color(0xFF90CAF9),
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
         }
 
-        // Center Pulsing Avatar
         Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
@@ -163,7 +437,6 @@ fun AudioCallContent(
             }
         }
 
-        // Bottom Controls: Mute, End Call, Speaker
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -171,13 +444,13 @@ fun AudioCallContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Mute Button
             IconButton(
                 onClick = { viewModel.toggleMute() },
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
                     .background(if (activeCall.isMuted) BangladeshRed else Color.White.copy(alpha = 0.15f))
+                    .testTag("audio_call_mute_button")
             ) {
                 Icon(
                     imageVector = if (activeCall.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
@@ -186,13 +459,13 @@ fun AudioCallContent(
                 )
             }
 
-            // End Call Button
             IconButton(
                 onClick = { viewModel.endCall() },
                 modifier = Modifier
                     .size(68.dp)
                     .clip(CircleShape)
                     .background(BangladeshRed)
+                    .testTag("audio_call_end_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.CallEnd,
@@ -202,13 +475,13 @@ fun AudioCallContent(
                 )
             }
 
-            // Speaker Button
             IconButton(
                 onClick = { viewModel.toggleSpeaker() },
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
                     .background(if (activeCall.isSpeakerOn) FacebookBlue else Color.White.copy(alpha = 0.15f))
+                    .testTag("audio_call_speaker_button")
             ) {
                 Icon(
                     imageVector = if (activeCall.isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
@@ -223,21 +496,38 @@ fun AudioCallContent(
 @Composable
 fun VideoCallContent(
     activeCall: ActiveCallState,
+    agoraState: AgoraRtcState,
+    hasCameraPermission: Boolean,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Friend's Simulated Fullscreen Video Feed
-        AsyncImage(
-            model = activeCall.user?.coverUrl?.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200" }
-                ?: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
-            contentDescription = "Video Feed",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        val remoteUid = agoraState.remoteUids.firstOrNull()
+        if (agoraState.isSdkActive && remoteUid != null) {
+            key(remoteUid) {
+                AndroidView(
+                    factory = { ctx ->
+                        SurfaceView(ctx).also { sv ->
+                            AgoraCallManager.setupRemoteVideo(sv, remoteUid)
+                        }
+                    },
+                    update = { sv ->
+                        AgoraCallManager.setupRemoteVideo(sv, remoteUid)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            AsyncImage(
+                model = activeCall.user?.coverUrl?.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200" }
+                    ?: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
+                contentDescription = "Video Feed",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
 
-        // Top Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -258,19 +548,19 @@ fun VideoCallContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = timerFormatted,
+                    text = "$timerFormatted • ${agoraState.statusText}",
                     color = Color(0xFF31A24C),
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
 
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = BangladeshRed.copy(alpha = 0.7f)
+                color = if (agoraState.isJoinedChannel) BangladeshGreen.copy(alpha = 0.85f) else BangladeshRed.copy(alpha = 0.7f)
             ) {
                 Text(
-                    text = "LIVE HD",
+                    text = if (agoraState.isSdkActive) "AGORA HD" else "LIVE HD",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
@@ -279,22 +569,38 @@ fun VideoCallContent(
             }
         }
 
-        // Picture-in-Picture Self Camera Preview in Top-Right
         Card(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 90.dp, end = 16.dp)
-                .size(width = 100.dp, height = 150.dp),
+                .size(width = 104.dp, height = 156.dp),
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                AsyncImage(
-                    model = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                    contentDescription = "My Camera",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                if (agoraState.isSdkActive && hasCameraPermission) {
+                    key(agoraState.isVideoActive) {
+                        AndroidView(
+                            factory = { ctx ->
+                                SurfaceView(ctx).apply {
+                                    setZOrderMediaOverlay(true)
+                                    AgoraCallManager.setupLocalVideo(this)
+                                }
+                            },
+                            update = { sv ->
+                                AgoraCallManager.setupLocalVideo(sv)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                } else {
+                    AsyncImage(
+                        model = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
+                        contentDescription = "My Camera",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
                 Text(
                     text = "You",
                     color = Color.White,
@@ -302,13 +608,12 @@ fun VideoCallContent(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 )
             }
         }
 
-        // Bottom Controls
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -322,24 +627,24 @@ fun VideoCallContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Flip Camera
             IconButton(
                 onClick = { viewModel.toggleCameraFlip() },
                 modifier = Modifier
                     .size(50.dp)
                     .clip(CircleShape)
                     .background(Color.White.copy(alpha = 0.2f))
+                    .testTag("video_call_flip_button")
             ) {
                 Icon(Icons.Default.FlipCameraAndroid, contentDescription = strings.flipCamera, tint = Color.White)
             }
 
-            // Mute Mic
             IconButton(
                 onClick = { viewModel.toggleMute() },
                 modifier = Modifier
                     .size(50.dp)
                     .clip(CircleShape)
                     .background(if (activeCall.isMuted) BangladeshRed else Color.White.copy(alpha = 0.2f))
+                    .testTag("video_call_mute_button")
             ) {
                 Icon(
                     imageVector = if (activeCall.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
@@ -348,13 +653,28 @@ fun VideoCallContent(
                 )
             }
 
-            // End Call
+            IconButton(
+                onClick = { viewModel.toggleSpeaker() },
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(CircleShape)
+                    .background(if (activeCall.isSpeakerOn) FacebookBlue else Color.White.copy(alpha = 0.2f))
+                    .testTag("video_call_speaker_button")
+            ) {
+                Icon(
+                    imageVector = if (activeCall.isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                    contentDescription = strings.speaker,
+                    tint = Color.White
+                )
+            }
+
             IconButton(
                 onClick = { viewModel.endCall() },
                 modifier = Modifier
                     .size(64.dp)
                     .clip(CircleShape)
                     .background(BangladeshRed)
+                    .testTag("video_call_end_button")
             ) {
                 Icon(Icons.Default.CallEnd, contentDescription = strings.callEnded, tint = Color.White, modifier = Modifier.size(30.dp))
             }
@@ -365,6 +685,7 @@ fun VideoCallContent(
 @Composable
 fun GroupCallContent(
     activeCall: ActiveCallState,
+    agoraState: AgoraRtcState,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
@@ -375,9 +696,10 @@ fun GroupCallContent(
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Group header
         Column(
-            modifier = Modifier.padding(top = 28.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -388,14 +710,13 @@ fun GroupCallContent(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "$timerFormatted • ${activeCall.groupMembers.size} participants",
+                text = "$timerFormatted • ${activeCall.groupMembers.size} participants • ${agoraState.statusText}",
                 color = Color(0xFF31A24C),
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
         }
 
-        // 4 Participant Video Tiles
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -403,14 +724,20 @@ fun GroupCallContent(
                 .padding(vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val remoteUids = agoraState.remoteUids
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                activeCall.groupMembers.take(2).forEach { member ->
-                    GroupParticipantTile(member = member, isSpeaking = true, modifier = Modifier.weight(1f))
+                activeCall.groupMembers.take(2).forEachIndexed { idx, member ->
+                    GroupParticipantTile(
+                        member = member,
+                        isSpeaking = true,
+                        remoteAgoraUid = remoteUids.getOrNull(idx),
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
             Row(
@@ -419,13 +746,17 @@ fun GroupCallContent(
                     .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                activeCall.groupMembers.drop(2).take(2).forEach { member ->
-                    GroupParticipantTile(member = member, isSpeaking = false, modifier = Modifier.weight(1f))
+                activeCall.groupMembers.drop(2).take(2).forEachIndexed { idx, member ->
+                    GroupParticipantTile(
+                        member = member,
+                        isSpeaking = false,
+                        remoteAgoraUid = remoteUids.getOrNull(idx + 2),
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
 
-        // Bottom Controls
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -434,11 +765,23 @@ fun GroupCallContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(
+                onClick = { viewModel.toggleCameraFlip() },
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.2f))
+                    .testTag("group_call_flip_button")
+            ) {
+                Icon(Icons.Default.FlipCameraAndroid, contentDescription = strings.flipCamera, tint = Color.White)
+            }
+
+            IconButton(
                 onClick = { viewModel.toggleMute() },
                 modifier = Modifier
                     .size(52.dp)
                     .clip(CircleShape)
                     .background(if (activeCall.isMuted) BangladeshRed else Color.White.copy(alpha = 0.2f))
+                    .testTag("group_call_mute_button")
             ) {
                 Icon(if (activeCall.isMuted) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = strings.mute, tint = Color.White)
             }
@@ -449,6 +792,7 @@ fun GroupCallContent(
                     .size(64.dp)
                     .clip(CircleShape)
                     .background(BangladeshRed)
+                    .testTag("group_call_end_button")
             ) {
                 Icon(Icons.Default.CallEnd, contentDescription = strings.callEnded, tint = Color.White, modifier = Modifier.size(30.dp))
             }
@@ -459,8 +803,13 @@ fun GroupCallContent(
                     .size(52.dp)
                     .clip(CircleShape)
                     .background(if (activeCall.isSpeakerOn) FacebookBlue else Color.White.copy(alpha = 0.2f))
+                    .testTag("group_call_speaker_button")
             ) {
-                Icon(Icons.Default.VolumeUp, contentDescription = strings.speaker, tint = Color.White)
+                Icon(
+                    imageVector = if (activeCall.isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
+                    contentDescription = strings.speaker,
+                    tint = Color.White
+                )
             }
         }
     }
@@ -470,25 +819,41 @@ fun GroupCallContent(
 fun GroupParticipantTile(
     member: com.example.model.User,
     isSpeaking: Boolean,
+    remoteAgoraUid: Int? = null,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier.fillMaxHeight(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E2433)),
-        border = if (isSpeaking) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF31A24C)) else null
+        border = if (isSpeaking) BorderStroke(2.dp, Color(0xFF31A24C)) else null
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            AsyncImage(
-                model = member.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
-                contentDescription = member.fullName,
-                modifier = Modifier
-                    .size(70.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+            if (remoteAgoraUid != null) {
+                key(remoteAgoraUid) {
+                    AndroidView(
+                        factory = { ctx ->
+                            SurfaceView(ctx).also { sv ->
+                                AgoraCallManager.setupRemoteVideo(sv, remoteAgoraUid)
+                            }
+                        },
+                        update = { sv ->
+                            AgoraCallManager.setupRemoteVideo(sv, remoteAgoraUid)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = member.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                    contentDescription = member.fullName,
+                    modifier = Modifier
+                        .size(70.dp)
+                        .clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
-            // Name & speaking indicator
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -505,7 +870,7 @@ fun GroupParticipantTile(
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )
-                if (isSpeaking) {
+                if (isSpeaking || remoteAgoraUid != null) {
                     Icon(
                         imageVector = Icons.Default.GraphicEq,
                         contentDescription = "Speaking",

@@ -30,7 +30,8 @@ object SampleData {
         college = "Taltali Degree College .তালতলী ডিগ্রী কলেজ",
         instagramHandle = "niyonislamsohag",
         website = "niyonislamsohag.com",
-        joinedDate = "Joined May 2020"
+        joinedDate = "Joined May 2020",
+        relationshipStatus = "Single"
     )
 
     val friendTanvir = User(
@@ -75,6 +76,7 @@ object SampleData {
         isOnline = true,
         friendCount = 1890,
         followerCount = 450,
+        note = "সবুজ প্রকৃতি 🌿",
         isFriend = true
     )
 
@@ -88,6 +90,7 @@ object SampleData {
         isOnline = true,
         friendCount = 5000,
         followerCount = 2300,
+        note = "চায়ের আড্ডায় ☕",
         isFriend = true
     )
 
@@ -101,20 +104,93 @@ object SampleData {
         isOnline = true,
         friendCount = 4999,
         followerCount = 760,
+        note = "লুডু খেলবে কে? 🎲",
         isFriend = true
     )
 
     val friendSadia = User(
         id = "user_sadia",
-        fullName = "Sadia Rahman",
+        fullName = "সাদিয়া রহমান",
         username = "sadia_rahman",
         avatarUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80",
         coverUrl = "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop&q=80",
         isVerified = false,
-        isOnline = false,
-        lastSeenMinutesAgo = 15,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
         friendCount = 3100,
         followerCount = 540,
+        note = "শুভ দিন সবাইকে 🌸",
+        isFriend = true
+    )
+
+    val friendJannat = User(
+        id = "user_jannat",
+        fullName = "জান্নাতুল ফেরদৌস",
+        username = "jannat_ferdous",
+        avatarUrl = "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop&q=80",
+        isVerified = true,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
+        friendCount = 4200,
+        followerCount = 1200,
+        note = "নতুন ছবি আসছে 📸",
+        isFriend = true
+    )
+
+    val friendManu = User(
+        id = "user_manu",
+        fullName = "মানু জাহান",
+        username = "manu_jahan",
+        avatarUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop&q=80",
+        isVerified = false,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
+        friendCount = 2800,
+        followerCount = 890,
+        isFriend = true
+    )
+
+    val friendRiya = User(
+        id = "user_riya",
+        fullName = "রিয়া মনি",
+        username = "riya_moni",
+        avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop&q=80",
+        isVerified = true,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
+        friendCount = 3900,
+        followerCount = 2100,
+        isFriend = true
+    )
+
+    val friendShunya = User(
+        id = "user_shunya",
+        fullName = "শূন্য হৃদয়",
+        username = "shunya_hridoy",
+        avatarUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=1200&auto=format&fit=crop&q=80",
+        isVerified = false,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
+        friendCount = 1900,
+        followerCount = 450,
+        isFriend = true
+    )
+
+    val friendUmor = User(
+        id = "user_umor",
+        fullName = "UMOR FARUK",
+        username = "umor_faruk",
+        avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1200&auto=format&fit=crop&q=80",
+        isVerified = false,
+        isOnline = true,
+        lastSeenMinutesAgo = 0,
+        friendCount = 3500,
+        followerCount = 980,
         isFriend = true
     )
 
@@ -145,7 +221,7 @@ object SampleData {
         isFriend = true
     )
 
-    // Users with incoming friend requests or suggestions
+    // Users with incoming friend requests or suggestions (7 real requests matching screenshot badge)
     val pendingRequestUsers = listOf(
         User(
             id = "req_1",
@@ -169,6 +245,38 @@ object SampleData {
             username = "mehedi_babu",
             avatarUrl = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500&auto=format&fit=crop&q=80",
             friendCount = 2800,
+            hasReceivedFriendRequest = true
+        ),
+        User(
+            id = "req_4",
+            fullName = "Sumaiya Akter",
+            username = "sumaiya_akter_bd",
+            avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80",
+            friendCount = 980,
+            hasReceivedFriendRequest = true
+        ),
+        User(
+            id = "req_5",
+            fullName = "Tanvir Rahman",
+            username = "tanvir_rahman",
+            avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80",
+            friendCount = 1450,
+            hasReceivedFriendRequest = true
+        ),
+        User(
+            id = "req_6",
+            fullName = "Jannatul Ferdous",
+            username = "jannat_ferdous",
+            avatarUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=500&auto=format&fit=crop&q=80",
+            friendCount = 2100,
+            hasReceivedFriendRequest = true
+        ),
+        User(
+            id = "req_7",
+            fullName = "Sakib Al Hasan",
+            username = "sakib_fan_bd",
+            avatarUrl = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500&auto=format&fit=crop&q=80",
+            friendCount = 3400,
             hasReceivedFriendRequest = true
         )
     )
@@ -346,6 +454,35 @@ object SampleData {
 
     val initialPosts = listOf(
         Post(
+            id = "post_sponsored_demo",
+            author = User(
+                id = "user_page_official",
+                fullName = "Face Feed Official 🇧🇩",
+                username = "facefeed_official",
+                avatarUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80",
+                isVerified = true
+            ),
+            timestamp = "Sponsored • 🚀 স্পন্সরড",
+            title = "Face Feed বাংলাদেশ — নতুন সোশ্যাল নেটওয়ার্কে আপনাকে স্বাগতম!",
+            text = "বাংলাদেশের যেকোনো সিম দিয়ে ০ এমবি ফ্রী ডাটায় ছবি ও পোস্ট শেয়ার করুন! নতুন নতুন ফিচার ও ভিডিও দেখুন। পোস্ট বুস্ট করুন ও হাজারো মানুষের কাছে আপনার কনটেন্ট ছড়িয়ে দিন।",
+            hashtags = listOf("#FaceFeedBD", "#FreeData", "#Sponsored", "#BangladeshSocial"),
+            images = listOf("https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80"),
+            reachViews = "350K+ 🚀",
+            reactionCounts = mapOf(
+                ReactionType.LOVE to 18400,
+                ReactionType.LIKE to 12500,
+                ReactionType.HUNDRED to 3200,
+                ReactionType.CARE to 2900
+            ),
+            isBoosted = true,
+            boostStatus = "ACTIVE",
+            boostBudget = 1000,
+            boostDays = 15,
+            boostTargetReach = "১,২০,০০০+ মানুষ",
+            boostTrxId = "BKH9281745",
+            shareCount = 1450
+        ),
+        Post(
             id = "post_sahid",
             author = friendSahid,
             timestamp = "2h",
@@ -391,6 +528,11 @@ object SampleData {
                 ReactionType.WOW to 1500
             ),
             userReaction = ReactionType.LOVE,
+            reactors = listOf(
+                ReactionUser(currentUser, ReactionType.LOVE, "Nov 11, 2025"),
+                ReactionUser(friendTanvir, ReactionType.LIKE, "Nov 11, 2025"),
+                ReactionUser(friendNusrat, ReactionType.CARE, "Nov 11, 2025")
+            ),
             comments = listOf(
                 Comment(
                     id = "c_pin_1",
@@ -419,6 +561,13 @@ object SampleData {
                 ReactionType.WOW to 950
             ),
             userReaction = ReactionType.LOVE,
+            reactors = listOf(
+                ReactionUser(currentUser, ReactionType.LOVE, "১০ মিনিট আগে"),
+                ReactionUser(friendTanvir, ReactionType.LIKE, "১৫ মিনিট আগে"),
+                ReactionUser(friendNusrat, ReactionType.CARE, "২০ মিনিট আগে"),
+                ReactionUser(friendSamrat, ReactionType.HUNDRED, "২৫ মিনিট আগে"),
+                ReactionUser(friendArifur, ReactionType.OK, "৩০ মিনিট আগে")
+            ),
             comments = listOf(
                 Comment(
                     id = "c_1",
@@ -565,8 +714,22 @@ object SampleData {
         coverUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80",
         isOnline = true,
         isFriend = true,
+        accountCreationDate = "০১/০১/২০২৬ (1/1/2026)",
         friendCount = 3420,
         followerCount = 890
+    )
+
+    val friendMdMohiuddin = User(
+        id = "user_md_mohiuddin",
+        fullName = "MD Mohiuddin",
+        username = "md_mohiuddin",
+        avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500&auto=format&fit=crop&q=80",
+        coverUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80",
+        isOnline = true,
+        isFriend = true,
+        accountCreationDate = "০১/০১/২০২৬ (1/1/2026)",
+        friendCount = 4250,
+        followerCount = 1150
     )
 
     val userRahima = User(
@@ -577,6 +740,7 @@ object SampleData {
         coverUrl = "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=1200&auto=format&fit=crop&q=80",
         isOnline = true,
         isFriend = true,
+        accountCreationDate = "০৫/০২/২০২৬",
         friendCount = 4150,
         followerCount = 1240
     )
@@ -590,8 +754,15 @@ object SampleData {
         isFriend = true
     )
 
+    val friendRahim = userRahim
+    val friendKajol = friendSamim
+    val friendShakib = friendSahadat
+    val friendMim = friendRikta
+    val friendSultana = userRahima
+
     val allAppUsersList: List<User> = listOf(
         currentUser,
+        friendMdMohiuddin,
         friendTanvir,
         friendNusrat,
         friendHasan,
@@ -608,13 +779,39 @@ object SampleData {
         userRahima
     )
 
+    // MD Mohiuddin Chat Messages matching Screenshot 3
+    private val msgMd1 = ChatMessage("md_1", "user_me", "Niyon Islam Sohag", "আসসালামু আলাইকুম,,", "8:10 PM", isFromMe = true)
+    private val msgMd2 = ChatMessage("md_2", "user_me", "Niyon Islam Sohag", "কেমন আছো বন্ধু,,", "8:11 PM", isFromMe = true)
+    private val msgMd3 = ChatMessage("md_3", "user_me", "Niyon Islam Sohag", "শুভ রাত্রি 💔", "8:12 PM", isFromMe = true)
+    private val msgMd4 = ChatMessage("md_4", "user_md_mohiuddin", "MD Mohiuddin", "হুম ভালো তুমি", "8:14 PM", isFromMe = false, userReaction = "❤️")
+    private val msgMd5 = ChatMessage("md_5", "user_md_mohiuddin", "MD Mohiuddin", "আছো কে", "8:15 PM", isFromMe = false)
+    private val msgMd6 = ChatMessage("md_6", "user_me", "Niyon Islam Sohag", "আমি বাড়ি আছি বন্ধু,,", "8:16 PM", isFromMe = true, replyTo = msgMd5)
+    private val msgMd7 = ChatMessage("md_7", "user_md_mohiuddin", "MD Mohiuddin", "ওহ", "8:17 PM", isFromMe = false)
+    private val msgMd8 = ChatMessage("md_8", "user_me", "Niyon Islam Sohag", "হুম,,", "8:18 PM", isFromMe = true, replyTo = msgMd7)
+    private val msgMd9 = ChatMessage("md_9", "user_md_mohiuddin", "MD Mohiuddin", "জাইতে চাইছিলাম কিন্তু সময় পাইনি তাই ঐ দিক যাইতে পারি নাই", "8:19 PM", isFromMe = false, userReaction = "😢")
+    private val msgMd10 = ChatMessage("md_10", "user_me", "Niyon Islam Sohag", "তুমি ঢাকা কী চাকরি করো,,", "8:20 PM", isFromMe = true)
+    private val msgMd11 = ChatMessage("md_11", "user_me", "Niyon Islam Sohag", "ঠিক আছে পরে দেখা হবে বন্ধু", "8:20 PM", isFromMe = true, replyTo = msgMd9)
+
     val initialConversations = listOf(
+        Conversation(
+            id = "chat_md_mohiuddin",
+            friend = friendMdMohiuddin,
+            lastMessage = "You: তুমি ঢাকা কী চাকরি করো,,",
+            lastTime = "6:26 PM",
+            unreadCount = 0,
+            lastMessageTimestamp = System.currentTimeMillis() - 60_000L,
+            messages = listOf(
+                msgMd1, msgMd2, msgMd3, msgMd4, msgMd5,
+                msgMd6, msgMd7, msgMd8, msgMd9, msgMd10, msgMd11
+            )
+        ),
         Conversation(
             id = "chat_rahim_rahima",
             friend = userRahim,
             lastMessage = "রহিমা: ঠিক আছে রহিম ভাই, আমি ফটো আর ভিডিও ফাইল পাঠিয়ে দিচ্ছি এখনই।",
             lastTime = "এখনই (Live)",
             unreadCount = 2,
+            lastMessageTimestamp = System.currentTimeMillis() - 120_000L,
             messages = listOf(
                 ChatMessage("rr_1", "user_rahim", "আব্দুর রহিম", "আসসালামু আলাইকুম রহিমা, কেমন আছো? কালকের প্রোগ্রামের ছবিগুলো কি রেডি?", "10:14 AM"),
                 ChatMessage("rr_2", "user_rahima", "রহিমা খাতুন", "ওয়ালাইকুম আসসালাম রহিম ভাই। হ্যাঁ, সব ছবি সিলেক্ট করেছি। FaceFeed এ আপলোড দিব।", "10:15 AM"),
@@ -648,8 +845,19 @@ object SampleData {
             lastMessage = "You missed a call from হাঢান মিয়া.",
             lastTime = "12:12 PM",
             unreadCount = 1,
+            lastMessageTimestamp = System.currentTimeMillis() - 3600_000L,
             messages = listOf(
-                ChatMessage("hm1", "user_hasan_mia_howlader", "হাঢান মিয়া হওলাদার", "You missed a call from হাঢান মিয়া.", "12:12 PM")
+                ChatMessage("hm_thumb", "user_hasan_mia_howlader", "হাঢান মিয়া হওলাদার", "👍", "12:10 PM"),
+                ChatMessage("hm_pray", "user_hasan_mia_howlader", "হাঢান মিয়া হওলাদার", "🙏", "12:11 PM"),
+                ChatMessage("hm_missed", "user_hasan_mia_howlader", "হাঢান মিয়া হওলাদার", "Missed audio call", "12:12 PM"),
+                ChatMessage(
+                    id = "hm_shared_post",
+                    senderId = "user_hasan_mia_howlader",
+                    senderName = "হাঢান মিয়া হওলাদার",
+                    text = "ভুল স্বীকার করলো বানর",
+                    timestamp = "10:43 AM",
+                    mediaUrl = "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=800"
+                )
             )
         ),
         Conversation(
@@ -787,34 +995,150 @@ object SampleData {
         )
     )
 
+    val notifActorFerdausFiroz = User(
+        id = "user_notif_ferdaus_firoz",
+        fullName = "মোঃফেরদাউস হাওলাদার, Md Firoz",
+        username = "ferdaus_firoz",
+        avatarUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?w=400"
+    )
+    val notifActorTax = User(
+        id = "user_notif_tax",
+        fullName = "FaceFeed Financial",
+        username = "facefeed_tax",
+        avatarUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400"
+    )
+    val notifActorKamalMia = User(
+        id = "user_notif_kamal_mia",
+        fullName = "MD Kamal Mia",
+        username = "kamal_mia",
+        avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400"
+    )
+    val notifActorGaziRuhul = User(
+        id = "user_notif_gazi_ruhul",
+        fullName = "Gazi Ruhul",
+        username = "gazi_ruhul",
+        avatarUrl = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400"
+    )
+    val notifActorGaziMehede = User(
+        id = "user_notif_gazi_mehede",
+        fullName = "Gazi Mehede Hasan",
+        username = "gazi_mehede",
+        avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"
+    )
+    val notifActorMahmuda = User(
+        id = "user_notif_mahmuda",
+        fullName = "Mahmuda M",
+        username = "mahmuda_m",
+        avatarUrl = "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=400"
+    )
+
     val initialNotifications = listOf(
+        // NEW SECTION
         AppNotification(
             id = "notif_1",
-            actor = friendTanvir,
-            title = "Tanvir Ahmed আপনার পোস্টে লাভ ❤️ রিঅ্যাক্ট করেছেন",
-            timeAgo = "৫ মিনিট আগে",
-            type = NotificationType.LIKE
+            actor = notifActorFerdausFiroz,
+            title = "মোঃফেরদাউস হাওলাদার, Md Firoz and 4 others reacted to your story.",
+            timeAgo = "3h",
+            type = NotificationType.STORY_REACTION,
+            isNewSection = true,
+            isRead = false,
+            subBadgeType = "heart"
         ),
         AppNotification(
             id = "notif_2",
-            actor = friendNusrat,
-            title = "Nusrat Jahan আপনার পোস্টে কমেন্ট করেছেন: '১০টি ছবি এবং ১০টি রিঅ্যাকশন...'",
-            timeAgo = "১৫ মিনিট আগে",
-            type = NotificationType.COMMENT
+            actor = notifActorTax,
+            title = "Complete your tax info now so you're ready to get paid.",
+            timeAgo = "3h",
+            type = NotificationType.TAX_INFO,
+            isNewSection = true,
+            isRead = false, // Highlighted blue unread in screenshot
+            subBadgeType = "tax"
         ),
         AppNotification(
             id = "notif_3",
-            actor = pendingRequestUsers[0],
-            title = "Rakib Hasan আপনাকে ফ্রেন্ড রিকোয়েস্ট পাঠিয়েছেন",
-            timeAgo = "১ ঘণ্টা আগে",
-            type = NotificationType.FRIEND_REQUEST
+            actor = notifActorKamalMia,
+            title = "MD Kamal Mia invited you to join the public group ⭐ Star sender.",
+            timeAgo = "54m",
+            type = NotificationType.GROUP_INVITE,
+            isNewSection = true,
+            isRead = true,
+            hasActionButtons = true,
+            subBadgeType = "group"
         ),
+
+        // EARLIER SECTION
         AppNotification(
             id = "notif_4",
+            actor = notifActorGaziRuhul,
+            title = "Gazi Ruhul mentioned you in a comment: \"Niyon Islam Sohag ok thanks\".",
+            timeAgo = "1d",
+            type = NotificationType.COMMENT,
+            isNewSection = false,
+            isRead = true,
+            subBadgeType = "comment"
+        ),
+        AppNotification(
+            id = "notif_5",
+            actor = notifActorGaziMehede,
+            title = "Gazi Mehede Hasan accepted your friend request.",
+            timeAgo = "1d",
+            type = NotificationType.FRIEND_REQUEST,
+            isNewSection = false,
+            isRead = true,
+            subBadgeType = "friend_accept"
+        ),
+        AppNotification(
+            id = "notif_6",
+            actor = notifActorMahmuda,
+            title = "Mahmuda M likes your post in নিদ্রার চর সমুদ্র সৈকত & ডিসি পয়েন্ট তালতলী বরগুনা: \"আসসালামু আলাইকুম🤝 প্রিয় ভাই ভোন ও...\"",
+            timeAgo = "1d",
+            type = NotificationType.LIKE,
+            isNewSection = false,
+            isRead = true,
+            subBadgeType = "like"
+        ),
+        AppNotification(
+            id = "notif_7",
+            actor = friendTanvir,
+            title = "Today is Tanvir Ahmed's birthday. Wish him a happy birthday! 🎂🎉",
+            timeAgo = "2h",
+            type = NotificationType.BIRTHDAY,
+            isNewSection = true,
+            isRead = false,
+            hasActionButtons = true,
+            subBadgeType = "birthday"
+        ),
+        AppNotification(
+            id = "notif_8",
+            actor = friendNusrat,
+            title = "Nusrat Jahan sent you a friend request.",
+            timeAgo = "5h",
+            type = NotificationType.FRIEND_REQUEST,
+            isNewSection = true,
+            isRead = false,
+            hasActionButtons = true,
+            subBadgeType = "friend_request"
+        ),
+        AppNotification(
+            id = "notif_9",
             actor = friendSamrat,
-            title = "MD Samrat 'বন্ধুদের আড্ডা (Friends Circle)' গ্রুপে একটি পোস্ট শেয়ার করেছেন",
-            timeAgo = "৩ ঘণ্টা আগে",
-            type = NotificationType.GROUP_INVITE
+            title = "MD Samrat shared your post to his timeline: 'অসাধারণ পোস্ট ভাই!'",
+            timeAgo = "1h",
+            type = NotificationType.SHARE,
+            isNewSection = true,
+            isRead = false,
+            subBadgeType = "share"
+        ),
+        AppNotification(
+            id = "notif_10",
+            actor = notifActorMahmuda,
+            title = "Daily Bangladesh 🇧🇩 invited you to follow their official page.",
+            timeAgo = "4h",
+            type = NotificationType.PAGE_LIKE,
+            isNewSection = true,
+            isRead = false,
+            hasActionButtons = true,
+            subBadgeType = "page"
         )
     )
 
@@ -827,7 +1151,33 @@ object SampleData {
             memberCount = 12400,
             isPrivate = false,
             isJoined = true,
-            creatorName = "Niyon Islam Sohag"
+            creatorName = "Niyon Islam Sohag",
+            isActive = true,
+            createdAt = "০১/০১/২০২৬ (1/1/2026)",
+            admins = listOf(
+                currentUser,
+                friendTanvir,
+                friendHasanMiaHowlader,
+                friendSamrat,
+                friendSadia
+            ),
+            moderators = listOf(
+                friendJannat,
+                friendManu,
+                friendRiya,
+                friendShunya,
+                friendUmor,
+                friendMdMohiuddin,
+                friendSahid,
+                friendJoyAhmed,
+                friendArifur,
+                friendNusrat,
+                friendRahim,
+                friendKajol,
+                friendShakib,
+                friendMim,
+                friendSultana
+            )
         ),
         SocialGroup(
             id = "grp_2",
@@ -837,7 +1187,11 @@ object SampleData {
             memberCount = 45800,
             isPrivate = false,
             isJoined = true,
-            creatorName = "Tanvir Ahmed"
+            creatorName = "Tanvir Ahmed",
+            isActive = true,
+            createdAt = "১০/০৫/২০২৬",
+            admins = listOf(friendTanvir, currentUser, friendSamrat, friendArifur, friendSadia),
+            moderators = listOf(friendJannat, friendManu, friendRiya, friendShunya, friendUmor)
         ),
         SocialGroup(
             id = "grp_3",
@@ -847,7 +1201,25 @@ object SampleData {
             memberCount = 8900,
             isPrivate = true,
             isJoined = false,
-            creatorName = "Nusrat Jahan"
+            creatorName = "Nusrat Jahan",
+            isActive = true,
+            createdAt = "১৫/০৬/২০২৬",
+            admins = listOf(friendNusrat, currentUser, friendSadia),
+            moderators = listOf(friendJannat, friendRiya, friendMim)
+        ),
+        SocialGroup(
+            id = "grp_4",
+            name = "🌾 আব্দুর রহিম কৃষি ও গ্রামীণ বাজার",
+            description = "গ্রামীণ কৃষিপণ্য বেচাকেনা ও সহযোগিতা গ্রুপ",
+            coverUrl = "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&auto=format&fit=crop&q=80",
+            memberCount = 5200,
+            isPrivate = false,
+            isJoined = false,
+            creatorName = "আব্দুর রহিম (Rahim)",
+            isActive = true,
+            createdAt = "০১/০১/২০২৬ (1/1/2026)",
+            admins = listOf(friendRahim, currentUser),
+            moderators = listOf(friendSahid, friendJoyAhmed, friendUmor)
         )
     )
 
@@ -859,7 +1231,10 @@ object SampleData {
             avatarUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80",
             coverUrl = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80",
             followerCount = 1250000,
-            isLiked = true
+            isLiked = true,
+            creatorName = "Niyon Islam Sohag",
+            isActive = true,
+            createdAt = "০১/০১/২০২৬ (1/1/2026)"
         ),
         SocialPage(
             id = "page_2",
@@ -868,7 +1243,22 @@ object SampleData {
             avatarUrl = "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=500&auto=format&fit=crop&q=80",
             coverUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80",
             followerCount = 450000,
-            isLiked = false
+            isLiked = false,
+            creatorName = "Tanvir Ahmed",
+            isActive = true,
+            createdAt = "১৫/০৩/২০২৬"
+        ),
+        SocialPage(
+            id = "page_3",
+            name = "রহিম ফ্যাশন ও শপিং কালেকশন",
+            category = "E-commerce & Business",
+            avatarUrl = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=500&auto=format&fit=crop&q=80",
+            coverUrl = "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=1200&auto=format&fit=crop&q=80",
+            followerCount = 38000,
+            isLiked = true,
+            creatorName = "আব্দুর রহিম (Rahim)",
+            isActive = true,
+            createdAt = "০১/০১/২০২৬ (1/1/2026)"
         )
     )
 
@@ -1144,7 +1534,24 @@ object SampleData {
         PostAudioTrack("aud_bday_5", "Happy Birthday To You (Acoustic Guitar & Piano 🎁)", "গ্লোবাল অ্যাকোস্টিক মেলোডি", "শুভ জন্মদিন", "৩:২০", coverArtUrl = "https://images.unsplash.com/photo-1512909006721-3d6018887383?w=300"),
         PostAudioTrack("aud_bday_6", "শুভ শুভ শুভ জন্মদিন - শত বছর বেঁচে থাকো তুমি 🕯️", "হৃদয়ছোঁয়া জন্মদিনের আশীর্বাদ সুর", "শুভ জন্মদিন", "৩:৩০", coverArtUrl = "https://images.unsplash.com/photo-1520854221256-17451cc331bf?w=300"),
         PostAudioTrack("aud_bday_7", "বার্থডে কেক কাটার মধুর সুর ও বাঁশি 🍰🎶", "মেলোডি ইন্সট্রুমেন্টাল", "শুভ জন্মদিন", "৩:০৫", coverArtUrl = "https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=300"),
-        PostAudioTrack("aud_bday_8", "বার্থডে রিমিক্স ২০২৬ - পার্টি নাইট সেলিব্রেশন 🎊", "ডিজে নাইটস ঢাকা", "শুভ জন্মদিন", "৩:১৫", coverArtUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300")
+        PostAudioTrack("aud_bday_8", "বার্থডে রিমিক্স ২০২৬ - পার্টি নাইট সেলিব্রেশন 🎊", "ডিজে নাইটস ঢাকা", "শুভ জন্মদিন", "৩:১৫", coverArtUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300"),
+
+        // অডিও গান (Popular Bengali Audio Songs)
+        PostAudioTrack("aud_song_1", "তুমি আমার ঘুম ভাঙ্গানিয়া গান", "বাংলা রোমান্টিক ক্লাসিক", "অডিও গান", "৪:১৫", coverArtUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300"),
+        PostAudioTrack("aud_song_2", "মেঘ বলেছে যাব যাব - ছায়াসুন্দরী সুর", "আধুনিক বাংলা মেলোডি", "অডিও গান", "৩:৪৮", coverArtUrl = "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=300"),
+        PostAudioTrack("aud_song_3", "ওরে নীল দরিয়া আমায় দে রে দে ছাড়িয়া", "অমর বাংলা লোকগীতি", "অডিও গান", "৪:০৫", coverArtUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=300"),
+        PostAudioTrack("aud_song_4", "এই সুন্দর স্বর্ণালী সন্ধ্যায় একাকী বসে", "হারানো দিনের সোনালী গান", "অডিও গান", "৩:৩৫", coverArtUrl = "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=300"),
+
+        // মিউজিক (Music / BGM / Relaxing Instrumental)
+        PostAudioTrack("aud_music_1", "শান্ত স্নিগ্ধ পিয়ানো ও অ্যাকোস্টিক গিটার মিউজিক", "রিল্যাক্সিং সাউন্ডস বিডি", "মিউজিক", "৩:৪০", coverArtUrl = "https://images.unsplash.com/photo-1520523839898-507121400c46?w=300"),
+        PostAudioTrack("aud_music_2", "বাংলার পল্লী মেঠো সুর ও শান্ত ব্যাকগ্রাউন্ড মিউজিক (BGM)", "ফোক অর্কেস্ট্রা ঢাকা", "মিউজিক", "৪:১২", coverArtUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=300"),
+        PostAudioTrack("aud_music_3", "সিনেমাটিক রোমান্টিক ভায়োলিন ও সিন্থ মিউজিক", "সুর সাগর স্টুডিও", "মিউজিক", "৩:২৫", coverArtUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=300"),
+        PostAudioTrack("aud_music_4", "ক্যাফে অ্যাকোস্টিক বিজিএম - মন জুড়ানো সুর", "বিডি অ্যাম্বিয়েন্স মিউজিক", "মিউজিক", "২:৫৫", coverArtUrl = "https://images.unsplash.com/photo-1445985543469-253c5bc697b2?w=300"),
+
+        // জন্মদিন গান (Birthday Songs explicitly tagged)
+        PostAudioTrack("aud_bday_9", "শুভ জন্মদিন গান - শত জনম বেঁচে রও তুমি 🎂", "বার্থডে সুর শিল্পীগোষ্ঠী", "জন্মদিন গান", "৩:২০", coverArtUrl = "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=300"),
+        PostAudioTrack("aud_bday_10", "আজ শুভ জন্মদিন তোমার - আলো ছড়াও ভুবনে 🎈", "বার্থডে মেলোডি কালেকশন", "জন্মদিন গান", "৩:১৫", coverArtUrl = "https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?w=300"),
+        PostAudioTrack("aud_bday_11", "Happy Birthday Beat Mix ২০২৬ 🥳🎉", "বার্থডে পার্টি ডিজে", "জন্মদিন গান", "২:৫০", coverArtUrl = "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=300")
     )
 
     // জন্মদিনের স্পেশাল ইমুজি কালেকশন (Birthday Emojis)
@@ -1155,10 +1562,10 @@ object SampleData {
 
     // 10 Admin Slots for Right Manager Fida (Controlled exclusively by Niyon Islam Sohag)
     val initialAdminSlots: List<AdminSlot> = listOf(
-        AdminSlot(1, currentUser, "প্রধান প্রতিষ্ঠাতা ও সুপার অ্যাডমিন 👑", isSuperAdmin = true, assignedDate = "প্রতিষ্ঠাতা সদস্য"),
-        AdminSlot(2, friendTanvir, "সিনিয়র টেকনিক্যাল অ্যাডমিন", isSuperAdmin = false, assignedDate = "১৫ মে, ২০২৬"),
-        AdminSlot(3, friendNusrat, "কন্টেন্ট ও সেফটি মডারেটর", isSuperAdmin = false, assignedDate = "১৮ মে, ২০২৬"),
-        AdminSlot(4, friendSamrat, "কমিউনিটি ম্যানেজার", isSuperAdmin = false, assignedDate = "১ জুন, ২০২৬"),
+        AdminSlot(1, currentUser, "প্রধান প্রতিষ্ঠাতা ও সুপার অ্যাডমিন 👑", isSuperAdmin = true, assignedDate = "০১/০১/২০২৬ (1/1/2026)"),
+        AdminSlot(2, friendTanvir, "সিনিয়র টেকনিক্যাল অ্যাডমিন", isSuperAdmin = false, assignedDate = "১৫/০২/২০২৬ (15/2/2026)"),
+        AdminSlot(3, friendNusrat, "কন্টেন্ট ও সেফটি মডারেটর", isSuperAdmin = false, assignedDate = "১৮/০৩/২০২৬ (18/3/2026)"),
+        AdminSlot(4, friendSamrat, "কমিউনিটি ম্যানেজার", isSuperAdmin = false, assignedDate = "০১/০৪/২০২৬ (1/4/2026)"),
         AdminSlot(5, null, "অ্যাডমিন পদ খালি (ফাঁকা)", isSuperAdmin = false),
         AdminSlot(6, null, "অ্যাডমিন পদ খালি (ফাঁকা)", isSuperAdmin = false),
         AdminSlot(7, null, "অ্যাডমিন পদ খালি (ফাঁকা)", isSuperAdmin = false),
@@ -1166,5 +1573,535 @@ object SampleData {
         AdminSlot(9, null, "অ্যাডমিন পদ খালি (ফাঁকা)", isSuperAdmin = false),
         AdminSlot(10, null, "অ্যাডমিন পদ খালি (ফাঁকা)", isSuperAdmin = false)
     )
+
+    // Feature 12: খারাপ মন্তব্যকারী ও সাইবার অপরাধী অডিট রেকর্ড (আইনগত প্রোফাইল সহ)
+    val initialCyberOffenders: List<CyberOffenderReport> = listOf(
+        CyberOffenderReport(
+            id = "offender_01",
+            userId = "user_bad_01",
+            userName = "আবুল কাশেম (Abul Kashem)",
+            userUsername = "kashem_hater",
+            userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
+            reportedComment = "এই অ্যাপ ভালো না, সোয়েব/মালিক ফালতু ফাও কথা বলে!",
+            targetPostTitle = "FaceFeed এর নতুন আপডেট প্রকাশিত হয়েছে!",
+            timestamp = "০৪/১০/২০২৬ (4/10/2026) ১২:৪০ PM",
+            nationalId = "১৯৮৮২৬৯২০১৯২৮৩২১",
+            phoneNumber = "+৮৮০ ১৮১৯-৭৭৬৬৫৫",
+            ipAddress = "103.112.54.90",
+            deviceModel = "Xiaomi Redmi Note 10 Pro (Android 13)",
+            location = "উত্তরা, ঢাকা - ১২৩০ (আইপি ও টাওয়ার লোকেশন ট্রেসড)",
+            legalViolation = "সাইবার নিরাপত্তা আইন ২০২৩ ধারা ২৫ (মিথ্যা/মানহানিকর তথ্য প্রচার) ও ধারা ২৯ (মানহানি)",
+            status = "UNDER_REVIEW"
+        ),
+        CyberOffenderReport(
+            id = "offender_02",
+            userId = "user_bad_02",
+            userName = "রকিবুল ইসলাম (Rokibul Islam)",
+            userUsername = "rokib_toxic",
+            userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
+            reportedComment = "তোদের অ্যাপের মালিক ভন্ড ও ধান্দাবাজ!",
+            targetPostTitle = "Right Manager Fida ফ্রী মেগা বুস্টের শুভ সূচনা",
+            timestamp = "০৩/১০/২০২৬ (3/10/2026) ০৮:১৫ PM",
+            nationalId = "১৯৯২১২৩৪৫৬৭৮৯০১২",
+            phoneNumber = "+৮৮০ ১৭৫৫-১১২২৩৩",
+            ipAddress = "103.205.71.18",
+            deviceModel = "Realme 9 Pro+ (Android 14)",
+            location = "আগ্রাবাদ, চট্টগ্রাম (সাইবার ক্রাইম সেল নিবন্ধিত)",
+            legalViolation = "ডিজিটাল নিরাপত্তা ও সাইবার অবমাননা আইন ধারা ২৯ (কুরুচিপূর্ণ আক্রমণ ও মানহানি)",
+            status = "LEGAL_NOTICE_SENT"
+        ),
+        CyberOffenderReport(
+            id = "offender_03",
+            userId = "user_bad_03",
+            userName = "কামরুল হাসান (Kamrul Hasan)",
+            userUsername = "kamrul_bet_promoter",
+            userAvatar = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150",
+            reportedComment = "মালিকের পোস্টে বাজি ধরুন 1xbet লিংক থেকে আর নেশার আড্ডা দিন!",
+            targetPostTitle = "সকল বন্ধুদের জন্য ভালোবাসা ও শুভেচ্ছা",
+            timestamp = "০২/১০/২০২৬ (2/10/2026) ০৩:২২ PM",
+            nationalId = "১৯৯৫৯৮৭৬৫৪৩২১০৯৮",
+            phoneNumber = "+৮৮০ ১৬১১-৪৪৩৩২২",
+            ipAddress = "118.179.201.44",
+            deviceModel = "Samsung Galaxy M31",
+            location = "রাজশাহী সদর, রাজশাহী",
+            legalViolation = "জুয়া প্রতিরোধ আইন ১৮৬৭ ও সাইবার নিরাপত্তা আইন (নিষিদ্ধ জুয়া ও মাদক প্রচার)",
+            status = "PERMANENT_BANNED"
+        )
+    )
+
+    // Feature 13: অ্যাপ আপডেট নোটিশ ব্রডকাস্ট রেকর্ড
+    val initialAppUpdateBroadcasts: List<AppUpdateBroadcast> = listOf(
+        AppUpdateBroadcast(
+            id = "update_2026_01",
+            version = "v3.0.0 (Right Manager Fida ১৩ মাস্টার সংস্করণ)",
+            title = "FaceFeed ও Right Manager Fida নতুন ১৩টি ফিচার আপডেট সম্পন্ন!",
+            description = "সকল সম্মানিত ব্যবহারকারীদের জানানো যাচ্ছে যে, FaceFeed অ্যাপে ওনার ফ্রী মেগা বুস্ট (১M+ রিচ), সাইবার অপরাধী আইনি ট্র্যাকার, নেশা ও জুয়া বিরোধী কড়া সিকিউরিটি এবং অ্যাপ আপডেট ব্রডকাস্টার সিস্টেম সফলভাবে যুক্ত করা হয়েছে!",
+            appLogoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300",
+            ownerAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300",
+            ownerName = "Niyon Islam Sohag (প্রধান প্রতিষ্ঠাতা)",
+            releaseDate = "০১/০১/২০২৬ (1/1/2026)",
+            isActive = true
+        )
+    )
+
+    // Option 14: ফ্রী ফিদা ভেরিফাই বিতরণ ইতিহাস (১ জনকে কতো বার দিছি, কোন মাসে দিছি, তারিখ সহ)
+    val initialFreeVerifiedGrantRecords: List<FreeVerifiedGrantRecord> = listOf(
+        FreeVerifiedGrantRecord(
+            id = "grant_rec_01",
+            recipientUserId = "user_tanvir",
+            recipientName = "Tanvir Ahmed",
+            recipientUsername = "tanvir_ahmed",
+            recipientAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+            grantCountTimes = 2, // ২ বার দেওয়া হয়েছে
+            grantMonth = "অক্টোবর ২০২৬, মে ২০২৬",
+            grantDateFormatted = "০৫ অক্টোবর ২০২৬, সকাল ১০:১৫ AM",
+            historyInstances = listOf(
+                GrantInstanceDetail(1, "১২ মে ২০২৬", "মে ২০২৬", "দুপুর ১২:৩০ PM", "৩,০০০ কোটা থেকে প্রথমবার ফ্রী Fida Verified প্রদান"),
+                GrantInstanceDetail(2, "০৫ অক্টোবর ২০২৬", "অক্টোবর ২০২৬", "সকাল ১০:১৫ AM", "ওনার কর্তৃক দ্বিতীয়বার ফ্রী ভেরিফিকেশন রিনিউয়াল অনুমোদন")
+            ),
+            quotaDeducted = 2,
+            remarks = "প্রধান প্রতিষ্ঠাতা ও ওনার নিয়ন ইসলাম সোহাগ কর্তৃক সরাসরি অনুমোদিত"
+        ),
+        FreeVerifiedGrantRecord(
+            id = "grant_rec_02",
+            recipientUserId = "user_sadia",
+            recipientName = "Sadia Islam",
+            recipientUsername = "sadia_islam",
+            recipientAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
+            grantCountTimes = 3, // ৩ বার দেওয়া হয়েছে
+            grantMonth = "অক্টোবর ২০২৬, জুলাই ২০২৬, মার্চ ২০২৬",
+            grantDateFormatted = "০৩ অক্টোবর ২০২৬, রাত ০৮:২০ PM",
+            historyInstances = listOf(
+                GrantInstanceDetail(1, "১০ মার্চ ২০২৬", "মার্চ ২০২৬", "সকাল ১১:০০ AM", "কোটা থেকে প্রথমবার ফ্রী Fida Verified প্রদান"),
+                GrantInstanceDetail(2, "১৫ জুলাই ২০২৬", "জুলাই ২০২৬", "বিকাল ০৪:৪৫ PM", "দ্বিতীয়বার কোটা থেকে ফ্রী এক্সেস প্রদান"),
+                GrantInstanceDetail(3, "০৩ অক্টোবর ২০২৬", "অক্টোবর ২০২৬", "রাত ০৮:২০ PM", "তৃতীয়বার ফ্রী কোটা রি-ভেরিফাই নিশ্চিতকরণ")
+            ),
+            quotaDeducted = 3,
+            remarks = "ওনার বিশেষ কোটা থেকে ৩ বার অনুমোদিত"
+        ),
+        FreeVerifiedGrantRecord(
+            id = "grant_rec_03",
+            recipientUserId = "user_nusrat",
+            recipientName = "Nusrat Jahan",
+            recipientUsername = "nusrat_jahan",
+            recipientAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
+            grantCountTimes = 1, // ১ বার দেওয়া হয়েছে
+            grantMonth = "সেপ্টেম্বর ২০২৬",
+            grantDateFormatted = "১৫ সেপ্টেম্বর ২০২৬, দুপুর ০২:৩০ PM",
+            historyInstances = listOf(
+                GrantInstanceDetail(1, "১৫ সেপ্টেম্বর ২০২৬", "সেপ্টেম্বর ২০২৬", "দুপুর ০২:৩০ PM", "৩,০০০ কোটা থেকে প্রথমবার ফ্রী Fida Verified প্রদান")
+            ),
+            quotaDeducted = 1,
+            remarks = "৩,০০০ কোটা থেকে প্রধান ওনার কর্তৃক সরাসরি অনুমোদিত"
+        ),
+        FreeVerifiedGrantRecord(
+            id = "grant_rec_04",
+            recipientUserId = "user_rafiqul",
+            recipientName = "Rafiqul Islam",
+            recipientUsername = "rafiqul_islam",
+            recipientAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
+            grantCountTimes = 1, // ১ বার দেওয়া হয়েছে
+            grantMonth = "আগস্ট ২০২৬",
+            grantDateFormatted = "২০ আগস্ট ২০২৬, সকাল ১১:৪৫ AM",
+            historyInstances = listOf(
+                GrantInstanceDetail(1, "২০ আগস্ট ২০২৬", "আগস্ট ২০২৬", "সকাল ১১:৪৫ AM", "কোটা থেকে প্রথমবার ফ্রী ভেরিফিকেশন প্রদান")
+            ),
+            quotaDeducted = 1,
+            remarks = "কোটা থেকে ওনার অনুমোদিত"
+        )
+    )
+
+    // Option 15: আমার কাছ থেকে ১ জনে কতো বার ভেরিফাই নিছে (তারিখ ও প্রোফাইল আইকন সহ অডিট লেজার)
+    val initialUserVerificationAuditEntries: List<UserVerificationAuditEntry> = listOf(
+        UserVerificationAuditEntry(
+            id = "audit_entry_01",
+            userId = "user_sadia",
+            userName = "Sadia Islam",
+            userUsername = "sadia_islam",
+            userAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
+            totalTimesVerifiedTaken = 3, // মোট ৩ বার ভেরিফাই নিয়েছে
+            currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+            historyInstances = listOf(
+                VerificationInstanceRecord(1, "১০ মার্চ ২০২৬", "মার্চ ২০২৬", "সকাল ১১:০০ AM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা অনুমোদন"),
+                VerificationInstanceRecord(2, "১৫ জুলাই ২০২৬", "জুলাই ২০২৬", "বিকাল ০৪:৪৫ PM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "কোটা রিনিউয়াল"),
+                VerificationInstanceRecord(3, "০৩ অক্টোবর ২০২৬", "অক্টোবর ২০২৬", "রাত ০৮:২০ PM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা রি-ভেরিফাই")
+            )
+        ),
+        UserVerificationAuditEntry(
+            id = "audit_entry_02",
+            userId = "user_tanvir",
+            userName = "Tanvir Ahmed",
+            userUsername = "tanvir_ahmed",
+            userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+            totalTimesVerifiedTaken = 2, // মোট ২ বার ভেরিফাই নিয়েছে
+            currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+            historyInstances = listOf(
+                VerificationInstanceRecord(1, "১২ মে ২০২৬", "মে ২০২৬", "দুপুর ১২:৩০ PM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা অনুমোদন"),
+                VerificationInstanceRecord(2, "০৫ অক্টোবর ২০২৬", "অক্টোবর ২০২৬", "সকাল ১০:১৫ AM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা রিনিউয়াল")
+            )
+        ),
+        UserVerificationAuditEntry(
+            id = "audit_entry_03",
+            userId = "user_nusrat",
+            userName = "Nusrat Jahan",
+            userUsername = "nusrat_jahan",
+            userAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
+            totalTimesVerifiedTaken = 1, // মোট ১ বার ভেরিফাই নিয়েছে
+            currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+            historyInstances = listOf(
+                VerificationInstanceRecord(1, "১৫ সেপ্টেম্বর ২০২৬", "সেপ্টেম্বর ২০২৬", "দুপুর ০২:৩০ PM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা অনুমোদন")
+            )
+        ),
+        UserVerificationAuditEntry(
+            id = "audit_entry_04",
+            userId = "user_rafiqul",
+            userName = "Rafiqul Islam",
+            userUsername = "rafiqul_islam",
+            userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
+            totalTimesVerifiedTaken = 1, // মোট ১ বার ভেরিফাই নিয়েছে
+            currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+            historyInstances = listOf(
+                VerificationInstanceRecord(1, "২০ আগস্ট ২০২৬", "আগস্ট ২০২৬", "সকাল ১১:৪৫ AM", "প্রধান প্রতিষ্ঠাতা নিয়ন ইসলাম সোহাগ", "ফ্রী কোটা অনুমোদন")
+            )
+        )
+    )
+
+    // User Story Highlights Collections (Friends এর নিচে হাইলাইটস - Screenshot 1 অনুযায়ী)
+    val initialHighlightsMap: Map<String, List<StoryHighlight>> = mapOf(
+        "user_me" to listOf(
+            StoryHighlight(
+                id = "hl_1",
+                userId = "user_me",
+                title = "আমি কিংবদন্তী...",
+                coverUrl = "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600",
+                stories = (1..14).map { idx ->
+                    Story("st_hl1_$idx", currentUser, "https://images.unsplash.com/photo-1544717305-2782549b5136?w=900", "$idx দিন আগে", false, "হৃদয়ের কিংবদন্তী মুহূর্ত ❤️")
+                },
+                createdAt = "০৫ অক্টোবর ২০২৬"
+            ),
+            StoryHighlight(
+                id = "hl_2",
+                userId = "user_me",
+                title = "ঢাকা মেট্রোরেল...",
+                coverUrl = "https://images.unsplash.com/photo-1509356843151-3e7d96241e11?w=600",
+                stories = (1..9).map { idx ->
+                    Story("st_hl2_$idx", currentUser, "https://images.unsplash.com/photo-1509356843151-3e7d96241e11?w=900", "$idx দিন আগে", false, "ঢাকা মেট্রোরেলের যাত্রা 🚆")
+                },
+                createdAt = "০১ অক্টোবর ২০২৬"
+            ),
+            StoryHighlight(
+                id = "hl_3",
+                userId = "user_me",
+                title = "সমুদ্রের গল্প 🌻...",
+                coverUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600",
+                stories = (1..8).map { idx ->
+                    Story("st_hl3_$idx", currentUser, "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900", "$idx সপ্তাহ আগে", false, "সাগরের শান্ত বেলাভূমি 🌊")
+                },
+                createdAt = "২০ সেপ্টেম্বর ২০২৬"
+            ),
+            StoryHighlight(
+                id = "hl_4",
+                userId = "user_me",
+                title = "ফিলিস্তিন 🌻🖤",
+                coverUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=600",
+                stories = (1..16).map { idx ->
+                    Story("st_hl4_$idx", currentUser, "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=900", "$idx দিন আগে", false, "শান্তি ও প্রার্থনার বার্তা 🕊️")
+                },
+                createdAt = "১৫ সেপ্টেম্বর ২০২৬"
+            ),
+            StoryHighlight(
+                id = "hl_5",
+                userId = "user_me",
+                title = "চাষী'র 🌻🤎",
+                coverUrl = "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=600",
+                stories = (1..16).map { idx ->
+                    Story("st_hl5_$idx", currentUser, "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900", "$idx দিন আগে", false, "সোনার বাংলার রূপালী ধানক্ষেত 🌾")
+                },
+                createdAt = "১০ সেপ্টেম্বর ২০২৬"
+            )
+        ),
+        "user_niyon" to listOf(
+            StoryHighlight(
+                id = "hl_niyon_1",
+                userId = "user_niyon",
+                title = "Official Moments 💎",
+                coverUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+                stories = listOf(
+                    Story("hl_n_1", currentUser, "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800", "১ দিন আগে", false, "CEO & Founder Diary 💼")
+                ),
+                createdAt = "০৩ অক্টোবর ২০২৬"
+            ),
+            StoryHighlight(
+                id = "hl_niyon_2",
+                userId = "user_niyon",
+                title = "Travel ✈️",
+                coverUrl = "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=500",
+                stories = listOf(
+                    Story("hl_n_2", currentUser, "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800", "২ সপ্তাহ আগে", false, "Journey through Green hills 🏔️")
+                ),
+                createdAt = "২৫ সেপ্টেম্বর ২০২৬"
+            )
+        )
+    )
+
+    // Option 16: নির্দিষ্ট মেয়াদে আইডি সার্চপেন্ড (৩ দিন থেকে ৩ বছর) নমুনা রেকর্ড তালিকা
+    val initialTimedSuspensions: List<UserSuspensionRecord> = listOf(
+        UserSuspensionRecord(
+            id = "susp_rec_1",
+            userId = "user_tareq",
+            userName = "Tareq Mahmud",
+            userUsername = "tareq_bd",
+            userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+            durationText = "7 দিনের",
+            durationIndex = 2,
+            reasonNote = "গ্রুপে নিয়মবহির্ভূত আপত্তিকর মন্তব্য ও পোস্ট করার অপরাধে",
+            suspendedDateFormatted = "০৮ অক্টোবর ২০২৬, সকাল ১০:৩০ AM",
+            isSuspendedActive = true
+        ),
+        UserSuspensionRecord(
+            id = "susp_rec_2",
+            userId = "user_shakib",
+            userName = "Shakib Al Hasan",
+            userUsername = "shakib_75",
+            userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
+            durationText = "14 দিনের",
+            durationIndex = 3,
+            reasonNote = "অন্য ব্যবহারকারীকে উস্কানিমূলক কথা ও মেসেজ পাঠানোর অপরাধে",
+            suspendedDateFormatted = "০৫ অক্টোবর ২০২৬, দুপুর ০২:১৫ PM",
+            isSuspendedActive = true
+        ),
+        UserSuspensionRecord(
+            id = "susp_rec_3",
+            userId = "user_rashed",
+            userName = "Rashed Khan",
+            userUsername = "rashed_khan_99",
+            userAvatar = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=500",
+            durationText = "1মাসের",
+            durationIndex = 5,
+            reasonNote = "স্প্যামিং ও ভুয়া কনটেন্ট বারবার ছড়ানোর অপরাধে",
+            suspendedDateFormatted = "০১ অক্টোবর ২০২৬, বিকাল ০৫:০০ PM",
+            isSuspendedActive = true
+        )
+    )
+
+    // Support Team User Messages & Tickets (Screenshot 2 and Right Manager Fida Option)
+    val sampleSupportTickets = listOf(
+        SupportTicket(
+            id = "ticket_1",
+            userId = "user_joy",
+            userName = "Joy Ahmed",
+            userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+            profileUrl = "https://facefeed.com/user/joy_ahmed",
+            message = "আসসালামু আলাইকুম ভাই, আমার পেজে ভিডিও আপলোড করার পর ক্যাপশন এডিট করতে পারছি না। অনুগ্রহ করে সমাধান করে দিন। ৫টি স্ক্রিনশট সংযুক্ত করলাম।",
+            screenshotUrls = listOf(
+                "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500",
+                "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500",
+                "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500"
+            ),
+            timestamp = "আজ দুপুর ২:৩০ PM",
+            status = "Open"
+        ),
+        SupportTicket(
+            id = "ticket_2",
+            userId = "user_tanvir",
+            userName = "Tanvir Ahmed",
+            userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
+            profileUrl = "https://facefeed.com/user/tanvir_ahmed",
+            message = "ভাইয়া Fida Verified ব্লু ব্যাজ পাওয়ার জন্য সাবস্ক্রিপশন সম্পন্ন করেছি। বিকাশ পেমেন্ট আইডি দিয়েছি। দয়া করে একটু যাচাই করে কনফার্ম করবেন।",
+            screenshotUrls = listOf(
+                "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500",
+                "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=500"
+            ),
+            timestamp = "গতকাল রাত ৯:১৫ PM",
+            status = "Resolved",
+            adminReply = "আলহামদুলিল্লাহ ভাই, আপনার ভেরিফিকেশন যাচাই সফল হয়েছে এবং নীল ব্যাজ সক্রিয় করা হয়েছে!",
+            adminReplyTime = "গতকাল রাত ৯:৪০ PM"
+        )
+    )
+
+    // User Ad Analytics & Activity Logs (Right Manager Fida Option 24)
+    val initialUserAdAnalytics = listOf(
+        UserAdAnalytics(
+            userId = "user_mohiuddin",
+            userName = "MD Mohiuddin",
+            userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
+            userHandle = "@mohiuddin_07",
+            totalAdsSeen = 48,
+            dailyAdsServed = 14,
+            completedAdsWatched = 39,
+            skippedAdsCount = 9,
+            bannerAdsViewed = 26,
+            interstitialAdsViewed = 22,
+            lastAdSeenTime = "১০ মিনিট আগে",
+            recentAdLogs = listOf(
+                "ভিডিও প্লেব্যাকের ৩ সেকেন্ডে Interstitial অ্যাড সম্পূর্ণ দেখেছে (৫ সেকেন্ড)",
+                "রিলস স্ক্রলে ছোট ব্যানার অ্যাড প্রদর্শন হয়েছে",
+                "ভিডিও শেষে Interstitial অ্যাড স্কিপ করেছে"
+            )
+        ),
+        UserAdAnalytics(
+            userId = "user_joy",
+            userName = "Joy Ahmed",
+            userAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500",
+            userHandle = "@joy_ahmed_bd",
+            totalAdsSeen = 62,
+            dailyAdsServed = 18,
+            completedAdsWatched = 55,
+            skippedAdsCount = 7,
+            bannerAdsViewed = 34,
+            interstitialAdsViewed = 28,
+            lastAdSeenTime = "২৫ মিনিট আগে",
+            recentAdLogs = listOf(
+                "ভিডিওর নিচে বটম স্টিকি ব্যানার অ্যাড দেখেছে",
+                "রিলস ভিডিওর ৫ সেকেন্ডের অ্যাড সম্পূর্ণ শেষ করেছে",
+                "ভিডিও শেষে Interstitial অ্যাড সম্পূর্ণ দেখেছে"
+            )
+        ),
+        UserAdAnalytics(
+            userId = "user_tanvir",
+            userName = "Tanvir Ahmed",
+            userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
+            userHandle = "@tanvir_pro",
+            totalAdsSeen = 35,
+            dailyAdsServed = 11,
+            completedAdsWatched = 24,
+            skippedAdsCount = 11,
+            bannerAdsViewed = 20,
+            interstitialAdsViewed = 15,
+            lastAdSeenTime = "১ ঘণ্টা আগে",
+            recentAdLogs = listOf(
+                "Interstitial অ্যাড ৫ সেকেন্ড পর স্কিপ বোতাম চেপে কেটে দিয়েছে",
+                "মার্কেটপ্লেস ও ভিডিও পেজে ব্যানার অ্যাড দেখেছে"
+            )
+        ),
+        UserAdAnalytics(
+            userId = "user_samrat",
+            userName = "Samrat Khan",
+            userAvatar = "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=500",
+            userHandle = "@samrat_king",
+            totalAdsSeen = 85,
+            dailyAdsServed = 25,
+            completedAdsWatched = 76,
+            skippedAdsCount = 9,
+            bannerAdsViewed = 45,
+            interstitialAdsViewed = 40,
+            lastAdSeenTime = "২ ঘণ্টা আগে",
+            recentAdLogs = listOf(
+                "৩টি ভিডিওর Interstitial অ্যাড একটানা সম্পূর্ণ দেখেছে",
+                "লাইভ আড্ডা ও রিলসে ব্যানার অ্যাড দেখেছে"
+            )
+        ),
+        UserAdAnalytics(
+            userId = "user_picchi",
+            userName = "পিচ্চি ছেলে",
+            userAvatar = "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200",
+            userHandle = "@picchi_boy",
+            totalAdsSeen = 19,
+            dailyAdsServed = 8,
+            completedAdsWatched = 12,
+            skippedAdsCount = 7,
+            bannerAdsViewed = 10,
+            interstitialAdsViewed = 9,
+            lastAdSeenTime = "৩ ঘণ্টা আগে",
+            recentAdLogs = listOf(
+                "৫ সেকেন্ড পর অ্যাড কেটে স্কিপ করেছে",
+                "ভিডিও বটম ব্যানার অ্যাড ইমপ্রেশন হয়েছে"
+            )
+        ),
+        UserAdAnalytics(
+            userId = "user_jamai",
+            userName = "জামাই",
+            userAvatar = "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=200",
+            userHandle = "@jamai_babu",
+            totalAdsSeen = 29,
+            dailyAdsServed = 10,
+            completedAdsWatched = 22,
+            skippedAdsCount = 7,
+            bannerAdsViewed = 15,
+            interstitialAdsViewed = 14,
+            lastAdSeenTime = "৫ ঘণ্টা আগে",
+            recentAdLogs = listOf(
+                "রিলসে ভিডিও অ্যাড সম্পূর্ণ দেখেছে",
+                "Interstitial অ্যাড দেখা সম্পন্ন"
+            )
+        )
+    )
+
+    // ১ কোটি ইউজারের মেসেনজার খারাপ ছবি, ভিডিও, ভয়েস ও আপত্তিকর চ্যাট অডিট রেকর্ড
+    val initialFlaggedMessengerAudits = listOf(
+        com.example.model.FlaggedMessengerAudit(
+            id = "flag_1",
+            senderUser = User(
+                id = "usr_bad_actor_1",
+                fullName = "রকি হাসান (ফেক আইডি)",
+                username = "rocky_fake_99",
+                avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
+                country = "বাংলাদেশ 🇧🇩 (আইপি: ১৯২.১৬৮.১.১০৫)"
+            ),
+            recipientUser = friendNusrat,
+            category = com.example.model.FlaggedMessageType.BAD_PHOTO,
+            contentPreview = "🔞 আপত্তিকর ছবি ইনবক্সে পাঠানো হয়েছে (অটো ফিল্টারে আটকানো হয়েছে)",
+            mediaUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600",
+            timestamp = "এইমাত্র (১০ মিনিট আগে)",
+            aiSafetyDetection = "AI ৯৯.৪% ক্ষতিকর / আপত্তিকর অ্যাডাল্ট কনটেন্ট শনাক্ত করেছে",
+            severity = "অত্যন্ত ক্ষতিকর (Critical)",
+            status = com.example.model.FlaggedAuditStatus.PENDING
+        ),
+        com.example.model.FlaggedMessengerAudit(
+            id = "flag_2",
+            senderUser = User(
+                id = "usr_bad_actor_2",
+                fullName = "সাইবার স্পামার জাহিদ",
+                username = "zahid_spammer",
+                avatarUrl = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200",
+                country = "বাংলাদেশ 🇧🇩 (ঢাকা, মিরপুর)"
+            ),
+            recipientUser = userRahima,
+            category = com.example.model.FlaggedMessageType.BAD_VIDEO,
+            contentPreview = "🔞 অশ্লীল ভিডিও ক্লিপ পাঠিয়ে ব্ল্যাকমেইলের চেষ্টা",
+            mediaUrl = "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=600",
+            timestamp = "২৫ মিনিট আগে",
+            aiSafetyDetection = "AI ৯৭.৮% আপত্তিকর ভিডিও ফুটেজ শনাক্ত করেছে",
+            severity = "উচ্চ ঝুঁকি (High)",
+            status = com.example.model.FlaggedAuditStatus.PENDING
+        ),
+        com.example.model.FlaggedMessengerAudit(
+            id = "flag_3",
+            senderUser = User(
+                id = "usr_bad_actor_3",
+                fullName = "অজ্ঞাত হামলাকারী",
+                username = "unknown_threat",
+                avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
+                country = "বাংলাদেশ 🇧🇩 (চট্টগ্রাম)"
+            ),
+            recipientUser = friendTanvir,
+            category = com.example.model.FlaggedMessageType.ABUSIVE_VOICE,
+            contentPreview = "🎤 অডিওতে চরম গালিগালাজ ও প্রাণনাশের হুমকি রেকর্ড হয়েছে (১৮ সেকেন্ড)",
+            isAudioVoice = true,
+            voiceDurationSeconds = 18,
+            timestamp = "১ ঘণ্টা আগে",
+            aiSafetyDetection = "AI ভয়েস অ্যানালাইসিস: চরম অপভাষা ও হুমকি ডিটেক্ট করেছে",
+            severity = "উচ্চ ঝুঁকি (High)",
+            status = com.example.model.FlaggedAuditStatus.PENDING
+        ),
+        com.example.model.FlaggedMessengerAudit(
+            id = "flag_4",
+            senderUser = User(
+                id = "usr_bad_actor_4",
+                fullName = "জুয়াড়ি ও প্রতারক রাসেল",
+                username = "gambler_russel",
+                avatarUrl = "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200",
+                country = "বাংলাদেশ 🇧🇩 (বরিশাল)"
+            ),
+            recipientUser = friendSamrat,
+            category = com.example.model.FlaggedMessageType.HARMFUL_TEXT,
+            contentPreview = "\"তোর অ্যাকাউন্টে লিঙ্ক পাঠাচ্ছি, এক্ষুনি ৫০ হাজার টাকা দে নয়তো তোর ছবি ফেসবুকে ভাইরাল করে দেব!\"",
+            timestamp = "২ ঘণ্টা আগে",
+            aiSafetyDetection = "AI ৯৮.২% চাঁদাবাজি ও সাইবার হেনস্তা ডিটেক্ট করেছে",
+            severity = "অত্যন্ত ক্ষতিকর (Critical)",
+            status = com.example.model.FlaggedAuditStatus.PENDING
+        )
+    )
 }
+
 

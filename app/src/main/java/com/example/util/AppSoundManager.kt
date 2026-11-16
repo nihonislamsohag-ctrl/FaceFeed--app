@@ -267,4 +267,40 @@ object AppSoundManager {
         }
         return buffer
     }
+
+    /**
+     * Play Facebook-style notification pop chime
+     */
+    fun playNotificationChime() {
+        audioScope.launch {
+            try {
+                toneGenerator?.startTone(ToneGenerator.TONE_PROP_PROMPT, 140)
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed playing notification chime", e)
+            }
+        }
+    }
+
+    /**
+     * Trigger subtle haptic vibration for notifications
+     */
+    fun triggerVibration(context: android.content.Context) {
+        try {
+            val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vm = context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vm?.defaultVibrator
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(100, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(100)
+            }
+        } catch (e: Throwable) {
+            // Ignore if vibration service is unavailable
+        }
+    }
 }

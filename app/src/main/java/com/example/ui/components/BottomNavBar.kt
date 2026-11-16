@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Translations
+import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import com.example.viewmodel.AppTab
@@ -30,9 +31,9 @@ fun FaceFeedBottomNavBar(
     val currentLang by viewModel.currentLanguage.collectAsState()
     val strings = Translations.get(currentLang)
     val activeTab by viewModel.activeTab.collectAsState()
-    val pendingRequests by viewModel.pendingRequests.collectAsState()
-    val notifications by viewModel.notifications.collectAsState()
-    val unreadNotifs = notifications.count { !it.isRead }
+    val friendsBadgeCount by viewModel.friendsBadgeCount.collectAsState()
+    val messagesBadgeCount by viewModel.messagesBadgeCount.collectAsState()
+    val notificationsBadgeCount by viewModel.notificationsBadgeCount.collectAsState()
 
     NavigationBar(
         modifier = modifier,
@@ -67,20 +68,22 @@ fun FaceFeedBottomNavBar(
                         imageVector = if (activeTab == AppTab.MESSAGES) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline,
                         contentDescription = "Chats"
                     )
-                    Box(
-                        modifier = Modifier
-                            .offset(x = 4.dp, y = (-2).dp)
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(BangladeshRed)
-                    )
+                    if (messagesBadgeCount > 0) {
+                        Box(
+                            modifier = Modifier
+                                .offset(x = 4.dp, y = (-2).dp)
+                                .size(7.dp)
+                                .clip(CircleShape)
+                                .background(BangladeshRed)
+                        )
+                    }
                 }
             },
             label = { Text("Chats", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 
@@ -96,9 +99,9 @@ fun FaceFeedBottomNavBar(
             },
             label = { Text("Watch", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 
@@ -114,9 +117,9 @@ fun FaceFeedBottomNavBar(
             },
             label = { Text("Reels", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 
@@ -132,9 +135,9 @@ fun FaceFeedBottomNavBar(
             },
             label = { Text("Groups", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 
@@ -148,7 +151,7 @@ fun FaceFeedBottomNavBar(
                         imageVector = if (activeTab == AppTab.FRIENDS) Icons.Filled.People else Icons.Outlined.People,
                         contentDescription = "Friends"
                     )
-                    if (pendingRequests.isNotEmpty()) {
+                    if (friendsBadgeCount > 0) {
                         Box(
                             modifier = Modifier
                                 .offset(x = 4.dp, y = (-2).dp)
@@ -161,9 +164,9 @@ fun FaceFeedBottomNavBar(
             },
             label = { Text("Friends", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 
@@ -177,7 +180,7 @@ fun FaceFeedBottomNavBar(
                         imageVector = if (activeTab == AppTab.NOTIFICATIONS) Icons.Filled.Notifications else Icons.Outlined.Notifications,
                         contentDescription = "Alerts"
                     )
-                    if (unreadNotifs > 0) {
+                    if (notificationsBadgeCount > 0) {
                         Box(
                             modifier = Modifier
                                 .offset(x = 4.dp, y = (-2).dp)
@@ -190,9 +193,9 @@ fun FaceFeedBottomNavBar(
             },
             label = { Text("Alerts", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = FacebookBlue,
-                selectedTextColor = FacebookBlue,
-                indicatorColor = FacebookBlue.copy(alpha = 0.12f)
+                selectedIconColor = BangladeshGreen,
+                selectedTextColor = BangladeshGreen,
+                indicatorColor = BangladeshGreen.copy(alpha = 0.12f)
             )
         )
 

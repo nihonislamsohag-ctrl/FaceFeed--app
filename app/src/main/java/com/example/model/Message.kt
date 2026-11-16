@@ -32,7 +32,18 @@ data class Conversation(
     val lastMessage: String,
     val lastTime: String,
     val unreadCount: Int = 0,
-    val messages: List<ChatMessage> = emptyList()
+    val activeBadge: String? = null,
+    val isDeliveredCheck: Boolean = false,
+    val isOnline: Boolean = false,
+    val rightMiniAvatarUrl: String? = null,
+    val messages: List<ChatMessage> = emptyList(),
+    val isPinned: Boolean = false,
+    val isMuted: Boolean = false,
+    val isArchived: Boolean = false,
+    val isMessageRequest: Boolean = false,
+    val isMarketplace: Boolean = false,
+    val isBlocked: Boolean = false,
+    val lastMessageTimestamp: Long = System.currentTimeMillis()
 )
 
 enum class CallType {
@@ -48,5 +59,28 @@ data class ActiveCallState(
     val durationSeconds: Int = 0,
     val isMuted: Boolean = false,
     val isSpeakerOn: Boolean = true,
-    val isVideoFrontCamera: Boolean = true
+    val isVideoFrontCamera: Boolean = true,
+    val callId: String = "",
+    val channelName: String = "",
+    val isIncoming: Boolean = false,
+    val isAccepted: Boolean = false
+)
+
+data class DeliveredVaultMessage(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val conversationId: String,
+    val contactId: String,
+    val contactName: String,
+    val contactAvatarUrl: String,
+    val senderId: String,
+    val senderName: String,
+    val isFromMe: Boolean,
+    val text: String,
+    val mediaUrl: String? = null,
+    val isMediaVideo: Boolean = false,
+    val isAudioVoice: Boolean = false,
+    val audioDurationSeconds: Int = 0,
+    val timestamp: String,
+    val deliveryStatus: String = "ডেলিভারি সম্পন্ন (Protected in Vault)",
+    val formattedDate: String = "আজ"
 )

@@ -103,12 +103,7 @@ fun AdminMessengerAuditDialog(
                                         )
                                         if (targetUser.isVerified) {
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Icon(
-                                                Icons.Default.Verified,
-                                                contentDescription = "Verified",
-                                                tint = FacebookBlue,
-                                                modifier = Modifier.size(14.dp)
-                                            )
+                                            FidaVerifiedBadge(size = 14.dp)
                                         }
                                     }
                                     Text(

@@ -2,9 +2,11 @@ package com.example.ui.screens
 
 import android.media.AudioManager
 import android.media.ToneGenerator
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -32,14 +35,32 @@ import com.example.model.ChatMessage
 import com.example.model.Conversation
 import com.example.model.MessageDeliveryStatus
 import com.example.model.Translations
+import com.example.ui.components.ChatMessageActionBottomSheet
+import com.example.ui.components.ForwardMessageDialog
 import com.example.ui.components.PhoneMediaGalleryDialog
+import com.example.ui.components.BlockConfirmationBottomSheet
+import com.example.ui.components.BlockedSuccessBottomSheet
+import com.example.ui.components.UnblockConfirmationBottomSheet
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
+import com.example.ui.components.BlockedChatFooter
+import com.example.ui.components.GoogleAdConfig
+import com.example.ui.components.LudoKingGroupDialog
+import com.example.ui.components.StickyVideoBottomBanner
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
 import com.example.viewmodel.FaceFeedViewModel
+import com.example.util.AppSoundManager
+import com.example.util.MediaSaveHelper
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,12 +71,28 @@ fun ChatDetailScreen(
 ) {
     val currentLang by viewModel.currentLanguage.collectAsState()
     val strings = Translations.get(currentLang)
+    val currentUser by viewModel.currentUser.collectAsState()
+    val blockedUserIds by viewModel.blockedUserIds.collectAsState()
+    val isBlocked = conversation.isBlocked || blockedUserIds.contains(conversation.friend.id)
 
     var messageText by remember { mutableStateOf("") }
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var showPhoneGalleryDialog by remember { mutableStateOf(false) }
     var viewingPhotoUrl by remember { mutableStateOf<String?>(null) }
     var viewingVideoUrl by remember { mutableStateOf<String?>(null) }
+    var showChatInfoScreen by remember { mutableStateOf(false) }
+    var showFriendProfileScreen by remember { mutableStateOf(false) }
+
+    // Block & Unblock Dialog States
+    var showBlockDialog by remember { mutableStateOf(false) }
+    var showBlockedSuccessDialog by remember { mutableStateOf(false) }
+    var showUnblockDialog by remember { mutableStateOf(false) }
+    var showLudoGameDialog by remember { mutableStateOf(false) }
+
+    // Message Action Bottom Sheet & Forward States (Matching Screenshot 20261109_211144)
+    var selectedMessageForActionSheet by remember { mutableStateOf<ChatMessage?>(null) }
+    var forwardingMessage by remember { mutableStateOf<ChatMessage?>(null) }
+    val allConversations by viewModel.conversations.collectAsState()
 
     // Audio Voice Message Recording States
     var isRecordingVoice by remember { mutableStateOf(false) }
@@ -77,27 +114,72 @@ fun ChatDetailScreen(
         }
     }
 
+    val context = LocalContext.current
+
     // System File Manager picker (avoids empty photo picker)
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
+            val mime = context.contentResolver.getType(uri) ?: ""
+            val isPickedVideo = mime.startsWith("video/", ignoreCase = true) ||
+                uri.toString().contains(".mp4", ignoreCase = true)
             viewModel.sendMessage(
                 conversationId = conversation.id,
                 text = "",
                 mediaUrl = uri.toString(),
-                isVideo = false,
+                isVideo = isPickedVideo,
                 replyTo = replyingToMessage
             )
             replyingToMessage = null
         }
     }
 
+    // Full Screen: Friend Profile View (when clicking Profile button or profile avatar)
+    if (showFriendProfileScreen) {
+        FriendProfileScreen(
+            user = conversation.friend,
+            viewModel = viewModel,
+            onBack = { showFriendProfileScreen = false },
+            onMessage = {
+                showFriendProfileScreen = false
+                showChatInfoScreen = false
+            },
+            onAudioCall = { viewModel.startAudioCall(conversation.friend) },
+            onVideoCall = { viewModel.startVideoCall(conversation.friend) }
+        )
+        return
+    }
+
+    // Full Screen: Chat Info Screen (Matching Screenshot 2 & 3 when clicking [ⓘ] or name)
+    if (showChatInfoScreen) {
+        ChatInfoScreen(
+            conversation = conversation,
+            viewModel = viewModel,
+            onBack = { showChatInfoScreen = false },
+            onOpenProfile = { showFriendProfileScreen = true },
+            onStartAudioCall = { viewModel.startAudioCall(conversation.friend) },
+            onStartVideoCall = { viewModel.startVideoCall(conversation.friend) },
+            onDeleteConversation = {
+                viewModel.deleteConversation(conversation.id)
+                onBack()
+            }
+        )
+        return
+    }
+
+    BackHandler {
+        onBack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { showFriendProfileScreen = true }
+                    ) {
                         Box(contentAlignment = Alignment.BottomEnd) {
                             if (conversation.isGroup) {
                                 Box(
@@ -143,12 +225,14 @@ fun ChatDetailScreen(
                             Text(
                                 text = if (conversation.isGroup) conversation.groupName ?: "Group" else conversation.friend.fullName,
                                 fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = if (conversation.isGroup) "${conversation.groupMembers.size} members" else if (conversation.friend.isOnline) strings.activeNow else "Offline",
+                                text = if (conversation.isGroup) "${conversation.groupMembers.size} members" else "Active 16 hours ago",
                                 fontSize = 11.sp,
-                                color = if (!conversation.isGroup && conversation.friend.isOnline) OnlineGreen else MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -159,43 +243,77 @@ fun ChatDetailScreen(
                     }
                 },
                 actions = {
-                    if (conversation.isGroup) {
-                        // Group Call Button
-                        IconButton(
-                            onClick = {
-                                viewModel.startGroupCall(
-                                    groupName = conversation.groupName ?: "Group Call",
-                                    members = conversation.groupMembers
-                                )
+                    // Audio Call Button (Disabled when blocked)
+                    IconButton(
+                        onClick = {
+                            if (isBlocked) {
+                                showUnblockDialog = true
+                            } else {
+                                viewModel.startAudioCall(conversation.friend)
                             }
-                        ) {
-                            Icon(Icons.Default.GroupAdd, contentDescription = strings.groupCall, tint = FacebookBlue)
                         }
-                    } else {
-                        // Audio Call Button
-                        IconButton(
-                            onClick = { viewModel.startAudioCall(conversation.friend) }
-                        ) {
-                            Icon(Icons.Default.Call, contentDescription = strings.audioCall, tint = FacebookBlue)
-                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = strings.audioCall,
+                            tint = if (isBlocked) Color.Gray.copy(alpha = 0.4f) else Color(0xFF673AB7),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
 
-                        // Video Call Button
-                        IconButton(
-                            onClick = { viewModel.startVideoCall(conversation.friend) }
-                        ) {
-                            Icon(Icons.Default.Videocam, contentDescription = strings.videoCall, tint = FacebookBlue)
-                        }
-
-                        // Group Call Button (Audio & Video with friend and others)
-                        IconButton(
-                            onClick = {
-                                viewModel.startGroupCall(
-                                    groupName = "${conversation.friend.fullName} এবং বন্ধুরা",
-                                    members = listOf(conversation.friend)
-                                )
+                    // Video Call Button (Disabled when blocked)
+                    IconButton(
+                        onClick = {
+                            if (isBlocked) {
+                                showUnblockDialog = true
+                            } else {
+                                viewModel.startVideoCall(conversation.friend)
                             }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Videocam,
+                            contentDescription = strings.videoCall,
+                            tint = if (isBlocked) Color.Gray.copy(alpha = 0.4f) else Color(0xFF673AB7),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Small Ludo Dice Icon (🎲) next to camera icon in Messenger chat header
+                    IconButton(
+                        onClick = {
+                            val inviteText = "🎲 ${currentUser.fullName} invited you to play Ludo King - Play Now"
+                            viewModel.sendMessage(conversationId = conversation.id, text = inviteText)
+                            showLudoGameDialog = true
+                        }
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFFFF8E1),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFB300)),
+                            modifier = Modifier.size(28.dp)
                         ) {
-                            Icon(Icons.Default.GroupAdd, contentDescription = strings.groupCall, tint = FacebookBlue)
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("🎲", fontSize = 16.sp)
+                            }
+                        }
+                    }
+
+                    // Info Button: [ ⓘ ] (Blue circle with white 'i' / exclamation mark, matching Screenshot 1!)
+                    IconButton(onClick = { showChatInfoScreen = true }) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(FacebookBlue),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Chat Info",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
                         }
                     }
                 }
@@ -206,8 +324,34 @@ fun ChatDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
         ) {
+            val isFreeMode by viewModel.isFreeMode.collectAsState()
+            val currentSim by viewModel.currentSimOperator.collectAsState()
+
+            if (isFreeMode) {
+                Surface(
+                    color = Color(currentSim.colorHex),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "📶 ${currentSim.banglaName} ফ্রি মেসেঞ্জার: ০ এমবিতে আনলিমিটেড চ্যাট, ছবি ও রিপ্লাই সক্রিয় ⚡",
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             // Messages List
             LazyColumn(
                 modifier = Modifier
@@ -225,11 +369,21 @@ fun ChatDetailScreen(
                         onReact = { reaction ->
                             viewModel.reactToChatMessage(conversation.id, msg.id, reaction)
                         },
+                        onLongPress = {
+                            selectedMessageForActionSheet = msg
+                        },
                         onViewMedia = { url, isVideo ->
                             if (isVideo) {
                                 viewingVideoUrl = url
                             } else {
                                 viewingPhotoUrl = url
+                            }
+                        },
+                        onPlayLudo = { showLudoGameDialog = true },
+                        onOpenProfileLink = { link ->
+                            val opened = viewModel.openUserProfileByLink(link)
+                            if (!opened) {
+                                Toast.makeText(context, "এই আইডির প্রোফাইল লিংক খুঁজে পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
                             }
                         }
                     )
@@ -291,7 +445,13 @@ fun ChatDetailScreen(
                 shadowElevation = 8.dp,
                 color = MaterialTheme.colorScheme.surface
             ) {
-                if (isRecordingVoice) {
+                if (isBlocked) {
+                    // Blocked State Footer (Screen 4)
+                    BlockedChatFooter(
+                        user = conversation.friend,
+                        onUnblockClick = { showUnblockDialog = true }
+                    )
+                } else if (isRecordingVoice) {
                     // Audio Voice Recording Mode
                     Row(
                         modifier = Modifier
@@ -562,6 +722,89 @@ fun ChatDetailScreen(
                 onDismiss = { viewingVideoUrl = null }
             )
         }
+
+        // Screen 1: Block Confirmation Bottom Sheet
+        if (showBlockDialog) {
+            BlockConfirmationBottomSheet(
+                user = conversation.friend,
+                onDismiss = { showBlockDialog = false },
+                onBlock = {
+                    viewModel.blockConversation(conversation.id)
+                    showBlockDialog = false
+                    showBlockedSuccessDialog = true
+                }
+            )
+        }
+
+        // Screen 2: Blocked Success Bottom Sheet
+        if (showBlockedSuccessDialog) {
+            BlockedSuccessBottomSheet(
+                user = conversation.friend,
+                onDismiss = { showBlockedSuccessDialog = false },
+                onDeleteChat = {
+                    showBlockedSuccessDialog = false
+                    viewModel.deleteConversation(conversation.id)
+                    onBack()
+                }
+            )
+        }
+
+        // Screen 5: Unblock Confirmation Bottom Sheet
+        if (showUnblockDialog) {
+            UnblockConfirmationBottomSheet(
+                user = conversation.friend,
+                onDismiss = { showUnblockDialog = false },
+                onUnblock = {
+                    viewModel.unblockConversation(conversation.id)
+                    showUnblockDialog = false
+                }
+            )
+        }
+
+        // Ludo King Realtime Multiplayer Dialog
+        if (showLudoGameDialog) {
+            LudoKingGroupDialog(
+                viewModel = viewModel,
+                onDismiss = { showLudoGameDialog = false }
+            )
+        }
+
+        // Messenger Long-Press Message Actions & Reactions Bottom Sheet (Screenshot 20261109_211144)
+        if (selectedMessageForActionSheet != null) {
+            ChatMessageActionBottomSheet(
+                message = selectedMessageForActionSheet!!,
+                onDismiss = { selectedMessageForActionSheet = null },
+                onReact = { reaction ->
+                    viewModel.reactToChatMessage(conversation.id, selectedMessageForActionSheet!!.id, reaction)
+                    selectedMessageForActionSheet = null
+                },
+                onReply = {
+                    replyingToMessage = selectedMessageForActionSheet
+                    selectedMessageForActionSheet = null
+                },
+                onForward = {
+                    forwardingMessage = selectedMessageForActionSheet
+                    selectedMessageForActionSheet = null
+                },
+                onDeleteForMe = {
+                    viewModel.deleteChatMessageForMe(conversation.id, selectedMessageForActionSheet!!.id)
+                    selectedMessageForActionSheet = null
+                }
+            )
+        }
+
+        // Forward Message to Friends Dialog
+        if (forwardingMessage != null) {
+            ForwardMessageDialog(
+                message = forwardingMessage!!,
+                conversations = allConversations,
+                onDismiss = { forwardingMessage = null },
+                onForwardTo = { targetConversationIds ->
+                    viewModel.forwardChatMessage(forwardingMessage!!, targetConversationIds)
+                    forwardingMessage = null
+                }
+            )
+        }
     }
 }
 
@@ -572,10 +815,23 @@ fun ChatBubble(
     recipientAvatar: String = "",
     onReply: () -> Unit,
     onReact: (String) -> Unit,
-    onViewMedia: (String, Boolean) -> Unit
+    onLongPress: () -> Unit = {},
+    onViewMedia: (String, Boolean) -> Unit,
+    onPlayLudo: () -> Unit = {},
+    onOpenProfileLink: (String) -> Unit = {}
 ) {
+    val context = LocalContext.current
+    val bubbleScope = rememberCoroutineScope()
     val isMe = message.isFromMe
     var showReactions by remember { mutableStateOf(false) }
+
+    // Swipe-to-reply horizontal gesture state (মেসেজ চেপে টেনে রিপ্লাই)
+    var swipeOffset by remember { mutableFloatStateOf(0f) }
+    val animatedSwipeOffset by animateFloatAsState(
+        targetValue = swipeOffset,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "swipeToReply"
+    )
 
     // Audio Voice Message Player States
     var isVoicePlaying by remember { mutableStateOf(false) }
@@ -653,11 +909,66 @@ fun ChatBubble(
             }
         }
 
+        // Reply Header (Matching Facebook Messenger Screenshot 3: You replied to MD)
+        if (message.replyTo != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 3.dp, start = 8.dp, end = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Reply,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (isMe) "You replied to ${message.replyTo.senderName.split(" ").firstOrNull() ?: message.replyTo.senderName}"
+                           else "${message.senderName.split(" ").firstOrNull() ?: message.senderName} replied to you",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { androidx.compose.ui.unit.IntOffset(animatedSwipeOffset.roundToInt(), 0) }
+                .pointerInput(message.id) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (kotlin.math.abs(swipeOffset) > 80f) {
+                                onReply()
+                            }
+                            swipeOffset = 0f
+                        },
+                        onDragCancel = {
+                            swipeOffset = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            swipeOffset = (swipeOffset + dragAmount).coerceIn(-130f, 130f)
+                        }
+                    )
+                }
         ) {
+            // Recipient Small Avatar for friend's messages (Matching Screenshot 3)
+            if (!isMe) {
+                AsyncImage(
+                    model = recipientAvatar.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                    contentDescription = message.senderName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                )
+            }
+
             // If sender is ME, reply and react triggers on the left
             if (isMe) {
                 IconButton(
@@ -692,22 +1003,33 @@ fun ChatBubble(
                         bottomStart = if (isMe) 16.dp else 4.dp,
                         bottomEnd = if (isMe) 4.dp else 16.dp
                     ),
-                    color = if (isMe) FacebookBlue else MaterialTheme.colorScheme.surface,
+                    color = if (isMe) FacebookBlue else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                     shadowElevation = 1.dp,
-                    modifier = Modifier.widthIn(max = 290.dp)
+                    modifier = Modifier
+                        .widthIn(max = 290.dp)
+                        .pointerInput(message.id) {
+                            detectTapGestures(
+                                onLongPress = {
+                                    onLongPress()
+                                },
+                                onTap = {
+                                    // Tap can also open reaction options
+                                }
+                            )
+                        }
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         // Quoted reply preview if message is a reply to another message
                         if (message.replyTo != null) {
                             Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isMe) Color.Black.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isMe) Color.Black.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 6.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(6.dp),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box(
@@ -725,10 +1047,11 @@ fun ChatBubble(
                                             color = if (isMe) Color.White else FacebookBlue
                                         )
                                         Text(
-                                            text = message.replyTo.text.take(30),
+                                            text = message.replyTo.text.ifBlank { "📷 মিডিয়া ফাইল" },
                                             fontSize = 11.sp,
                                             maxLines = 1,
-                                            color = if (isMe) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            overflow = TextOverflow.Ellipsis,
+                                            color = if (isMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }
@@ -811,7 +1134,7 @@ fun ChatBubble(
                             }
                         }
 
-                        // 2. Video Attachment with play button overlay
+                        // 2. Video Attachment with play button overlay + Quick Save/Download button
                         if (message.mediaUrl != null && message.isMediaVideo) {
                             Box(
                                 modifier = Modifier
@@ -846,6 +1169,35 @@ fun ChatBubble(
                                         modifier = Modifier.size(28.dp)
                                     )
                                 }
+                                // Quick Save / Download Video Button
+                                Surface(
+                                    onClick = {
+                                        Toast.makeText(context, "⏳ ভিডিও ডাউনলোড হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                        bubbleScope.launch {
+                                            val res = MediaSaveHelper.saveMediaToGallery(context, message.mediaUrl, isVideo = true)
+                                            if (res.isSuccess) {
+                                                AppSoundManager.playReactionChime()
+                                                Toast.makeText(context, "✅ ভিডিও গ্যালারি/ডাউনলোডে সেইভ হয়েছে!", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                Toast.makeText(context, "⚠️ ভিডিও ডাউনলোড ব্যর্থ হয়েছে", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color.Black.copy(alpha = 0.72f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = "Save Video", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("সেইভ", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                                 Surface(
                                     shape = RoundedCornerShape(4.dp),
                                     color = Color.Black.copy(alpha = 0.75f),
@@ -866,7 +1218,7 @@ fun ChatBubble(
                             if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(6.dp))
                         }
 
-                        // 3. Photo Attachment with click to view fullscreen
+                        // 3. Photo Attachment with click to view fullscreen + Quick Save/Download button
                         if (message.mediaUrl != null && !message.isMediaVideo) {
                             Box(
                                 modifier = Modifier
@@ -880,17 +1232,160 @@ fun ChatBubble(
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
                                 )
+                                Surface(
+                                    onClick = {
+                                        Toast.makeText(context, "⏳ ছবি ডাউনলোড হচ্ছে...", Toast.LENGTH_SHORT).show()
+                                        bubbleScope.launch {
+                                            val res = MediaSaveHelper.saveMediaToGallery(context, message.mediaUrl, isVideo = false)
+                                            if (res.isSuccess) {
+                                                AppSoundManager.playReactionChime()
+                                                Toast.makeText(context, "✅ ছবি গ্যালারি/ডাউনলোডে সেইভ হয়েছে!", Toast.LENGTH_LONG).show()
+                                            } else {
+                                                Toast.makeText(context, "⚠️ ছবি ডাউনলোড ব্যর্থ হয়েছে", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = Color.Black.copy(alpha = 0.68f),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Download, contentDescription = "Save Photo", tint = Color.White, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text("সেইভ", fontSize = 10.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                             if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(6.dp))
                         }
 
-                        // 4. Text Content (if not voice placeholder)
-                        if (message.text.isNotBlank() && !message.isAudioVoice) {
+                        // 4. Ludo Challenge Invite Card, Profile Link Card, or Standard Text Content
+                        val profileLinkInMsg = MediaSaveHelper.extractProfileLink(message.text)
+                        if (message.text.contains("invited you to play Ludo King") || message.text.contains("লুডু খেলার আমন্ত্রণ") || message.text.contains("🎲")) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isMe) Color(0xFF1565C0) else Color(0xFF1B5E20),
+                                border = BorderStroke(1.5.dp, Color(0xFFFFD700)),
+                                shadowElevation = 4.dp
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(text = "🎲", fontSize = 28.sp)
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "লুডু কিং চ্যালেঞ্জ! 👑",
+                                                fontWeight = FontWeight.Black,
+                                                color = Color(0xFFFFD700),
+                                                fontSize = 14.sp
+                                            )
+                                            Text(
+                                                text = message.text,
+                                                color = Color.White,
+                                                fontSize = 12.sp,
+                                                lineHeight = 16.sp
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = onPlayLudo,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFFFFD700),
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(20.dp),
+                                        modifier = Modifier.fillMaxWidth().height(36.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text(
+                                            text = "🎮 Play Now / এখনই খেলুন 🎲",
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        } else if (message.text.isNotBlank() && !message.isAudioVoice) {
                             Text(
                                 text = message.text,
                                 color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface,
                                 fontSize = 14.sp
                             )
+                            if (profileLinkInMsg != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Surface(
+                                    onClick = { onOpenProfileLink(profileLinkInMsg) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (isMe) Color.White.copy(alpha = 0.18f) else FacebookBlue.copy(alpha = 0.12f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (isMe) Color.White.copy(alpha = 0.55f) else FacebookBlue.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.PersonPin,
+                                                contentDescription = "Open Profile",
+                                                tint = if (isMe) Color.White else FacebookBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Column {
+                                                Text(
+                                                    text = "আইডির প্রোফাইল লিংক 🔗",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isMe) Color.White else FacebookBlue
+                                                )
+                                                Text(
+                                                    text = profileLinkInMsg,
+                                                    fontSize = 10.5.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    color = if (isMe) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isMe) Color.White else FacebookBlue
+                                        ) {
+                                            Text(
+                                                text = "আইডিতে ঢুকুন",
+                                                fontSize = 10.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isMe) FacebookBlue else Color.White,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         // 5. Message Timestamp & Facebook Messenger Style Delivery Status
@@ -1071,6 +1566,11 @@ fun FullScreenImageViewerDialog(
     imageUrl: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
+    var isSaved by remember { mutableStateOf(false) }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1089,7 +1589,7 @@ fun FullScreenImageViewerDialog(
                 contentScale = ContentScale.Fit
             )
 
-            // Top Bar with Close and Title
+            // Top Bar with Close, Title, Save/Download & Share
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1115,16 +1615,108 @@ fun FullScreenImageViewerDialog(
                     fontSize = 16.sp
                 )
 
-                IconButton(
-                    onClick = { /* Save or share */ },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (!isSaving) {
+                                isSaving = true
+                                scope.launch {
+                                    val res = MediaSaveHelper.saveMediaToGallery(context, imageUrl, isVideo = false)
+                                    isSaving = false
+                                    if (res.isSuccess) {
+                                        isSaved = true
+                                        AppSoundManager.playReactionChime()
+                                        Toast.makeText(context, "✅ ছবি ফোনের গ্যালারিতে সেইভ ও ডাউনলোড হয়েছে!", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "⚠️ ডাউনলোড ব্যর্থ: ${res.exceptionOrNull()?.message ?: ""}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isSaved) BangladeshGreen else Color.Black.copy(alpha = 0.65f))
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isSaved) Icons.Default.Check else Icons.Default.Download,
+                                contentDescription = "Save Photo",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            MediaSaveHelper.shareTextOrMediaLink(
+                                context,
+                                "FotoFilm ChatFilm ছবি: $imageUrl",
+                                subject = "FotoFilm ছবি"
+                            )
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                    }
                 }
             }
+
+            // Floating Save & Download Pill Button right above banner
+            Button(
+                onClick = {
+                    if (!isSaving) {
+                        isSaving = true
+                        scope.launch {
+                            val res = MediaSaveHelper.saveMediaToGallery(context, imageUrl, isVideo = false)
+                            isSaving = false
+                            if (res.isSuccess) {
+                                isSaved = true
+                                AppSoundManager.playReactionChime()
+                                Toast.makeText(context, "✅ ছবি গ্যালারিতে সেইভ ও ডাউনলোড হয়েছে!", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "⚠️ ডাউনলোড করা যায়নি", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isSaved) BangladeshGreen else FacebookBlue
+                ),
+                shape = RoundedCornerShape(24.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 72.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSaved) Icons.Default.CheckCircle else Icons.Default.Download,
+                    contentDescription = "Save",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isSaving) "ডাউনলোড হচ্ছে..." else if (isSaved) "সেইভ হয়েছে ✓" else "সেইভ ও ডাউনলোড করুন",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            // User requested: যে কোনো ছবির নিচে Banner এই এড চালু করে দেন
+            StickyVideoBottomBanner(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                adUnitId = GoogleAdConfig.BANNER_ID
+            )
         }
     }
 }
@@ -1134,6 +1726,10 @@ fun FullScreenVideoViewerDialog(
     videoUrl: String,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
+    var isSaved by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(true) }
     var currentSeconds by remember { mutableIntStateOf(3) }
     val totalSeconds = 24
@@ -1162,7 +1758,7 @@ fun FullScreenVideoViewerDialog(
                 contentScale = ContentScale.Fit
             )
 
-            // Top Bar
+            // Top Bar with Close, Title, Save/Download & Share
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1188,14 +1784,59 @@ fun FullScreenVideoViewerDialog(
                     fontSize = 16.sp
                 )
 
-                IconButton(
-                    onClick = { /* Share video */ },
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                ) {
-                    Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    IconButton(
+                        onClick = {
+                            if (!isSaving) {
+                                isSaving = true
+                                scope.launch {
+                                    val res = MediaSaveHelper.saveMediaToGallery(context, videoUrl, isVideo = true)
+                                    isSaving = false
+                                    if (res.isSuccess) {
+                                        isSaved = true
+                                        AppSoundManager.playReactionChime()
+                                        Toast.makeText(context, "✅ ভিডিও ফোনের গ্যালারিতে সেইভ ও ডাউনলোড হয়েছে!", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "⚠️ ভিডিও ডাউনলোড ব্যর্থ হয়েছে", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isSaved) BangladeshGreen else Color.Black.copy(alpha = 0.65f))
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (isSaved) Icons.Default.Check else Icons.Default.Download,
+                                contentDescription = "Save Video",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            MediaSaveHelper.shareTextOrMediaLink(
+                                context,
+                                "FotoFilm ChatFilm ভিডিও: $videoUrl",
+                                subject = "FotoFilm ভিডিও"
+                            )
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White)
+                    }
                 }
             }
 
@@ -1225,14 +1866,57 @@ fun FullScreenVideoViewerDialog(
                 }
             }
 
-            // Bottom Video Controls
+            // Bottom Video Controls + Save & Download Button
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
                     .background(Color.Black.copy(alpha = 0.7f))
+                    .navigationBarsPadding()
                     .padding(16.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Button(
+                        onClick = {
+                            if (!isSaving) {
+                                isSaving = true
+                                scope.launch {
+                                    val res = MediaSaveHelper.saveMediaToGallery(context, videoUrl, isVideo = true)
+                                    isSaving = false
+                                    if (res.isSuccess) {
+                                        isSaved = true
+                                        AppSoundManager.playReactionChime()
+                                        Toast.makeText(context, "✅ ভিডিও গ্যালারিতে সেইভ ও ডাউনলোড হয়েছে!", Toast.LENGTH_LONG).show()
+                                    } else {
+                                        Toast.makeText(context, "⚠️ ভিডিও ডাউনলোড করা যায়নি", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isSaved) BangladeshGreen else FacebookBlue
+                        ),
+                        shape = RoundedCornerShape(22.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSaved) Icons.Default.CheckCircle else Icons.Default.Download,
+                            contentDescription = "Save Video",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isSaving) "ডাউনলোড হচ্ছে..." else if (isSaved) "ভিডিও সেইভ হয়েছে ✓" else "ভিডিও সেইভ ও ডাউনলোড করুন",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

@@ -1,4 +1,4 @@
-name: Build FaceFeed APK
+name: Build FotoFilm APK
 
 on:
   push:
@@ -22,25 +22,34 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Restore Debug Keystore
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          fi
+
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Prepare FotoFilm APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk FotoFilm.apk
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FaceFeed-APK
-          path: app/build/outputs/apk/debug/*.apk
+          name: FotoFilm-APK
+          path: FotoFilm.apk
 
-      - name: Create Automatic Release
+      - name: Create or Update Latest Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
-          tag_name: v1.0.0
-          name: "FaceFeed App Release v1.0.0"
-          body: "আপনার FaceFeed অ্যান্ড্রয়েড অ্যাপের রেডি APK ফাইল। নিচে Assets থেকে FaceFeed.apk ডাউনলোড করে ফোনে ইনস্টল করে নিন।"
-          files: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: latest
+          name: "FotoFilm App Release (116 MB)"
+          body: "আপনার নতুন FotoFilm অ্যান্ড্রয়েড অ্যাপের রেডি APK ফাইল (প্রায় ১১৬ MB)। নিচে Assets থেকে FotoFilm.apk ডাউনলোড করে ফোনে ইনস্টল করে নিন।"
+          files: FotoFilm.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,10 +33,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import coil.compose.AsyncImage
 import com.example.data.SampleData
 import com.example.model.FollowerUser
 import com.example.model.ProfileFriend
+import com.example.model.StoryHighlight
 import com.example.model.Translations
 import com.example.ui.components.*
 import com.example.ui.theme.BangladeshGreen
@@ -43,6 +46,7 @@ import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
 import com.example.util.AppSoundManager
+import com.example.util.PrivacyPolicyHelper
 import com.example.viewmodel.AppTab
 import com.example.viewmodel.FaceFeedViewModel
 import com.example.viewmodel.MediaPickerTarget
@@ -85,6 +89,10 @@ fun ProfileScreen(
     var showAllFriendsDialog by remember { mutableStateOf(false) }
     var showLifeEventDialog by remember { mutableStateOf(false) }
     var selectedFriendDetail by remember { mutableStateOf<ProfileFriend?>(null) }
+    var selectedViewingHighlight by remember { mutableStateOf<StoryHighlight?>(null) }
+    var showCreateHighlightDialog by remember { mutableStateOf(false) }
+    var showProfile11FeaturesDialog by remember { mutableStateOf(false) }
+    var isViewAsPublicMode by remember { mutableStateOf(false) }
 
     // Action Sheets & Modal States for Profile & Cover Photos (matching Screenshot 1 & 2)
     var showProfileAvatarModal by remember { mutableStateOf(false) }
@@ -94,6 +102,8 @@ fun ProfileScreen(
     var isSelectingForCover by remember { mutableStateOf(false) }
     var showViewProfilePictureDialog by remember { mutableStateOf(false) }
     var showViewCoverPhotoDialog by remember { mutableStateOf(false) }
+    var showVideoSourceDialog by remember { mutableStateOf(false) }
+    var showInAppVideoGallery by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Real Phone Gallery Launcher for Profile Avatar (Screenshot 1)
@@ -128,6 +138,18 @@ fun ProfileScreen(
             viewModel.openCreatePostWithImages(uris.map { it.toString() })
         } else {
             viewModel.setShowCreatePostDialog(true)
+        }
+    }
+
+    // Video Launcher for Posts created from Profile (Video আইকন)
+    val profileVideoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.setShowCreatePostDialog(true)
+            viewModel.setPendingPostMedia(uri.toString(), isVideo = true)
+        } else {
+            viewModel.openMediaPicker(MediaPickerTarget.LONG_VIDEO)
         }
     }
 
@@ -187,12 +209,61 @@ fun ProfileScreen(
                     )
                 }
 
-                IconButton(onClick = { showEditProfileDialog = true }) {
+                IconButton(onClick = { showProfile11FeaturesDialog = true }) {
                     Icon(
                         imageVector = Icons.Default.MoreHoriz,
-                        contentDescription = "More",
+                        contentDescription = "More Options (11 Features)",
                         tint = MaterialTheme.colorScheme.onSurface
                     )
+                }
+            }
+        }
+
+        // View As Public Visitor Notice Banner (Feature 7)
+        if (isViewAsPublicMode) {
+            Surface(
+                color = FacebookBlue,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "You're viewing your profile as a public visitor",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Button(
+                        onClick = { isViewAsPublicMode = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(
+                            text = "Exit View As",
+                            color = FacebookBlue,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         }
@@ -257,109 +328,124 @@ fun ProfileScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 135.dp, start = 16.dp, end = 16.dp)
+                            .padding(top = 110.dp, start = 16.dp, end = 16.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Bottom,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Avatar Box with Frame Support (matching Screenshot 1)
                             val activeFrame = AVAILABLE_PROFILE_FRAMES.find { it.id == user.avatarFrame }
-                            Box(contentAlignment = Alignment.BottomEnd) {
-                                Box(
+                            Column(horizontalAlignment = Alignment.Start) {
+                                // 80-character Profile Note Speech Bubble right above profile icon
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shadowElevation = 3.dp,
+                                    border = BorderStroke(1.dp, FacebookBlue.copy(alpha = 0.35f)),
                                     modifier = Modifier
-                                        .size(if (activeFrame != null) 124.dp else 116.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (activeFrame != null) {
-                                                Brush.sweepGradient(
-                                                    listOf(
-                                                        activeFrame.borderColor,
-                                                        activeFrame.secondaryColor,
-                                                        activeFrame.borderColor
-                                                    )
-                                                )
-                                            } else {
-                                                Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface))
-                                            }
-                                        )
-                                        .padding(if (activeFrame != null) 4.dp else 0.dp)
-                                        .clickable {
-                                            showProfileAvatarModal = true
-                                        },
-                                    contentAlignment = Alignment.Center
+                                        .padding(bottom = 6.dp)
+                                        .clickable { showEditNoteDialog = true }
                                 ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    ) {
+                                        Text("💭", fontSize = 13.sp)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (user.note.isNotBlank()) user.note else "নোট লিখুন (সর্বোচ্চ ৮০ অক্ষর)... ✨",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (user.note.isNotBlank()) MaterialTheme.colorScheme.onSurface else FacebookBlue,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.widthIn(max = 160.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit note",
+                                            tint = FacebookBlue,
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    }
+                                }
+
+                                // Avatar Box with Frame Support (matching Screenshot 1)
+                                Box(contentAlignment = Alignment.BottomEnd) {
                                     Box(
                                         modifier = Modifier
-                                            .size(116.dp)
+                                            .size(if (activeFrame != null) 124.dp else 116.dp)
                                             .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surface)
-                                            .border(if (activeFrame == null) 4.dp else 2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                            .background(
+                                                if (activeFrame != null) {
+                                                    Brush.sweepGradient(
+                                                        listOf(
+                                                            activeFrame.borderColor,
+                                                            activeFrame.secondaryColor,
+                                                            activeFrame.borderColor
+                                                        )
+                                                    )
+                                                } else {
+                                                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surface))
+                                                }
+                                            )
+                                            .padding(if (activeFrame != null) 4.dp else 0.dp)
+                                            .clickable {
+                                                showProfileAvatarModal = true
+                                            },
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        AsyncImage(
-                                            model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800" },
-                                            contentDescription = strings.profilePhoto,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
-
-                                // Badge or Camera button on avatar
-                                if (activeFrame != null) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = Color.White,
-                                        shadowElevation = 4.dp,
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clickable { showProfileAvatarModal = true }
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text(activeFrame.badgeIcon, fontSize = 18.sp)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(116.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surface)
+                                                .border(if (activeFrame == null) 4.dp else 2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                        ) {
+                                            AsyncImage(
+                                                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800" },
+                                                contentDescription = strings.profilePhoto,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
                                         }
                                     }
-                                } else {
-                                    IconButton(
-                                        onClick = {
-                                            showProfileAvatarModal = true
-                                        },
-                                        modifier = Modifier
-                                            .size(34.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.CameraAlt,
-                                            contentDescription = strings.changePhoto,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
 
-                            // "Share a note..." bubble from screenshot
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shadowElevation = 3.dp,
-                                modifier = Modifier
-                                    .padding(bottom = 20.dp)
-                                    .clickable { showEditNoteDialog = true }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = if (user.note.isNotBlank()) user.note else "Share a note...",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    // Badge or Camera button on avatar
+                                    if (activeFrame != null) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color.White,
+                                            shadowElevation = 4.dp,
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clickable { showProfileAvatarModal = true }
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(activeFrame.badgeIcon, fontSize = 18.sp)
+                                            }
+                                        }
+                                    } else {
+                                        IconButton(
+                                            onClick = {
+                                                showProfileAvatarModal = true
+                                            },
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CameraAlt,
+                                                contentDescription = strings.changePhoto,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -510,39 +596,69 @@ fun ProfileScreen(
                             ) {
                                 Icon(Icons.Default.Work, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Digital creator", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(user.category.ifBlank { user.workplace.ifBlank { "Digital creator" } }, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
 
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Dhaka", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                if (user.livesIn.isNotBlank()) {
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(user.livesIn, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                }
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("লাউপাডা সাগর সৈকত মাধ্যমিক বিদ্যালয়", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (user.school.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(user.school, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Taltali Degree College .তালতলী ডিগ্রী কলেজ", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (user.college.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.School, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(user.college, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
 
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("niyonislamsohag", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = FacebookBlue)
+                            if (user.instagramHandle.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(user.instagramHandle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = FacebookBlue)
+                                }
+                            }
+
+                            if (user.relationshipStatus.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Favorite, contentDescription = null, tint = Color(0xFFE91E63), modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(user.relationshipStatus, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+
+                            if (user.joinedDate.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.AccessTime, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(user.joinedDate, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             }
                         }
 
@@ -596,9 +712,9 @@ fun ProfileScreen(
                                 )
                             }
 
-                            // More Options Button (•••)
+                            // More Options Button (••• - 11 Features)
                             FilledTonalIconButton(
-                                onClick = { showEditProfileDialog = true },
+                                onClick = { showProfile11FeaturesDialog = true },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = IconButtonDefaults.filledTonalIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -610,6 +726,32 @@ fun ProfileScreen(
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                             }
+                        }
+
+                        // Privacy Policy Button on Profile Page
+                        OutlinedButton(
+                            onClick = { PrivacyPolicyHelper.openInBrowser(context) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .heightIn(min = 48.dp)
+                                .testTag("profile_privacy_policy_button"),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PrivacyTip,
+                                contentDescription = "Privacy Policy",
+                                tint = FacebookBlue,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Privacy Policy",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
 
                         HorizontalDivider(
@@ -688,10 +830,33 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        DetailRow(icon = Icons.Default.LocationOn, label = user.livesIn)
-                        DetailRow(icon = Icons.Default.Home, label = "From ${user.fromCity}")
-                        DetailRow(icon = Icons.Default.AccessTime, label = user.joinedDate)
-                        DetailRow(icon = Icons.Default.Language, label = user.website)
+                        if (user.workplace.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.Work, label = "Works at ${user.workplace}")
+                        }
+                        if (user.school.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.School, label = "Went to ${user.school}")
+                        }
+                        if (user.college.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.School, label = "Went to ${user.college}")
+                        }
+                        if (user.livesIn.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.LocationOn, label = "Lives in ${user.livesIn}")
+                        }
+                        if (user.fromCity.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.Home, label = "From ${user.fromCity}")
+                        }
+                        if (user.instagramHandle.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.PhotoCamera, label = user.instagramHandle)
+                        }
+                        if (user.relationshipStatus.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.Favorite, label = user.relationshipStatus)
+                        }
+                        if (user.joinedDate.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.AccessTime, label = user.joinedDate)
+                        }
+                        if (user.website.isNotBlank()) {
+                            DetailRow(icon = Icons.Default.Language, label = user.website)
+                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(top = 14.dp, bottom = 12.dp),
@@ -792,6 +957,110 @@ fun ProfileScreen(
                                             overflow = TextOverflow.Ellipsis,
                                             textAlign = TextAlign.Center
                                         )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                        )
+
+                        // ============================================================
+                        // HIGHLIGHTS SECTION (Screenshot 1 অনুযায়ী Friends এর নিচে Highlights)
+                        // স্টোরিগুলো স্থায়ীভাবে জমা থাকবে এবং যেকোনো সময় পরেও দেখা যাবে
+                        // ============================================================
+                        val userHighlightsMap by viewModel.userHighlights.collectAsState()
+                        val highlights = userHighlightsMap[user.id] ?: (SampleData.initialHighlightsMap["user_me"] ?: emptyList())
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Highlights",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            TextButton(
+                                onClick = { showCreateHighlightDialog = true }
+                            ) {
+                                Text(
+                                    text = "+ New",
+                                    color = FacebookBlue,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Horizontal list of Highlights (Screenshot 1: ভার্টিকাল স্টোরি কার্ডের মতো রূপ)
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            // Highlights Cards from Screenshot 1
+                            items(highlights) { highlight ->
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .width(86.dp)
+                                        .height(148.dp)
+                                        .clickable { selectedViewingHighlight = highlight },
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        // Highlight Cover Image
+                                        AsyncImage(
+                                            model = highlight.coverUrl.ifEmpty { user.avatarUrl },
+                                            contentDescription = highlight.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+
+                                        // Bottom Dark Gradient for readability
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(85.dp)
+                                                .align(Alignment.BottomCenter)
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                                                    )
+                                                )
+                                        )
+
+                                        // Overlaid Title & "+ count" of stories (Screenshot 1 অনুযায়ী)
+                                        Column(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .padding(horizontal = 8.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = highlight.title,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                color = Color.White,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                                lineHeight = 13.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "+ ${highlight.stories.size.coerceAtLeast(1)}",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                color = Color.White
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -964,6 +1233,22 @@ fun ProfileScreen(
                                             Icon(Icons.Default.PhotoLibrary, contentDescription = "Photo", tint = Color(0xFF45BD62), modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text("Photo", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        }
+                                    }
+
+                                    // Video Icon & Button (Posts এর নিচে Video আইকন - ফোন গ্যালারি ও ক্লিপস)
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.clickable { showVideoSourceDialog = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.VideoCall, contentDescription = "Video", tint = Color(0xFFE53935), modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Video", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                         }
                                     }
 
@@ -1195,6 +1480,20 @@ fun ProfileScreen(
     }
 
     // ============================================================
+    // DIALOG: 11 FEATURES PROFILE OPTIONS (Screenshot 1: IMG_20261012_092741.jpg)
+    // ============================================================
+    if (showProfile11FeaturesDialog) {
+        ProfileMoreOptionsDialog(
+            user = user,
+            viewModel = viewModel,
+            onDismiss = { showProfile11FeaturesDialog = false },
+            onOpenEditProfile = { showEditProfileDialog = true },
+            onActivateViewAs = { isViewAsPublicMode = true },
+            onOpenCreateHighlight = { showCreateHighlightDialog = true }
+        )
+    }
+
+    // ============================================================
     // DIALOG: PROFESSIONAL DASHBOARD
     // ============================================================
     if (showDashboardDialog) {
@@ -1211,47 +1510,108 @@ fun ProfileScreen(
         EditProfileDetailsDialog(
             user = user,
             onDismiss = { showEditProfileDialog = false },
-            onSave = { name, bio, cat, work, lives, from, sch, col, ig ->
-                viewModel.updateProfileDetails(name, bio, cat, work, lives, from, sch, col, ig)
+            onSave = { name, bio, cat, work, lives, from, sch, col, ig, rel, joined ->
+                viewModel.updateProfileDetails(name, bio, cat, work, lives, from, sch, col, ig, rel, joined)
                 showEditProfileDialog = false
             }
         )
     }
 
     // ============================================================
-    // DIALOG: EDIT NOTE ("Share a note...")
+    // DIALOG: EDIT NOTE ("প্রোফাইল আইকন উপরে নোট টেস্ট ৮০ অক্ষরের")
     // ============================================================
     if (showEditNoteDialog) {
         var noteInput by remember { mutableStateOf(user.note) }
+        var noteError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
             onDismissRequest = { showEditNoteDialog = false },
-            title = { Text("Share a note...", fontWeight = FontWeight.Bold) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("💭", fontSize = 20.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("প্রোফাইল নোট পোস্ট করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+            },
             text = {
-                OutlinedTextField(
-                    value = noteInput,
-                    onValueChange = { noteInput = it },
-                    placeholder = { Text("Share a thought or status update ✨") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    Text(
+                        text = "প্রোফাইল আইকনের উপরে সর্বোচ্চ ৮০ অক্ষরে আপনার স্ট্যাটাস বা নোট লিখুন। সব বন্ধুরা এটি দেখতে পারবে।",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = noteInput,
+                        onValueChange = {
+                            if (it.length <= 80) {
+                                noteInput = it
+                                noteError = null
+                            }
+                        },
+                        placeholder = { Text("কী ভাবছেন? (সর্বোচ্চ ৮০ অক্ষর) ✨") },
+                        maxLines = 3,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = if (noteError != null) noteError!! else "সর্বোচ্চ ৮০ অক্ষর",
+                                    color = if (noteError != null) Color.Red else Color.Gray,
+                                    fontSize = 11.sp
+                                )
+                                Text(
+                                    text = "${noteInput.length} / ৮০",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    color = if (noteInput.length >= 75) Color.Red else FacebookBlue
+                                )
+                            }
+                        }
+                    )
+                }
             },
             confirmButton = {
                 Button(
                     onClick = {
+                        val safety = com.example.util.SafetyPolicyValidator.validateContent(noteInput)
+                        if (!safety.isAllowed) {
+                            noteError = safety.reasonMessage
+                            return@Button
+                        }
                         viewModel.updateNote(noteInput)
                         showEditNoteDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue)
                 ) {
-                    Text("Save")
+                    Text("নোট পোস্ট করুন")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEditNoteDialog = false }) {
-                    Text("Cancel")
+                    Text("বাতিল")
                 }
             }
+        )
+    }
+
+    // DIALOG: HIGHLIGHT STORY VIEWER
+    selectedViewingHighlight?.let { highlight ->
+        HighlightStoryViewerDialog(
+            highlight = highlight,
+            viewModel = viewModel,
+            onDismiss = { selectedViewingHighlight = null }
+        )
+    }
+
+    // DIALOG: CREATE NEW HIGHLIGHT
+    if (showCreateHighlightDialog) {
+        CreateHighlightDialog(
+            user = user,
+            viewModel = viewModel,
+            onDismiss = { showCreateHighlightDialog = false }
         )
     }
 
@@ -1420,6 +1780,124 @@ fun ProfileScreen(
             frameId = null,
             isCover = true,
             onDismiss = { showViewCoverPhotoDialog = false }
+        )
+    }
+
+    // ============================================================
+    // 7. VIDEO SOURCE SELECTOR DIALOG (ফোন গ্যালারি ও ক্লিপস)
+    // ============================================================
+    if (showVideoSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showVideoSourceDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.VideoCall, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(26.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ভিডিও আপলোড 🎥", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("আপনি কোথা থেকে ভিডিও যোগ করে পোস্ট করতে চান?", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, FacebookBlue.copy(alpha = 0.3f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showVideoSourceDialog = false
+                                try {
+                                    profileVideoPicker.launch("video/*")
+                                } catch (e: Exception) {
+                                    showInAppVideoGallery = true
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = FacebookBlue.copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = FacebookBlue, modifier = Modifier.size(22.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("📱 ফোনের মেমোরি / গ্যালারি", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("মোবাইলে সংরক্ষিত যেকোনো ভিডিও বেছে নিন", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE53935).copy(alpha = 0.3f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                showVideoSourceDialog = false
+                                showInAppVideoGallery = true
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFE53935).copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(22.dp))
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("🎬 ভিডিও অ্যালবাম ও ক্লিপস কালেকশন", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text("তাত্ক্ষণিক এইচডি ভিডিও ও রিলস অ্যালবাম থেকে বাছাই", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showVideoSourceDialog = false }) {
+                    Text("বাতিল", color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        )
+    }
+
+    if (showInAppVideoGallery) {
+        PhoneMediaGalleryDialog(
+            title = "ভিডিও অ্যালবাম ও গ্যালারি কালেকশন 🎥",
+            allowMultiple = false,
+            isVideoOnly = true,
+            onMediaSelected = { selectedList ->
+                if (selectedList.isNotEmpty()) {
+                    viewModel.setPendingPostMedia(selectedList.first(), isVideo = true)
+                    viewModel.setShowCreatePostDialog(true)
+                }
+                showInAppVideoGallery = false
+            },
+            onLaunchSystemFilePicker = {
+                try {
+                    profileVideoPicker.launch("video/*")
+                } catch (e: Exception) {
+                    // Fallback
+                }
+            },
+            onDismiss = { showInAppVideoGallery = false }
         )
     }
 }
@@ -1939,7 +2417,7 @@ fun ToolRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String
 fun EditProfileDetailsDialog(
     user: com.example.model.User,
     onDismiss: () -> Unit,
-    onSave: (name: String, bio: String, cat: String, work: String, lives: String, from: String, sch: String, col: String, ig: String) -> Unit
+    onSave: (name: String, bio: String, cat: String, work: String, lives: String, from: String, sch: String, col: String, ig: String, rel: String, joined: String) -> Unit
 ) {
     var name by remember { mutableStateOf(user.fullName) }
     var bio by remember { mutableStateOf(user.bio) }
@@ -1950,6 +2428,8 @@ fun EditProfileDetailsDialog(
     var school by remember { mutableStateOf(user.school) }
     var college by remember { mutableStateOf(user.college) }
     var instagram by remember { mutableStateOf(user.instagramHandle) }
+    var relationshipStatus by remember { mutableStateOf(user.relationshipStatus) }
+    var joinedDate by remember { mutableStateOf(user.joinedDate) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1958,9 +2438,10 @@ fun EditProfileDetailsDialog(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 400.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .heightIn(max = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // ১. Full Name
                 item {
                     OutlinedTextField(
                         value = name,
@@ -1970,6 +2451,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ২. Bio
                 item {
                     OutlinedTextField(
                         value = bio,
@@ -1979,6 +2461,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৩. Category
                 item {
                     OutlinedTextField(
                         value = category,
@@ -1988,6 +2471,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৪. Work
                 item {
                     OutlinedTextField(
                         value = workplace,
@@ -1997,6 +2481,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৫. Lives in
                 item {
                     OutlinedTextField(
                         value = livesIn,
@@ -2006,6 +2491,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৬. From
                 item {
                     OutlinedTextField(
                         value = fromCity,
@@ -2015,6 +2501,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৭. School
                 item {
                     OutlinedTextField(
                         value = school,
@@ -2024,6 +2511,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৮. College
                 item {
                     OutlinedTextField(
                         value = college,
@@ -2033,6 +2521,7 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                // ৯. ইউজারনেম / সোশ্যাল লিঙ্ক
                 item {
                     OutlinedTextField(
                         value = instagram,
@@ -2042,11 +2531,85 @@ fun EditProfileDetailsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+
+                // ১০. Relationship status (ছিলেন, মেরিড, রিলেশনশিপ)
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = relationshipStatus,
+                            onValueChange = { relationshipStatus = it },
+                            label = { Text("Relationship status") },
+                            placeholder = { Text("e.g. Single, In a relationship, Married") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE91E63),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Single", "In a relationship", "Married", "Engaged").forEach { statusOption ->
+                                FilterChip(
+                                    selected = relationshipStatus.equals(statusOption, ignoreCase = true),
+                                    onClick = { relationshipStatus = statusOption },
+                                    label = { Text(statusOption, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ১১. Joined Date (জয়েন্ট ডেট ও সাল ইংরেজি)
+                item {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = joinedDate,
+                            onValueChange = { joinedDate = it },
+                            label = { Text("Joined Date") },
+                            placeholder = { Text("e.g. Joined May 2020 / Joined October 2026") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.AccessTime,
+                                    contentDescription = null,
+                                    tint = FacebookBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("Joined May 2020", "Joined October 2026", "Joined January 2024", "Joined March 2021").forEach { dateOption ->
+                                FilterChip(
+                                    selected = joinedDate.equals(dateOption, ignoreCase = true),
+                                    onClick = { joinedDate = dateOption },
+                                    label = { Text(dateOption, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onSave(name, bio, category, workplace, livesIn, fromCity, school, college, instagram) },
+                onClick = { onSave(name, bio, category, workplace, livesIn, fromCity, school, college, instagram, relationshipStatus, joinedDate) },
                 colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue)
             ) {
                 Text("Save")

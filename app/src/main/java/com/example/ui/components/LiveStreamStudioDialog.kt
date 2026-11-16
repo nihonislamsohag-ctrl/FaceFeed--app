@@ -1,16 +1,23 @@
 package com.example.ui.components
 
+import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,13 +27,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import com.example.data.SampleData
 import com.example.model.LiveCommentItem
 import com.example.model.ReactionType
@@ -39,102 +49,159 @@ import com.example.viewmodel.FaceFeedViewModel
 import kotlinx.coroutines.delay
 import java.util.UUID
 
+enum class LiveStudioStage {
+    PRE_LIVE,        // Screenshot 1: Prepare live, Go Live button, description, vertical toolbar
+    ACTIVE_BROADCAST,// Screenshot 2: LIVE badge with timer, live comments, reaction bar, Finish button
+    ENDED_SUMMARY    // Screenshot 3: Broadcast ended, Monetization card, 30 days warning, Boost, Reel, Done
+}
+
+enum class LivePrivacy {
+    PUBLIC, FRIENDS, ONLY_ME
+}
+
+/**
+ * Facebook Live Studio with:
+ * 1. Pre-Live Setup (Screenshot 1)
+ * 2. Active Live Broadcast (Screenshot 2)
+ * 3. Broadcast Ended Summary (Screenshot 3)
+ * 4. Front & Rear camera switching (সামনের ক্যামেরা ও পিছনের ক্যামেরা)
+ * 5. Full support for Portrait (লাম্বা) and Landscape (দিগলা) modes ("যেকোনো ফোন লাম্বা ও দিগলা করে দুনোটা দিয়ে লাইভ চালানো যাবে")
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LiveStreamStudioDialog(
     viewModel: FaceFeedViewModel,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
+    val configuration = LocalConfiguration.current
 
-    var isFrontCamera by remember { mutableStateOf(true) }
+    // Studio Stage
+    var currentStage by remember { mutableStateOf(LiveStudioStage.PRE_LIVE) }
+
+    // Orientation state: Portrait (লাম্বা) vs Landscape (দিগলা)
+    var isManualLandscape by remember { mutableStateOf(false) }
+    val isLandscape = isManualLandscape || (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+
+    // Camera states (Front vs Rear Camera / সামনের ও পিছনের ক্যামেরা)
+    var isFrontCamera by remember { mutableStateOf(false) } // Default rear camera matching screenshot 1
     var isFlashOn by remember { mutableStateOf(false) }
     var isMicMuted by remember { mutableStateOf(false) }
-    var liveSeconds by remember { mutableStateOf(165) } // Started ~2.5 mins ago
-    var viewerCount by remember { mutableStateOf(5840) } // Thousands of active viewers
-    var hostMessage by remember { mutableStateOf("") }
-    var showEndLiveConfirm by remember { mutableStateOf(false) }
-    var showEditTitleHashtagDialog by remember { mutableStateOf(false) }
+    var isEnhanceOn by remember { mutableStateOf(false) }
+    var isToolbarExpanded by remember { mutableStateOf(true) }
+    var selectedFilterIndex by remember { mutableIntStateOf(0) }
+    var showStickersDialog by remember { mutableStateOf(false) }
 
-    // 5 Social Advertisements state for Live Video
+    // Privacy & Audience
+    var livePrivacy by remember { mutableStateOf(LivePrivacy.PUBLIC) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var isShareToStoryOn by remember { mutableStateOf(true) }
+
+    // Title & Description
+    var liveDescription by remember { mutableStateOf("") }
+    var liveTitle by remember { mutableStateOf("🔴 সবার সাথে সরাসরি আড্ডা ও গানবাজনা ✨") }
+    var liveHashtags by remember { mutableStateOf(listOf("#FaceFeed", "#Live", "#Bangladesh", "#NiyonIslamSohag", "#Viral")) }
+    var showEditDescriptionDialog by remember { mutableStateOf(false) }
+
+    // Timer & Viewers
+    var liveSeconds by remember { mutableIntStateOf(18) } // Matching Screenshot 2: 0:18
+    var isLiveTimerRunning by remember { mutableStateOf(false) }
+    var viewerCount by remember { mutableIntStateOf(5840) }
+    var recentJoinNotice by remember { mutableStateOf("🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!") }
+
+    // 5 Social Advertisements
     var activeLiveAd by remember { mutableStateOf<SocialAd?>(null) }
     var activeLiveAdSlotTitle by remember { mutableStateOf("") }
     var showAdsSelectorDialog by remember { mutableStateOf(false) }
     var shownLiveAdIndices by remember { mutableStateOf(setOf<Int>()) }
 
-    // Live Title & Hashtags as requested by user
-    var liveTitle by remember { mutableStateOf("🔴 সবার সাথে সরাসরি আড্ডা ও গানবাজনা ✨") }
-    var liveHashtags by remember { mutableStateOf(listOf("#FaceFeed", "#Live", "#Bangladesh", "#NiyonIslamSohag", "#Viral")) }
-    var newHashtagInput by remember { mutableStateOf("") }
-    var recentJoinNotice by remember { mutableStateOf("🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!") }
+    // Google AdMob Live Mid-Roll Ads (at 3 min / 180s and 8 min / 480s)
+    var showGoogleLiveMidAd by remember { mutableStateOf(false) }
+    var triggeredLiveAdSlots by remember { mutableStateOf(setOf<Int>()) }
 
+    // Live Comments & Reactions
     val liveComments = remember { mutableStateListOf<LiveCommentItem>() }
     val floatingHearts = remember { mutableStateListOf<Long>() }
+    var hostCommentInput by remember { mutableStateOf("") }
+
+    // Ended screen states (Screenshot 3)
+    var showReminderSentToast by remember { mutableStateOf(false) }
+    var isDismissedPaymentCard by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showEndedMenuOptions by remember { mutableStateOf(false) }
 
     // Initialize initial comments
     LaunchedEffect(Unit) {
         liveComments.addAll(SampleData.sampleLiveComments)
     }
 
-    // Live timer & viewer counter tick (thousands of viewers)
-    LaunchedEffect(Unit) {
-        val joiners = listOf(
-            "🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!",
-            "🔥 সাকিব আল হাসান ও আরও ৩,৪০০ জন দর্শক লাইভ দেখছেন!",
-            "✨ ঢাকা ও চট্টগ্রাম থেকে আরও ২,১০০ জন লাইভে জয়েন করেছেন!",
-            "👏 নাজমুল, সুমাইয়া ও আরও ৯৮০ জন লাইভে লাইক দিয়েছেন!"
-        )
-        var noticeIndex = 0
-        while (true) {
-            delay(1000)
-            liveSeconds++
-            viewerCount += (-8..35).random()
-            if (liveSeconds % 12 == 0) {
-                recentJoinNotice = joiners[noticeIndex % joiners.size]
-                noticeIndex++
-            }
+    // Active Live timer & viewer counter
+    LaunchedEffect(isLiveTimerRunning) {
+        if (isLiveTimerRunning) {
+            val joiners = listOf(
+                "🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!",
+                "🔥 সাকিব আল হাসান ও আরও ৩,৪০০ জন দর্শক লাইভ দেখছেন!",
+                "✨ ঢাকা ও চট্টগ্রাম থেকে আরও ২,১০০ জন লাইভে জয়েন করেছেন!",
+                "👏 নাজমুল, সুমাইয়া ও আরও ৯৮০ জন লাইভে লাইক দিয়েছেন!"
+            )
+            var noticeIndex = 0
+            while (isLiveTimerRunning) {
+                delay(1000)
+                liveSeconds++
+                viewerCount += (-5..25).random()
+                if (liveSeconds % 12 == 0) {
+                    recentJoinNotice = joiners[noticeIndex % joiners.size]
+                    noticeIndex++
+                }
 
-            // 5 Social advertisements scheduling for Live Video (৫ টি সামাজিক এডবেরাইজ)
-            if (activeLiveAd == null) {
-                if (liveSeconds >= 175 && !shownLiveAdIndices.contains(0)) {
-                    shownLiveAdIndices = shownLiveAdIndices + 0
-                    activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (১/৫): রক্তদান কর্মসূচি"
-                    activeLiveAd = SampleData.sampleSocialAds.getOrNull(0)
-                } else if (liveSeconds >= 210 && !shownLiveAdIndices.contains(1)) {
-                    shownLiveAdIndices = shownLiveAdIndices + 1
-                    activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (২/৫): বৃক্ষরোপণ অভিযান"
-                    activeLiveAd = SampleData.sampleSocialAds.getOrNull(1)
-                } else if (liveSeconds >= 245 && !shownLiveAdIndices.contains(2)) {
-                    shownLiveAdIndices = shownLiveAdIndices + 2
-                    activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (৩/৫): পথশিশু শিক্ষা তহবিল"
-                    activeLiveAd = SampleData.sampleSocialAds.getOrNull(2)
-                } else if (liveSeconds >= 280 && !shownLiveAdIndices.contains(3)) {
-                    shownLiveAdIndices = shownLiveAdIndices + 3
-                    activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (৪/৫): ক্ষুধামুক্ত বাংলাদেশ"
-                    activeLiveAd = SampleData.sampleSocialAds.getOrNull(3)
-                } else if (liveSeconds >= 315 && !shownLiveAdIndices.contains(4)) {
-                    shownLiveAdIndices = shownLiveAdIndices + 4
-                    activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (৫/৫): নিরাপদ সড়ক সচেতনতা"
-                    activeLiveAd = SampleData.sampleSocialAds.getOrNull(4)
+                // Google AdMob Ads at 3 min (180s) and 8 min (480s)
+                if (liveSeconds >= 180 && !triggeredLiveAdSlots.contains(180)) {
+                    triggeredLiveAdSlots = triggeredLiveAdSlots + 180
+                    showGoogleLiveMidAd = true
+                } else if (liveSeconds >= 480 && !triggeredLiveAdSlots.contains(480)) {
+                    triggeredLiveAdSlots = triggeredLiveAdSlots + 480
+                    showGoogleLiveMidAd = true
+                }
+
+                // Social advertisements scheduling
+                if (activeLiveAd == null && !showGoogleLiveMidAd) {
+                    if (liveSeconds >= 35 && !shownLiveAdIndices.contains(0)) {
+                        shownLiveAdIndices = shownLiveAdIndices + 0
+                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (১/৫): রক্তদান কর্মসূচি"
+                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(0)
+                    } else if (liveSeconds >= 70 && !shownLiveAdIndices.contains(1)) {
+                        shownLiveAdIndices = shownLiveAdIndices + 1
+                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (২/৫): বৃক্ষরোপণ অভিযান"
+                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(1)
+                    } else if (liveSeconds >= 105 && !shownLiveAdIndices.contains(2)) {
+                        shownLiveAdIndices = shownLiveAdIndices + 2
+                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (৩/৫): পথশিশু শিক্ষা তহবিল"
+                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(2)
+                    }
                 }
             }
         }
     }
 
-    // Periodic new simulated comments arriving from viewers across Bangladesh
-    LaunchedEffect(Unit) {
-        val extraComments = listOf(
-            LiveCommentItem(UUID.randomUUID().toString(), "Kamrul Hasan", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", "ভাইয়া সাউন্ড একদম পরিষ্কার ও ক্লিয়ার 👏"),
-            LiveCommentItem(UUID.randomUUID().toString(), "Fatema Khatun", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", "মাশাআল্লাহ, অনেক সুন্দর লাইভ ❤️"),
-            LiveCommentItem(UUID.randomUUID().toString(), "Biplob Kumar", "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200", "লাইভ লিঙ্ক ফেসবুক ও মেসেঞ্জারে শেয়ার করলাম ভাই 🔥"),
-            LiveCommentItem(UUID.randomUUID().toString(), "Nusrat Jahan", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "কেমন আছেন ভাইয়া? সিলেট থেকে দেখছি 🇧🇩"),
-            LiveCommentItem(UUID.randomUUID().toString(), "Arif Hossain", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "হাজার হাজার মানুষ লাইভ দেখছে! দারুন 🤩"),
-            LiveCommentItem(UUID.randomUUID().toString(), "Sohag Fan Club", "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200", "Niyon Islam Sohag ভাই এগিয়ে যান ❤️")
-        )
-        for (item in extraComments) {
-            delay(3500)
-            liveComments.add(item)
-            floatingHearts.add(System.currentTimeMillis())
+    // Extra incoming comments during live
+    LaunchedEffect(isLiveTimerRunning) {
+        if (isLiveTimerRunning) {
+            val extraComments = listOf(
+                LiveCommentItem(UUID.randomUUID().toString(), "Kamrul Hasan", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", "ভাইয়া সাউন্ড একদম পরিষ্কার ও ক্লিয়ার 👏"),
+                LiveCommentItem(UUID.randomUUID().toString(), "Fatema Khatun", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", "মাশাআল্লাহ, অনেক সুন্দর লাইভ ❤️"),
+                LiveCommentItem(UUID.randomUUID().toString(), "Biplob Kumar", "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200", "লাইভ লিঙ্ক ফেসবুক ও মেসেঞ্জারে শেয়ার করলাম ভাই 🔥"),
+                LiveCommentItem(UUID.randomUUID().toString(), "Nusrat Jahan", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "কেমন আছেন ভাইয়া? সিলেট থেকে দেখছি 🇧🇩"),
+                LiveCommentItem(UUID.randomUUID().toString(), "Arif Hossain", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "হাজার হাজার মানুষ লাইভ দেখছে! দারুন 🤩"),
+                LiveCommentItem(UUID.randomUUID().toString(), "Sohag Fan Club", "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200", "Niyon Islam Sohag ভাই এগিয়ে যান ❤️")
+            )
+            for (item in extraComments) {
+                delay(3000)
+                if (isLiveTimerRunning) {
+                    liveComments.add(item)
+                    floatingHearts.add(System.currentTimeMillis())
+                }
+            }
         }
     }
 
@@ -142,612 +209,1305 @@ fun LiveStreamStudioDialog(
     val minutes = (liveSeconds % 3600) / 60
     val secs = liveSeconds % 60
     val timeFormatted = if (hours > 0) String.format("%02d:%02d:%02d", hours, minutes, secs) else String.format("%02d:%02d", minutes, secs)
-    val formattedViewers = if (viewerCount >= 1000) String.format("%.1fK", viewerCount / 1000.0) else "$viewerCount"
+
+    // Camera feed image simulation
+    val cameraBackgroundModel = remember(isFrontCamera) {
+        if (isFrontCamera) {
+            currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1000" }
+        } else {
+            // Rear camera feed: lush green trees, backyard outdoor scene from user screenshot
+            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200"
+        }
+    }
 
     Dialog(
-        onDismissRequest = { showEndLiveConfirm = true },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = {
+            if (currentStage == LiveStudioStage.ACTIVE_BROADCAST) {
+                isLiveTimerRunning = false
+                currentStage = LiveStudioStage.ENDED_SUMMARY
+            } else {
+                onDismiss()
+            }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnBackPress = true)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // Camera Stream Simulator (User Avatar or Live Camera feed background)
+            // 1. Camera Stream Background (Supports Portrait & Landscape seamlessly)
             AsyncImage(
-                model = if (isFrontCamera) {
-                    currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1000" }
-                } else {
-                    "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000"
-                },
-                contentDescription = "Live Camera Feed",
-                modifier = Modifier.fillMaxSize(),
+                model = cameraBackgroundModel,
+                contentDescription = "Camera Feed",
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (isFlashOn) Modifier.background(Color.White.copy(alpha = 0.25f)) else Modifier
+                    ),
                 contentScale = ContentScale.Crop
             )
 
-            // Gradient Overlays (Top & Bottom) for clear readability
+            // Enhancement overlay if active
+            if (isEnhanceOn) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(Color(0xFFFFE0B2).copy(alpha = 0.15f), Color.Transparent)
+                            )
+                        )
+                )
+            }
+
+            // Dark gradient overlay for top & bottom controls
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color.Black.copy(alpha = 0.7f),
+                                Color.Black.copy(alpha = 0.65f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.85f)
+                                Color.Black.copy(alpha = 0.75f)
                             )
                         )
                     )
             )
 
-            // Top Header: Back button, LIVE badge, viewers, camera toggles
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Prominent Back Button
-                        IconButton(
-                            onClick = { showEndLiveConfirm = true },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.6f))
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back / বের হন",
-                                tint = Color.White
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        // Pulsing LIVE Badge
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = BangladeshRed
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(Color.White)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("LIVE", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Timer
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color.Black.copy(alpha = 0.6f)
-                        ) {
-                            Text(
-                                text = timeFormatted,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Viewers count in thousands
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = Color.Black.copy(alpha = 0.65f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Visibility, contentDescription = null, tint = BangladeshRed, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "$formattedViewers দর্শক",
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                            }
-                        }
-                    }
-
-                    // Camera Controls (Flip, Flash, Mic)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(
-                            onClick = { isFrontCamera = !isFrontCamera },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.6f))
-                        ) {
-                            Icon(Icons.Default.FlipCameraAndroid, contentDescription = "Flip Camera", tint = Color.White, modifier = Modifier.size(18.dp))
-                        }
-
-                        IconButton(
-                            onClick = { isFlashOn = !isFlashOn },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (isFlashOn) Color.Yellow.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.6f))
-                        ) {
-                            Icon(
-                                if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                                contentDescription = "Flash",
-                                tint = if (isFlashOn) Color.Black else Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { isMicMuted = !isMicMuted },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(if (isMicMuted) BangladeshRed else Color.Black.copy(alpha = 0.6f))
-                        ) {
-                            Icon(
-                                if (isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                contentDescription = "Mic",
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Live Seconds & Minutes Active Timer Bar & 5 Social Ads Indicator
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.Black.copy(alpha = 0.65f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(BangladeshRed)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "লাইভ: $timeFormatted",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    // 5 Social Ads Badge / Button
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = BangladeshGreen.copy(alpha = 0.95f),
-                        modifier = Modifier.clickable { showAdsSelectorDialog = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                Icons.Default.Campaign,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "৫টি সামাজিক বিজ্ঞাপন 📢",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                // Title & Hashtag Card (as requested: "লেখা টাইটেল ও হেস্টাগ ব্যবহার করতে পারে")
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = Color.Black.copy(alpha = 0.65f),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            // =========================================================================
+            // SWITCH BETWEEN STAGES
+            // =========================================================================
+            when (currentStage) {
+                LiveStudioStage.PRE_LIVE -> {
+                    // =================================================================
+                    // SCREENSHOT 1: PRE-LIVE PREPARATION SCREEN
+                    // =================================================================
                     Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
                     ) {
+                        // Top Bar matching Screenshot 1: Back, Avatar, Name, Public dropdown, Help, Orientation toggle
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = liveTitle,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 2,
-                                modifier = Modifier.weight(1f)
-                            )
-                            IconButton(
-                                onClick = { showEditTitleHashtagDialog = true },
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = "Edit Title & Hashtags",
-                                    tint = Color.Yellow,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Hashtags Flow Row
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            liveHashtags.forEach { tag ->
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = FacebookBlue.copy(alpha = 0.35f)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Back arrow
+                                IconButton(
+                                    onClick = onDismiss,
+                                    modifier = Modifier.size(36.dp)
                                 ) {
-                                    Text(
-                                        text = tag,
-                                        color = Color(0xFF64B5F6),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Back",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
-                            }
-                        }
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
 
-                // Real-time Thousands Join Notification
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = Color(0xFF1E88E5).copy(alpha = 0.8f),
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = recentJoinNotice,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-            }
-
-            // Floating Hearts / Reactions
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 100.dp, end = 20.dp)
-            ) {
-                floatingHearts.takeLast(6).forEach { _ ->
-                    Text("❤️", fontSize = 28.sp)
-                }
-            }
-
-            // Bottom Section: Comments Feed & Host Bar
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
-                    .navigationBarsPadding()
-            ) {
-                // Live Scrolling Comments Feed (max height 220dp)
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth(0.85f)
-                        .heightIn(max = 200.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(liveComments.takeLast(6)) { comment ->
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color.Black.copy(alpha = 0.55f)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                                // Profile Avatar
                                 AsyncImage(
-                                    model = comment.avatarUrl,
-                                    contentDescription = comment.authorName,
+                                    model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+                                    contentDescription = currentUser.fullName,
                                     modifier = Modifier
-                                        .size(26.dp)
-                                        .clip(CircleShape),
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .border(1.5.dp, Color.White, CircleShape),
                                     contentScale = ContentScale.Crop
                                 )
-                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
                                 Column {
-                                    Text(comment.authorName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Text(comment.comment, color = Color.White.copy(alpha = 0.95f), fontSize = 12.sp)
+                                    Text(
+                                        text = currentUser.fullName.ifBlank { "Niyon Islam Sohag" },
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp,
+                                        color = Color.White
+                                    )
+
+                                    // Privacy Dropdown Pill: 🌐 Public ▼
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color.Black.copy(alpha = 0.55f),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                                        modifier = Modifier.clickable { showPrivacyDialog = true }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = when (livePrivacy) {
+                                                    LivePrivacy.PUBLIC -> "🌐 Public"
+                                                    LivePrivacy.FRIENDS -> "👥 Friends"
+                                                    LivePrivacy.ONLY_ME -> "🔒 Only Me"
+                                                },
+                                                fontSize = 12.sp,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.ArrowDropDown,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
 
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Interactive Live Reaction Emojis (👍 ❤️ 🥰 😮 😂 😢 😡 🔥 🎉 🎂)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val liveReactionEmojis = listOf(
-                        Pair("❤️", ReactionType.LOVE),
-                        Pair("🥰", ReactionType.CARE),
-                        Pair("👍", ReactionType.LIKE),
-                        Pair("😂", ReactionType.HAHA),
-                        Pair("😮", ReactionType.WOW),
-                        Pair("😢", ReactionType.SAD),
-                        Pair("😡", ReactionType.ANGRY),
-                        Pair("🔥", ReactionType.HUNDRED),
-                        Pair("🎉", ReactionType.LIKE),
-                        Pair("🎂", ReactionType.LOVE)
-                    )
-                    liveReactionEmojis.forEach { (emoji, reactionType) ->
-                        Surface(
-                            shape = CircleShape,
-                            color = Color.Black.copy(alpha = 0.55f),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clickable {
-                                    floatingHearts.add(System.currentTimeMillis())
-                                    AppSoundManager.playReactionSound(reactionType)
-                                    liveComments.add(
-                                        LiveCommentItem(
-                                            UUID.randomUUID().toString(),
-                                            currentUser.fullName,
-                                            currentUser.avatarUrl,
-                                            "লাইভে রিয়াকশন দিয়েছেন: $emoji"
+                            // Right Top: Orientation Toggle (লাম্বা / দিগলা) + Help icon '?'
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Manual Orientation Switcher (যেকোনো ফোন লাম্বা ও দিগলা করে দুনোটা দিয়ে লাইভ চালানো যাবে)
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = if (isLandscape) Color(0xFF00E676) else Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.clickable {
+                                        isManualLandscape = !isManualLandscape
+                                        val modeName = if (!isManualLandscape) "লাম্বা (Portrait)" else "দিগলা (Landscape)"
+                                        Toast.makeText(context, "লাইভ ভিউ: $modeName মোড", Toast.LENGTH_SHORT).show()
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isLandscape) Icons.Default.ScreenRotation else Icons.Default.StayCurrentPortrait,
+                                            contentDescription = "Orientation",
+                                            tint = if (isLandscape) Color.Black else Color.White,
+                                            modifier = Modifier.size(16.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (isLandscape) "দিগলা" else "লাম্বা",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isLandscape) Color.Black else Color.White
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Help '?' icon
+                                IconButton(
+                                    onClick = {
+                                        Toast.makeText(context, "Facebook Live: সরাসরি দর্শকদের সাথে সংযোগ স্থাপন করুন", Toast.LENGTH_LONG).show()
+                                    },
+                                    modifier = Modifier.size(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.HelpOutline,
+                                        contentDescription = "Help",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(emoji, fontSize = 18.sp)
                             }
                         }
-                    }
-                }
 
-                // Host Input Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = hostMessage,
-                        onValueChange = { hostMessage = it },
-                        placeholder = { Text("লাইভে কিছু লিখুন...", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color.White.copy(alpha = 0.7f),
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
-                            cursorColor = Color.White
-                        ),
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(50.dp)
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // Floating Reaction Buttons (Heart, Fire)
-                    IconButton(
-                        onClick = {
-                            floatingHearts.add(System.currentTimeMillis())
-                            if (hostMessage.isNotBlank()) {
-                                liveComments.add(LiveCommentItem(UUID.randomUUID().toString(), currentUser.fullName, currentUser.avatarUrl, hostMessage))
-                                hostMessage = ""
-                            }
-                        },
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(FacebookBlue)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
-                    }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // End Live Button
-                    Button(
-                        onClick = { showEndLiveConfirm = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = BangladeshRed),
-                        shape = RoundedCornerShape(20.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Text("শেষ করুন", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            }
-
-            // Confirmation Dialog for Ending Live
-            if (showEndLiveConfirm) {
-                AlertDialog(
-                    onDismissRequest = { showEndLiveConfirm = false },
-                    title = { Text("লাইভ ভিডিও শেষ করবেন?") },
-                    text = { Text("আপনি কি নিশ্চিতভাবে এই লাইভ স্ট্রিমিং সেশনটি শেষ করতে চান?") },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                showEndLiveConfirm = false
-                                onDismiss()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshRed)
+                        // Middle Body: Camera View with Right Vertical Toolbar
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
                         ) {
-                            Text("হ্যাঁ, লাইভ শেষ করুন", fontWeight = FontWeight.Bold)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showEndLiveConfirm = false }) {
-                            Text("বাতিল / চালিয়ে যান")
-                        }
-                    }
-                )
-            }
-
-            // Edit Live Title & Hashtags Dialog (as requested by user)
-            if (showEditTitleHashtagDialog) {
-                var tempTitle by remember { mutableStateOf(liveTitle) }
-                val popularHashtagPresets = listOf(
-                    "#FaceFeed", "#Live", "#Bangladesh", "#Viral", "#NiyonIslamSohag",
-                    "#Adda", "#Music", "#Dhaka", "#Chittagong", "#Sylhet", "#BengaliLive"
-                )
-
-                AlertDialog(
-                    onDismissRequest = { showEditTitleHashtagDialog = false },
-                    title = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Edit, contentDescription = null, tint = FacebookBlue)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("লাইভ টাইটেল ও হ্যাশট্যাগ এডিট", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                    },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Text("লাইভের টাইটেল:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            OutlinedTextField(
-                                value = tempTitle,
-                                onValueChange = { tempTitle = it },
-                                placeholder = { Text("লাইভের আকর্ষণীয় শিরোনাম লিখুন...") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-
-                            Text("হ্যাশট্যাগসমূহ (ট্যাপ করে অন/অফ করুন):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            // Right Vertical Control Toolbar matching Screenshot 1
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 14.dp),
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                popularHashtagPresets.forEach { tag ->
-                                    val isSelected = liveHashtags.contains(tag)
-                                    FilterChip(
-                                        selected = isSelected,
-                                        onClick = {
-                                            liveHashtags = if (isSelected) {
-                                                liveHashtags - tag
-                                            } else {
-                                                liveHashtags + tag
+                                AnimatedVisibility(visible = isToolbarExpanded) {
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        // 1. Flash off / on
+                                        LiveToolButton(
+                                            label = if (isFlashOn) "Flash on" else "Flash off",
+                                            icon = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                            isActive = isFlashOn,
+                                            onClick = {
+                                                isFlashOn = !isFlashOn
+                                                Toast.makeText(context, if (isFlashOn) "ফ্ল্যাশ অন" else "ফ্ল্যাশ অফ", Toast.LENGTH_SHORT).show()
                                             }
-                                        },
-                                        label = { Text(tag, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) }
+                                        )
+
+                                        // 2. Rotate (Camera switch front / back)
+                                        LiveToolButton(
+                                            label = if (isFrontCamera) "Front cam" else "Rotate",
+                                            icon = Icons.Default.Cameraswitch,
+                                            isActive = false,
+                                            onClick = {
+                                                isFrontCamera = !isFrontCamera
+                                                Toast.makeText(
+                                                    context,
+                                                    if (isFrontCamera) "সামনের ক্যামেরা চালু হয়েছে 🤳" else "পিছনের ক্যামেরা চালু হয়েছে 📷",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        )
+
+                                        // 3. Stickers
+                                        LiveToolButton(
+                                            label = "Stickers",
+                                            icon = Icons.Default.Mood,
+                                            isActive = selectedFilterIndex > 0,
+                                            onClick = { showStickersDialog = true }
+                                        )
+
+                                        // 4. Mute mic
+                                        LiveToolButton(
+                                            label = if (isMicMuted) "Muted" else "Mute mic",
+                                            icon = if (isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                            isActive = isMicMuted,
+                                            onClick = {
+                                                isMicMuted = !isMicMuted
+                                                Toast.makeText(context, if (isMicMuted) "মাইক মিউট করা হয়েছে" else "মাইক চালু", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+
+                                        // 5. Enhance off / on
+                                        LiveToolButton(
+                                            label = if (isEnhanceOn) "Enhance on" else "Enhance off",
+                                            icon = Icons.Default.AutoFixHigh,
+                                            isActive = isEnhanceOn,
+                                            onClick = {
+                                                isEnhanceOn = !isEnhanceOn
+                                                Toast.makeText(context, if (isEnhanceOn) "বিউটি ফিল্টার চালু" else "ফিল্টার বন্ধ", Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                    }
+                                }
+
+                                // Collapse / Expand Arrow Button
+                                IconButton(
+                                    onClick = { isToolbarExpanded = !isToolbarExpanded },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(
+                                        imageVector = if (isToolbarExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Toolbar",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        // Bottom Section matching Screenshot 1
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                        ) {
+                            // "Tap to add a description..."
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.Black.copy(alpha = 0.4f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showEditDescriptionDialog = true }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.EditNote, contentDescription = null, tint = Color.White.copy(alpha = 0.8f))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (liveDescription.isNotBlank()) liveDescription else "Tap to add a description...",
+                                        color = if (liveDescription.isNotBlank()) Color.White else Color.White.copy(alpha = 0.8f),
+                                        fontSize = 14.sp,
+                                        fontWeight = if (liveDescription.isNotBlank()) FontWeight.SemiBold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
 
-                            // Custom hashtag input
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Share to Story toggle: Share to > Story: On >
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        isShareToStoryOn = !isShareToStoryOn
+                                        Toast.makeText(context, if (isShareToStoryOn) "স্টোরিতে শেয়ার চালু" else "স্টোরিতে শেয়ার বন্ধ", Toast.LENGTH_SHORT).show()
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Reply, contentDescription = "Share", tint = Color.White, modifier = Modifier.size(22.dp))
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text("Share to", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Text(if (isShareToStoryOn) "Story: On" else "Story: Off", fontSize = 12.sp, color = Color.White.copy(alpha = 0.8f))
+                                    }
+                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.White)
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            // Blue Big "Go live" Button
+                            Button(
+                                onClick = {
+                                    liveSeconds = 1
+                                    isLiveTimerRunning = true
+                                    currentStage = LiveStudioStage.ACTIVE_BROADCAST
+                                    Toast.makeText(context, "লাইভ ব্রডকাস্ট শুরু হয়েছে! 🔴", Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Text(
+                                    text = "Go live",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Bottom 5 Icons: Megaphone, Coins, Add Guest, Handshake, Menu
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                OutlinedTextField(
-                                    value = newHashtagInput,
-                                    onValueChange = { newHashtagInput = it },
-                                    placeholder = { Text("#কাস্টম_হ্যাশট্যাগ", fontSize = 12.sp) },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(10.dp),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                FilledTonalButton(
-                                    onClick = {
-                                        if (newHashtagInput.isNotBlank()) {
-                                            val tagFormatted = if (newHashtagInput.startsWith("#")) newHashtagInput.trim() else "#${newHashtagInput.trim()}"
-                                            if (!liveHashtags.contains(tagFormatted)) {
-                                                liveHashtags = liveHashtags + tagFormatted
-                                            }
-                                            newHashtagInput = ""
-                                        }
-                                    },
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("যোগ")
+                                IconButton(onClick = { showAdsSelectorDialog = true }) {
+                                    Icon(Icons.Default.Campaign, contentDescription = "Promote / Ad", tint = Color.White)
+                                }
+                                IconButton(onClick = {
+                                    Toast.makeText(context, "স্টার ও মনিটাইজেশন সক্রিয় আছে ⭐", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.MonetizationOn, contentDescription = "Stars / Coins", tint = Color.White)
+                                }
+                                IconButton(onClick = {
+                                    Toast.makeText(context, "লাইভে কো-হোস্ট বা বন্ধুদের যুক্ত করার ইনভাইট পাঠান", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.PersonAddAlt1, contentDescription = "Add Guest", tint = Color.White)
+                                }
+                                IconButton(onClick = {
+                                    Toast.makeText(context, "ব্র্যান্ড পার্টনারশিপ ও কলাবোরেশন", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.Handshake, contentDescription = "Collab", tint = Color.White)
+                                }
+                                IconButton(onClick = {
+                                    Toast.makeText(context, "লাইভ সেটিংস মেনু", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
                                 }
                             }
                         }
-                    },
+                    }
+                }
+
+                LiveStudioStage.ACTIVE_BROADCAST -> {
+                    // =================================================================
+                    // SCREENSHOT 2: ACTIVE LIVE BROADCAST SCREEN
+                    // =================================================================
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .navigationBarsPadding()
+                    ) {
+                        // Top Bar matching Screenshot 2: Red LIVE 0:18 badge, Public indicator, Orientation toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Red LIVE badge with timer (LIVE 0:18)
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFFE53935)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "LIVE",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 13.sp
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = timeFormatted,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                // Privacy Indicator: 🌐 Public
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color.Black.copy(alpha = 0.5f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("🌐 Public", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Viewers
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color.Black.copy(alpha = 0.5f)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.Red, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = if (viewerCount >= 1000) String.format("%.1fK", viewerCount / 1000.0) else "$viewerCount",
+                                            color = Color.White,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Orientation toggle (লাম্বা / দিগলা)
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isLandscape) Color(0xFF00E676) else Color.White.copy(alpha = 0.2f),
+                                modifier = Modifier.clickable {
+                                    isManualLandscape = !isManualLandscape
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isLandscape) Icons.Default.ScreenRotation else Icons.Default.StayCurrentPortrait,
+                                        contentDescription = "Orientation",
+                                        tint = if (isLandscape) Color.Black else Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = if (isLandscape) "দিগলা" else "লাম্বা",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isLandscape) Color.Black else Color.White
+                                    )
+                                }
+                            }
+                        }
+
+                        // Middle Viewport: Live feed with right overlay controls
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            // Right side buttons matching Screenshot 2: Flash, Rotate, Stickers, Collapse
+                            Column(
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        isFlashOn = !isFlashOn
+                                        Toast.makeText(context, if (isFlashOn) "ফ্ল্যাশ অন" else "ফ্ল্যাশ অফ", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isFlashOn) Color.Yellow.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                        contentDescription = "Flash",
+                                        tint = if (isFlashOn) Color.Black else Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                // Rotate Camera: Front ↔ Rear (সামনের ও পিছনের ক্যামেরা)
+                                IconButton(
+                                    onClick = {
+                                        isFrontCamera = !isFrontCamera
+                                        Toast.makeText(
+                                            context,
+                                            if (isFrontCamera) "সামনের ক্যামেরা চালু হয়েছে 🤳" else "পিছনের ক্যামেরা চালু হয়েছে 📷",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Cameraswitch,
+                                        contentDescription = "Rotate",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { showStickersDialog = true },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(Icons.Default.Mood, contentDescription = "Stickers", tint = Color.White, modifier = Modifier.size(20.dp))
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        Toast.makeText(context, "কন্ট্রোল মিনিমাইজ", Toast.LENGTH_SHORT).show()
+                                    },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.5f))
+                                ) {
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse", tint = Color.White)
+                                }
+                            }
+
+                            // Floating hearts animation
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(bottom = 60.dp, end = 20.dp)
+                            ) {
+                                floatingHearts.takeLast(5).forEach { _ ->
+                                    Text("❤️", fontSize = 26.sp)
+                                }
+                            }
+                        }
+
+                        // Bottom Section matching Screenshot 2: Live Comments + Action icons + Finish button
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            // Live incoming comments scrolling
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth(if (isLandscape) 0.6f else 0.85f)
+                                    .heightIn(max = 140.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(liveComments.takeLast(4)) { comment ->
+                                    Surface(
+                                        shape = RoundedCornerShape(14.dp),
+                                        color = Color.Black.copy(alpha = 0.55f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            AsyncImage(
+                                                model = comment.avatarUrl,
+                                                contentDescription = comment.authorName,
+                                                modifier = Modifier
+                                                    .size(22.dp)
+                                                    .clip(CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "${comment.authorName}: ",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 11.sp,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                text = comment.comment,
+                                                fontSize = 11.sp,
+                                                color = Color.White.copy(alpha = 0.9f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // "Comments will appear here" placeholder / text input
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.Black.copy(alpha = 0.4f),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.ChatBubbleOutline, contentDescription = null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextField(
+                                        value = hostCommentInput,
+                                        onValueChange = { hostCommentInput = it },
+                                        placeholder = { Text("Comments will appear here", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp) },
+                                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 13.sp),
+                                        colors = TextFieldDefaults.colors(
+                                            focusedContainerColor = Color.Transparent,
+                                            unfocusedContainerColor = Color.Transparent,
+                                            focusedIndicatorColor = Color.Transparent,
+                                            unfocusedIndicatorColor = Color.Transparent,
+                                            cursorColor = Color.White
+                                        ),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (hostCommentInput.isNotBlank()) {
+                                        IconButton(
+                                            onClick = {
+                                                liveComments.add(
+                                                    LiveCommentItem(UUID.randomUUID().toString(), currentUser.fullName, currentUser.avatarUrl, hostCommentInput)
+                                                )
+                                                hostCommentInput = ""
+                                                floatingHearts.add(System.currentTimeMillis())
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = FacebookBlue, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Bottom Action Icons matching Screenshot 2: Link, Equalizer, Q&A, Stars, Co-host, Share, Capture, FINISH
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                // Group of toolbar icons
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    // 1. Link icon
+                                    IconButton(
+                                        onClick = { Toast.makeText(context, "লাইভ লিংক কপি হয়েছে! 🔗", Toast.LENGTH_SHORT).show() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Link, contentDescription = "Link", tint = Color.White, modifier = Modifier.size(19.dp))
+                                    }
+
+                                    // 2. Sound Equalizer
+                                    IconButton(
+                                        onClick = {
+                                            AppSoundManager.playReactionSound(ReactionType.LOVE)
+                                            Toast.makeText(context, "সাউন্ড ইফেক্ট চালু 🎵", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Equalizer, contentDescription = "Sound", tint = Color.White, modifier = Modifier.size(19.dp))
+                                    }
+
+                                    // 3. Q&A
+                                    IconButton(
+                                        onClick = { Toast.makeText(context, "দর্শকদের প্রশ্নোত্তর সেশন চালু ❓", Toast.LENGTH_SHORT).show() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.QuestionAnswer, contentDescription = "Q&A", tint = Color.White, modifier = Modifier.size(19.dp))
+                                    }
+
+                                    // 4. Star
+                                    IconButton(
+                                        onClick = {
+                                            floatingHearts.add(System.currentTimeMillis())
+                                            Toast.makeText(context, "স্টার ও শুভেচ্ছা গৃহীত হয়েছে ⭐", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.StarBorder, contentDescription = "Star", tint = Color(0xFFFFD54F), modifier = Modifier.size(20.dp))
+                                    }
+
+                                    // 5. Co-host / Guests
+                                    IconButton(
+                                        onClick = { Toast.makeText(context, "লাইভে দর্শক ও বন্ধুদের যুক্ত করুন", Toast.LENGTH_SHORT).show() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.GroupAdd, contentDescription = "Co-host", tint = Color.White, modifier = Modifier.size(19.dp))
+                                    }
+
+                                    // 6. Share
+                                    IconButton(
+                                        onClick = { Toast.makeText(context, "লাইভ শেয়ার মেনু ওপেন হয়েছে", Toast.LENGTH_SHORT).show() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.Share, contentDescription = "Share", tint = Color.White, modifier = Modifier.size(18.dp))
+                                    }
+
+                                    // 7. Snapshot Capture Circle
+                                    IconButton(
+                                        onClick = { Toast.makeText(context, "লাইভ থেকে ছবি ক্যাপচার হয়েছে 📸", Toast.LENGTH_SHORT).show() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.RadioButtonUnchecked, contentDescription = "Capture", tint = Color.White, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                // Finish Button (Red / White Button matching Screenshot 2)
+                                Button(
+                                    onClick = {
+                                        isLiveTimerRunning = false
+                                        currentStage = LiveStudioStage.ENDED_SUMMARY
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color.White,
+                                        contentColor = Color.Black
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Text(
+                                        text = "Finish",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = Color.Black
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                LiveStudioStage.ENDED_SUMMARY -> {
+                    // =================================================================
+                    // SCREENSHOT 3: BROADCAST ENDED SUMMARY SCREEN
+                    // =================================================================
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.85f)),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                            color = Color(0xFF1E1E24),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                // Top Drag Handle
+                                Box(
+                                    modifier = Modifier
+                                        .width(40.dp)
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp))
+                                        .background(Color.Gray)
+                                        .align(Alignment.CenterHorizontally)
+                                )
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Header: "Your live broadcast has ended" + 3-dots menu
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Your live broadcast has ended",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+
+                                    Box {
+                                        IconButton(
+                                            onClick = { showEndedMenuOptions = true },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.MoreHoriz, contentDescription = "Options", tint = Color.White)
+                                        }
+
+                                        DropdownMenu(
+                                            expanded = showEndedMenuOptions,
+                                            onDismissRequest = { showEndedMenuOptions = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Download video to device") },
+                                                leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                                                onClick = {
+                                                    showEndedMenuOptions = false
+                                                    Toast.makeText(context, "ভিডিও ডিভাইসে ডাউনলোড শুরু হয়েছে 📥", Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Copy link") },
+                                                leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
+                                                onClick = {
+                                                    showEndedMenuOptions = false
+                                                    Toast.makeText(context, "লাইভ ভিডিওর লিংক কপি হয়েছে", Toast.LENGTH_SHORT).show()
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Delete broadcast", color = Color.Red) },
+                                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
+                                                onClick = {
+                                                    showEndedMenuOptions = false
+                                                    showDeleteConfirmDialog = true
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // CARD 1: Star Monetization Card matching Screenshot 3
+                                if (!isDismissedPaymentCard) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color(0xFF2C2C34),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.Top
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.weight(1f),
+                                                    verticalAlignment = Alignment.Top
+                                                ) {
+                                                    // Yellow Star Icon
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = Color(0xFFFFB300),
+                                                        modifier = Modifier.size(36.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Default.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                                    Column {
+                                                        Text(
+                                                            text = "Enter payment info to start earning",
+                                                            fontSize = 14.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color.White
+                                                        )
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = "Complete payment info on a computer to get paid for Stars you receive from fans. Send a reminder to your Page inbox.",
+                                                            fontSize = 12.sp,
+                                                            color = Color.LightGray,
+                                                            lineHeight = 16.sp
+                                                        )
+                                                    }
+                                                }
+
+                                                IconButton(
+                                                    onClick = { isDismissedPaymentCard = true },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+
+                                            Spacer(modifier = Modifier.height(12.dp))
+
+                                            // "Send reminder" button
+                                            Button(
+                                                onClick = {
+                                                    showReminderSentToast = true
+                                                    Toast.makeText(context, "রিমাইন্ডার পাঠানো হয়েছে আপনার ইনবক্সে!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D4263)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = if (showReminderSentToast) "✓ Reminder sent" else "Send reminder",
+                                                    color = Color(0xFF90CAF9),
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                }
+
+                                // CARD 2: 30-day deletion warning card matching Screenshot 3
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0xFF2C2C34),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFFE53935).copy(alpha = 0.2f),
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE53935), modifier = Modifier.size(20.dp))
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(10.dp))
+
+                                        Column {
+                                            Text(
+                                                text = "This video will be deleted after 30 days",
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = "You can download it to your device in the video's ... menu. Learn more",
+                                                fontSize = 12.sp,
+                                                color = Color.LightGray,
+                                                lineHeight = 16.sp
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // Menu Action 1: Boost post >
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF2C2C34),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            Toast.makeText(context, "Boost Post: পোস্ট প্রমোট করার অপশন খোলা হয়েছে", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Campaign, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(22.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text("Boost post", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Menu Action 2: Turn this live into a reel >
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF2C2C34),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            Toast.makeText(context, "রিলসে রূপান্তর করার প্রসেসিং শুরু হয়েছে 🎬", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = Color(0xFFAB47BC), modifier = Modifier.size(22.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text("Turn this live into a reel", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                        }
+                                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(18.dp))
+
+                                // Bottom Action Buttons: Done Button + Delete/Trash Button matching Screenshot 3
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            // Save as published post in FaceFeed
+                                            viewModel.createPost(
+                                                text = if (liveDescription.isNotBlank()) liveDescription else "🔴 লাইভ সম্পন্ন: $liveTitle",
+                                                hashtags = liveHashtags,
+                                                images = listOf(if (isFrontCamera) currentUser.avatarUrl else "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000"),
+                                                isVideo = true,
+                                                videoTitle = liveTitle
+                                            )
+                                            Toast.makeText(context, "লাইভ ভিডিও টাইমলাইনে ও স্টোরিতে সফলভাবে সেভ হয়েছে!", Toast.LENGTH_LONG).show()
+                                            onDismiss()
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                    ) {
+                                        Text("Done", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    // Trash Icon
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFF2C2C34),
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clickable { showDeleteConfirmDialog = true }
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = Color.White)
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // Footer notice matching Screenshot 3
+                                Text(
+                                    text = "Your video will also be added to your story. Closing the app or switching accounts will stop the HD upload.",
+                                    fontSize = 11.sp,
+                                    color = Color.Gray,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // =========================================================================
+            // DIALOGS & OVERLAYS
+            // =========================================================================
+
+            // Delete Confirm Dialog
+            if (showDeleteConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteConfirmDialog = false },
+                    title = { Text("লাইভ ভিডিও মুছে ফেলবেন?") },
+                    text = { Text("আপনি কি নিশ্চিতভাবে এই লাইভ রেকর্ডিংটি ডিসকার্ড করতে চান? এটি টাইমলাইনে সেভ হবে না।") },
                     confirmButton = {
                         Button(
                             onClick = {
-                                if (tempTitle.isNotBlank()) {
-                                    liveTitle = tempTitle
-                                }
-                                showEditTitleHashtagDialog = false
+                                showDeleteConfirmDialog = false
+                                Toast.makeText(context, "লাইভ ভিডিও মুছে ফেলা হয়েছে", Toast.LENGTH_SHORT).show()
+                                onDismiss()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue)
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
                         ) {
-                            Text("সংরক্ষণ করুন", fontWeight = FontWeight.Bold)
+                            Text("হ্যাঁ, ডিলিট করুন")
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showEditTitleHashtagDialog = false }) {
+                        TextButton(onClick = { showDeleteConfirmDialog = false }) {
                             Text("বাতিল")
                         }
                     }
                 )
             }
 
-            // 5 Social Advertisements Selector Dialog for Live Streaming
+            // Privacy Dialog
+            if (showPrivacyDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPrivacyDialog = false },
+                    title = { Text("লাইভ দর্শক নির্বাচন (Audience)", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                Triple(LivePrivacy.PUBLIC, "🌐 Public", "যে কেউ এই লাইভ ভিডিও দেখতে পারবে"),
+                                Triple(LivePrivacy.FRIENDS, "👥 Friends", "শুধুমাত্র আপনার বন্ধুরা দেখতে পারবে"),
+                                Triple(LivePrivacy.ONLY_ME, "🔒 Only Me", "শুধুমাত্র আপনি নিজে দেখতে পারবেন")
+                            ).forEach { (privacy, title, desc) ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (livePrivacy == privacy) FacebookBlue.copy(alpha = 0.15f) else Color.Transparent,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            livePrivacy = privacy
+                                            showPrivacyDialog = false
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = livePrivacy == privacy,
+                                            onClick = {
+                                                livePrivacy = privacy
+                                                showPrivacyDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                            Text(desc, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showPrivacyDialog = false }) {
+                            Text("বন্ধ করুন")
+                        }
+                    }
+                )
+            }
+
+            // Description Edit Dialog
+            if (showEditDescriptionDialog) {
+                var tempDesc by remember { mutableStateOf(liveDescription) }
+                AlertDialog(
+                    onDismissRequest = { showEditDescriptionDialog = false },
+                    title = { Text("লাইভের বিবরণ লিখুন") },
+                    text = {
+                        OutlinedTextField(
+                            value = tempDesc,
+                            onValueChange = { tempDesc = it },
+                            placeholder = { Text("Tap to add a description...") },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 3,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                liveDescription = tempDesc
+                                if (liveDescription.isNotBlank()) {
+                                    liveTitle = liveDescription
+                                }
+                                showEditDescriptionDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue)
+                        ) {
+                            Text("সংরক্ষণ করুন")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEditDescriptionDialog = false }) {
+                            Text("বাতিল")
+                        }
+                    }
+                )
+            }
+
+            // Stickers & Filters Dialog
+            if (showStickersDialog) {
+                AlertDialog(
+                    onDismissRequest = { showStickersDialog = false },
+                    title = { Text("ফিল্টার ও স্টিকার নির্বাচন (Stickers)", fontWeight = FontWeight.Bold) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val stickers = listOf("✨ নরমাল", "🕶️ কুল সানগ্লাস", "👑 গোল্ডেন ক্রাউন", "🌸 ফুল মালা", "🐱 কিউট ক্যাট ফেস", "🔥 ফায়ার ইফেক্ট")
+                            stickers.forEachIndexed { idx, item ->
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (selectedFilterIndex == idx) FacebookBlue.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedFilterIndex = idx
+                                            showStickersDialog = false
+                                            Toast.makeText(context, "$item প্রয়োগ করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                                        }
+                                ) {
+                                    Text(
+                                        text = item,
+                                        modifier = Modifier.padding(12.dp),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showStickersDialog = false }) {
+                            Text("বন্ধ করুন")
+                        }
+                    }
+                )
+            }
+
+            // 5 Social Advertisements Selector Dialog
             if (showAdsSelectorDialog) {
                 AlertDialog(
                     onDismissRequest = { showAdsSelectorDialog = false },
@@ -764,7 +1524,7 @@ fun LiveStreamStudioDialog(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "লাইভ ভিডিওতে মোট ৫টি সামাজিক সচেতনতামূলক বিজ্ঞাপন নির্ধারিত রয়েছে। আপনি যেকোনো সময় এগুলো প্লে করতে পারেন:",
+                                text = "লাইভ ভিডিও চলাকালীন মোট ৫টি সামাজিক সচেতনতামূলক বিজ্ঞাপন প্রচার করতে পারবেন:",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -804,6 +1564,41 @@ fun LiveStreamStudioDialog(
                                     }
                                 }
                             }
+
+                            // Google AdMob Live Mid-Roll Ad Test trigger
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = BangladeshRed.copy(alpha = 0.1f),
+                                border = BorderStroke(1.dp, BangladeshRed.copy(alpha = 0.3f)),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showGoogleLiveMidAd = true
+                                        showAdsSelectorDialog = false
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = BangladeshRed,
+                                        modifier = Modifier.size(26.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("Ad", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Google AdMob লাইভ অ্যাড (৩ মিনিট ও ৮ মিনিট)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = BangladeshRed)
+                                        Text("এখনই পরীক্ষা করতে ট্যাপ করুন (৫ সেকেন্ড কাউন্টডাউন)", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Icon(Icons.Default.PlayCircle, contentDescription = "Play", tint = BangladeshRed, modifier = Modifier.size(22.dp))
+                                }
+                            }
                         }
                     },
                     confirmButton = {
@@ -817,7 +1612,20 @@ fun LiveStreamStudioDialog(
                 )
             }
 
-            // Active Social Advertisement Overlay for Live Video (৫টি বিজ্ঞাপন)
+            // Google AdMob Live Mid-Roll Ad (at 3 min / 180s and 8 min / 480s)
+            if (showGoogleLiveMidAd) {
+                VideoMidAd(
+                    onAdFinished = {
+                        showGoogleLiveMidAd = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .align(Alignment.Center)
+                )
+            }
+
+            // Active Social Advertisement Overlay
             if (activeLiveAd != null) {
                 SocialAdOverlay(
                     ad = activeLiveAd!!,
@@ -828,5 +1636,40 @@ fun LiveStreamStudioDialog(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LiveToolButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable { onClick() }
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = if (isActive) Color(0xFFFFD54F) else Color.Black.copy(alpha = 0.45f),
+            modifier = Modifier.size(38.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = if (isActive) Color.Black else Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = Color.White,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
