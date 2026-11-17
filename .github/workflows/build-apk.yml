@@ -102,6 +102,6 @@ jobs:
           name: "FotoFilm App Release (116 MB)"
           body: "আপনার নতুন FotoFilm অ্যান্ড্রয়েড অ্যাপের রেডি APK ফাইল (প্রায় ১১৬ MB)। নিচে Assets থেকে FotoFilm.apk ডাউনলোড করে ফোনে ইনস্টল করে নিন।"
           files: FotoFilm.apk
-          make_latest: true
+          make_latest: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
