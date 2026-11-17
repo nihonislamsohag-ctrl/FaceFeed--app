@@ -76,6 +76,9 @@ jobs:
           if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
             base64 -d debug.keystore.base64 > debug.keystore
           fi
+          if [ ! -f debug.keystore ]; then
+            keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
@@ -85,8 +88,18 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          set -o pipefail
-          ./gradlew assembleDebug --no-daemon --no-configuration-cache --no-parallel --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" --stacktrace 2>&1 | tee build.log
+          set +e
+          ./gradlew assembleDebug --no-daemon --no-configuration-cache --no-parallel --max-workers=1 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee build.log
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ "$BUILD_EXIT" -ne 0 ]; then
+            echo "================ REAL GRADLE ERROR ================"
+            if grep -q "FAILURE: Build failed" build.log; then
+              grep -A 25 "FAILURE: Build failed" build.log | head -n 30
+            else
+              tail -n 30 build.log
+            fi
+            exit "$BUILD_EXIT"
+          fi
 
       - name: Prepare FotoFilm APK
         run: |
