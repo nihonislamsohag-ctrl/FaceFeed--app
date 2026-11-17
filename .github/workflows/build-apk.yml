@@ -68,6 +68,7 @@ jobs:
             chmod +x "$SDKMANAGER" || true
             set +o pipefail
             yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+            yes | "$SDKMANAGER" "platform-tools" "platforms;android-36.1" "build-tools;36.0.0" >/dev/null 2>&1 || true
           fi
 
       - name: Restore Debug Keystore & Env
@@ -83,18 +84,23 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" --stacktrace
 
       - name: Prepare FotoFilm APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk FotoFilm.apk
+        run: |
+          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk FotoFilm.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: FotoFilm-APK
           path: FotoFilm.apk
+          retention-days: 30
 
       - name: Create or Update Latest Release
+        id: publish_release
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
@@ -105,3 +111,21 @@ jobs:
           make_latest: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Summary
+        if: always()
+        run: |
+          {
+            echo "## FotoFilm APK Build Summary"
+            if [ -f FotoFilm.apk ]; then
+              echo "- APK Status: **Ready** ($(du -h FotoFilm.apk | cut -f1))"
+              echo "- Download from **Artifacts -> FotoFilm-APK** below on this page."
+            else
+              echo "- APK Status: **Not built**"
+            fi
+            if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
+              echo "- GitHub Release: **Published** under Releases -> latest"
+            elif [ "${{ steps.publish_release.outcome }}" = "failure" ]; then
+              echo "- GitHub Release: **Permission blocked** (Enable Settings -> Actions -> General -> Workflow permissions -> Read and write permissions). You can still download the APK from Artifacts below."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
