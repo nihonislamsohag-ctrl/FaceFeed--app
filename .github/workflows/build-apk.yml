@@ -84,7 +84,9 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --no-configuration-cache -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --no-configuration-cache --no-parallel --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" --stacktrace 2>&1 | tee build.log
 
       - name: Prepare FotoFilm APK
         run: |
@@ -121,7 +123,18 @@ jobs:
               echo "- APK Status: **Ready** ($(du -h FotoFilm.apk | cut -f1))"
               echo "- Download from **Artifacts -> FotoFilm-APK** below on this page."
             else
-              echo "- APK Status: **Not built**"
+              echo "- APK Status: **Build Failed**"
+              if [ -f build.log ]; then
+                echo ""
+                echo "### Error Details"
+                echo '```text'
+                if grep -q "FAILURE: Build failed" build.log; then
+                  grep -A 25 "FAILURE: Build failed" build.log | head -n 30
+                else
+                  tail -n 30 build.log
+                fi
+                echo '```'
+              fi
             fi
             if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
               echo "- GitHub Release: **Published** under Releases -> latest"
