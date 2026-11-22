@@ -1,8 +1,12 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
@@ -28,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,8 +47,10 @@ import com.example.model.User
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
+import com.example.util.VoiceAudioManager
 import com.example.viewmodel.FaceFeedViewModel
 import com.example.viewmodel.MediaPickerTarget
+import java.util.UUID
 
 @Composable
 fun CreatePostDialog(
@@ -63,7 +70,7 @@ fun CreatePostDialog(
                 id = "page_${pageAuthor.id}",
                 username = pageAuthor.name.lowercase().replace(" ", "_"),
                 fullName = pageAuthor.name,
-                avatarUrl = pageAuthor.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                avatarUrl = pageAuthor.avatarUrl,
                 isVerified = true
             )
         } else {
@@ -85,6 +92,53 @@ fun CreatePostDialog(
     var showPhotoAlbumDialog by remember { mutableStateOf(false) }
     var showAddLinkDialog by remember { mutableStateOf(false) }
     var showSafetyWarningDialog by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    val isRecordingVoice by VoiceAudioManager.isRecording.collectAsState()
+    val isRecordingPaused by VoiceAudioManager.isRecordingPaused.collectAsState()
+    val recordingTarget by VoiceAudioManager.activeRecordingTarget.collectAsState()
+    val isRecordingPostVoice = isRecordingVoice && recordingTarget == "create_post"
+    val recordingSeconds by VoiceAudioManager.recordingSeconds.collectAsState()
+    val recordingAmplitude by VoiceAudioManager.recordingAmplitude.collectAsState()
+    val playingItemId by VoiceAudioManager.playingItemId.collectAsState()
+    val isVoicePlaying by VoiceAudioManager.isPlaying.collectAsState()
+    var pendingStartPostVoice by remember { mutableStateOf(false) }
+
+    val recordVoicePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && pendingStartPostVoice) {
+            pendingStartPostVoice = false
+            VoiceAudioManager.startRecording(context, "create_post")
+        } else {
+            pendingStartPostVoice = false
+            if (!granted) {
+                Toast.makeText(context, "ভয়েস পোস্ট করতে মাইক্রোফোন পারমিশন দিন", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val startVoicePostRecording: () -> Unit = {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            VoiceAudioManager.startRecording(context, "create_post")
+        } else {
+            pendingStartPostVoice = true
+            recordVoicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            VoiceAudioManager.stopPlayback()
+            if (VoiceAudioManager.activeRecordingTarget.value == "create_post") {
+                VoiceAudioManager.cancelRecording()
+            }
+        }
+    }
 
     // Read any pending images or videos passed into CreatePost (e.g. from HomeScreen gallery launcher or Profile video launcher)
     val pendingImages by viewModel.pendingPostImages.collectAsState()
@@ -280,13 +334,11 @@ fun CreatePostDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        AsyncImage(
-                            model = authorUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                            contentDescription = authorUser.fullName,
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                        FotoFilmAvatar(
+                            imageUrl = authorUser.avatarUrl,
+                            name = authorUser.fullName,
+                            modifier = Modifier.size(46.dp),
+                            iconSize = 22.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
@@ -512,7 +564,7 @@ fun CreatePostDialog(
                             Text("💡", fontSize = 20.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "আসল মোবাইল ফোনে এই অ্যাপটি (APK) চালালে ফেসবুকের মতোই সাথে সাথে আপনার ফোনের মেমোরি কার্ড ও ক্যামেরার সমস্ত ছবি ওপেন হবে। এখন প্রিভিউতে আপনি ফোন গ্যালারি অথবা নিচের অ্যালবাম কালেকশন থেকেও ছবি বেছে নিতে পারেন।",
+                                text = "আসল মোবাইল ফোনে এই অ্যাপটি (APK) চালালে সাথে সাথে আপনার ফোনের মেমোরি কার্ড ও ক্যামেরার সমস্ত ছবি ওপেন হবে। এখন প্রিভিউতে আপনি ফোন গ্যালারি অথবা নিচের অ্যালবাম কালেকশন থেকেও ছবি বেছে নিতে পারেন।",
                                 fontSize = 11.sp,
                                 color = Color(0xFF1B5E20),
                                 lineHeight = 16.sp
@@ -597,9 +649,10 @@ fun CreatePostDialog(
                         Spacer(modifier = Modifier.height(6.dp))
                     }
 
-                    // Attached Music Track Card
+                    // Attached Music Track or Recorded Voice Post Card
                     selectedAudioTrack?.let { track ->
                         Spacer(modifier = Modifier.height(8.dp))
+                        val isPreviewPlaying = isVoicePlaying && playingItemId == track.id
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             colors = CardDefaults.cardColors(containerColor = BangladeshGreen.copy(alpha = 0.12f)),
@@ -615,14 +668,23 @@ fun CreatePostDialog(
                                 Surface(
                                     shape = CircleShape,
                                     color = BangladeshGreen,
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clickable {
+                                            val url = track.audioUrl?.trim().orEmpty()
+                                            if (url.isNotBlank()) {
+                                                VoiceAudioManager.togglePlay(context, track.id, url)
+                                            } else {
+                                                com.example.util.AppSoundManager.playAudio(track, context)
+                                            }
+                                        }
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Icon(
-                                            imageVector = Icons.Default.MusicNote,
-                                            contentDescription = null,
+                                            imageVector = if (isPreviewPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = "Play/Pause",
                                             tint = Color.White,
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(22.dp)
                                         )
                                     }
                                 }
@@ -640,10 +702,13 @@ fun CreatePostDialog(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                IconButton(onClick = { selectedAudioTrack = null }) {
+                                IconButton(onClick = {
+                                    VoiceAudioManager.stopPlayback()
+                                    selectedAudioTrack = null
+                                }) {
                                     Icon(
                                         imageVector = Icons.Default.Close,
-                                        contentDescription = "Remove music",
+                                        contentDescription = "Remove audio",
                                         tint = Color.Red,
                                         modifier = Modifier.size(18.dp)
                                     )
@@ -653,6 +718,116 @@ fun CreatePostDialog(
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
+
+                    // Voice Post Recorder Panel or Record Trigger Button
+                    if (isRecordingPostVoice) {
+                        Card(
+                            shape = RoundedCornerShape(14.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                            border = BorderStroke(1.2.dp, BangladeshRed.copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Mic, contentDescription = null, tint = BangladeshRed, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = String.format(
+                                                "🎙️ ভয়েস পোস্ট রেকর্ড হচ্ছে (%02d:%02d)",
+                                                recordingSeconds / 60,
+                                                recordingSeconds % 60
+                                            ),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = BangladeshRed
+                                        )
+                                    }
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        val bars = listOf(8f, 16f, 22f, 12f, 20f, 14f, 18f, 10f)
+                                        bars.forEachIndexed { idx, baseH ->
+                                            val h = if (isRecordingPaused) 5f else (baseH * (0.35f + recordingAmplitude * (0.7f + (idx % 2) * 0.25f))).coerceIn(5f, 24f)
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(3.dp)
+                                                    .height(h.dp)
+                                                    .clip(RoundedCornerShape(1.5.dp))
+                                                    .background(BangladeshRed)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { VoiceAudioManager.cancelRecording() },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("বাতিল", fontSize = 12.sp, color = BangladeshRed, fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { VoiceAudioManager.togglePauseRecording() },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text(if (isRecordingPaused) "চালু" else "বিরতি", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            val rec = VoiceAudioManager.stopRecording()
+                                            if (rec != null) {
+                                                val mmSs = String.format("%d:%02d", rec.durationSeconds / 60, rec.durationSeconds % 60)
+                                                selectedAudioTrack = PostAudioTrack(
+                                                    id = "voice_post_${UUID.randomUUID().toString().take(8)}",
+                                                    title = "🎙️ ভয়েস পোস্ট ($mmSs)",
+                                                    artist = authorUser.fullName,
+                                                    category = "ভয়েস পোস্ট",
+                                                    duration = mmSs,
+                                                    audioUrl = rec.fileUri
+                                                )
+                                            } else {
+                                                Toast.makeText(context, "কমপক্ষে ১ সেকেন্ড কথা বলে যুক্ত করুন", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1.2f),
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen)
+                                    ) {
+                                        Text("✔ যুক্ত করুন", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { startVoicePostRecording() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00796B))
+                        ) {
+                            Icon(Icons.Default.Mic, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "🎙️ সরাসরি ভয়েস রেকর্ড করে পোস্ট করুন (Voice Post)",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Audio Music Track Picker Button
                     Button(
@@ -688,7 +863,7 @@ fun CreatePostDialog(
                         OutlinedTextField(
                             value = hashtagInput,
                             onValueChange = { hashtagInput = it },
-                            placeholder = { Text("#FaceFeed #Bangladesh", fontSize = 12.sp) },
+                            placeholder = { Text("#FotoFilm #Bangladesh", fontSize = 12.sp) },
                             modifier = Modifier.weight(1f),
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp)
@@ -898,7 +1073,7 @@ fun CreatePostDialog(
                                                     color = Color(0xFF9C27B0).copy(alpha = 0.15f)
                                                 ) {
                                                     Text(
-                                                        text = "রিলস ভিডিও",
+                                                        text = "শর্ট ভিডিও",
                                                         fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Color(0xFF9C27B0),
@@ -907,7 +1082,7 @@ fun CreatePostDialog(
                                                 }
                                             }
                                             Text(
-                                                text = "রিলস ও শর্ট ভিডিও হিসেবে FaceClip এ পোস্ট হবে",
+                                                text = "শর্ট ভিডিও হিসেবে FaceClip এ পোস্ট হবে",
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -990,7 +1165,7 @@ fun CreatePostDialog(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.VideoLibrary,
-                                    contentDescription = "Reel",
+                                    contentDescription = "Short Video",
                                     tint = if (isReelPost) BangladeshRed else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -1074,7 +1249,7 @@ fun CreatePostDialog(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "FaceFeed ও Right Manager Fida নিরাপত্তা প্রোটোকল অনুযায়ী কোনো ধরনের নেশা বা মাদকদ্রব্য এবং জুয়া/বাজির গেমস বা লিংক প্রচার আইনত দণ্ডনীয় ও সম্পূর্ণ নিষিদ্ধ।",
+                        text = "FotoFilm ও Right Manager Fida নিরাপত্তা প্রোটোকল অনুযায়ী কোনো ধরনের নেশা বা মাদকদ্রব্য এবং জুয়া/বাজির গেমস বা লিংক প্রচার আইনত দণ্ডনীয় ও সম্পূর্ণ নিষিদ্ধ।",
                         fontSize = 11.sp,
                         color = Color.Gray
                     )
@@ -1102,35 +1277,9 @@ fun PostAlbumPickerDialog(
     onDismiss: () -> Unit
 ) {
     val albums = listOf(
-        "সব ছবি" to listOf(
-            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
-            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1200",
-            "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200",
-            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=1200",
-            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1200",
-            "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1200",
-            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=1200",
-            "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=1200",
-            "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=1200",
-            "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200",
-            "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200",
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200"
-        ),
-        "ক্যামেরা অ্যালবাম" to listOf(
-            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1200",
-            "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=1200",
-            "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1200",
-            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=1200",
-            "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=1200",
-            "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=1200"
-        ),
-        "বাংলাদেশ ও প্রকৃতি" to listOf(
-            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
-            "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200",
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200",
-            "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200",
-            "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1200"
-        )
+        "সব ছবি" to emptyList<String>(),
+        "ক্যামেরা অ্যালবাম" to emptyList<String>(),
+        "বাংলাদেশ ও প্রকৃতি" to emptyList<String>()
     )
 
     var selectedTabIndex by remember { mutableStateOf(0) }
@@ -1199,60 +1348,89 @@ fun PostAlbumPickerDialog(
 
                 // Photos Grid
                 val currentPhotos = albums[selectedTabIndex].second
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(currentPhotos) { url ->
-                        val isSelected = selectedUrls.contains(url)
-                        Box(
-                            modifier = Modifier
-                                .aspectRatio(1f)
-                                .clip(RoundedCornerShape(10.dp))
-                                .border(
-                                    width = if (isSelected) 3.dp else 0.5.dp,
-                                    color = if (isSelected) FacebookBlue else Color.LightGray,
-                                    shape = RoundedCornerShape(10.dp)
-                                )
-                                .clickable {
-                                    selectedUrls = if (isSelected) {
-                                        selectedUrls - url
-                                    } else {
-                                        selectedUrls + url
-                                    }
-                                }
-                        ) {
-                            AsyncImage(
-                                model = url,
-                                contentDescription = "Photo",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                if (currentPhotos.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(48.dp)
                             )
-
-                            if (isSelected) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0x331877F2))
-                                )
-                                Surface(
-                                    shape = CircleShape,
-                                    color = FacebookBlue,
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(6.dp)
-                                        .size(24.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = Color.White,
-                                        modifier = Modifier.padding(4.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "কোনো ডেমো অ্যালবাম ছবি নেই",
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "ফোনের গ্যালারি বা ক্যামেরা থেকে ছবি আপলোড করুন",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(currentPhotos) { url ->
+                            val isSelected = selectedUrls.contains(url)
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .border(
+                                        width = if (isSelected) 3.dp else 0.5.dp,
+                                        color = if (isSelected) FacebookBlue else Color.LightGray,
+                                        shape = RoundedCornerShape(10.dp)
                                     )
+                                    .clickable {
+                                        selectedUrls = if (isSelected) {
+                                            selectedUrls - url
+                                        } else {
+                                            selectedUrls + url
+                                        }
+                                    }
+                            ) {
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = "Photo",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+
+                                if (isSelected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color(0x331877F2))
+                                    )
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = FacebookBlue,
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(6.dp)
+                                            .size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = Color.White,
+                                            modifier = Modifier.padding(4.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

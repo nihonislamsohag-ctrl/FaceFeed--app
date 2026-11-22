@@ -7,7 +7,7 @@ import android.widget.Toast
 
 object PrivacyPolicyHelper {
     const val PRIVACY_POLICY_URL =
-        "https://www.termsfeed.com/live/cc3fdcba-d730-4765-88e0-06b6331f787f"
+        "https://www.termsfeed.com/live/0dd2a5b3-46bc-4931-9af1-883a72650b9a"
 
     fun openInBrowser(context: Context) {
         try {

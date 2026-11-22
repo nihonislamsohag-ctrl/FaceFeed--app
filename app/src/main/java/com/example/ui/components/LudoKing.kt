@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.zIndex
 import com.example.data.SampleData
+import com.example.util.LiveMicHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -183,14 +185,18 @@ fun LudoKingFullGame(
     var isRoomJoined by remember { mutableStateOf(false) }
     var roomPlayersCount by remember { mutableIntStateOf(1) }
 
-    // Agora Live Ludo Voice Call Integration
+    // Agora Live Ludo Voice Call + Real Hardware Mic Integration
     val agoraState by com.example.data.AgoraCallManager.callState.collectAsState()
     var isAgoraLudoVoiceActive by remember { mutableStateOf(false) }
+    var hasMicPermission by remember { mutableStateOf(LiveMicHelper.hasMicPermission(context)) }
+    var hasAutoPromptedMic by remember { mutableStateOf(false) }
     var pendingLudoVoiceJoin by remember { mutableStateOf(false) }
+    val ludoMicTag = remember(roomId) { "ludo_$roomId" }
     val ludoAudioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted && pendingLudoVoiceJoin) {
+        hasMicPermission = granted || LiveMicHelper.hasMicPermission(context)
+        if (hasMicPermission && pendingLudoVoiceJoin) {
             val ludoChannel = com.example.data.AgoraCallManager.sanitizeChannelName("ff_ludo_$roomId")
             val muted = !(voiceStates[LudoColor.BLUE] ?: true)
             com.example.data.AgoraCallManager.joinCall(
@@ -200,40 +206,67 @@ fun LudoKingFullGame(
                 startMuted = muted
             )
             isAgoraLudoVoiceActive = true
-        } else if (!granted) {
+        } else if (!hasMicPermission) {
             Toast.makeText(context, "লুডু লাইভ ভয়েসের জন্য মাইক্রোফোন অনুমতি দিন", Toast.LENGTH_SHORT).show()
         }
         pendingLudoVoiceJoin = false
     }
+    fun startLudoVoiceWithPermission() {
+        val granted = LiveMicHelper.hasMicPermission(context)
+        hasMicPermission = granted
+        if (granted) {
+            val ludoChannel = com.example.data.AgoraCallManager.sanitizeChannelName("ff_ludo_$roomId")
+            val muted = !(voiceStates[LudoColor.BLUE] ?: true)
+            com.example.data.AgoraCallManager.joinCall(
+                context = context,
+                channelName = ludoChannel,
+                isVideoCall = false,
+                startMuted = muted
+            )
+            isAgoraLudoVoiceActive = true
+        } else {
+            pendingLudoVoiceJoin = true
+            ludoAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
     fun toggleLudoAgoraVoice() {
         if (isAgoraLudoVoiceActive) {
+            LiveMicHelper.stopMonitoring(ludoMicTag)
             com.example.data.AgoraCallManager.leaveCall()
             isAgoraLudoVoiceActive = false
-            Toast.makeText(context, "লুডু Agora ভয়েস বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "লুডু লাইভ ভয়েস বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
         } else {
-            val granted = ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            if (granted) {
-                val ludoChannel = com.example.data.AgoraCallManager.sanitizeChannelName("ff_ludo_$roomId")
-                val muted = !(voiceStates[LudoColor.BLUE] ?: true)
-                com.example.data.AgoraCallManager.joinCall(
-                    context = context,
-                    channelName = ludoChannel,
-                    isVideoCall = false,
-                    startMuted = muted
-                )
-                isAgoraLudoVoiceActive = true
-                Toast.makeText(context, "লুডু Agora HD ভয়েস চালু হয়েছে! 🎙️", Toast.LENGTH_SHORT).show()
-            } else {
+            startLudoVoiceWithPermission()
+            if (hasMicPermission) {
+                Toast.makeText(context, "লুডু লাইভ ভয়েস চালু হয়েছে! 🎙️", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    LaunchedEffect(selectedMode) {
+        if (selectedMode != null) {
+            if (LiveMicHelper.hasMicPermission(context)) {
+                hasMicPermission = true
+                if (!isAgoraLudoVoiceActive && (voiceStates[LudoColor.BLUE] == true)) {
+                    startLudoVoiceWithPermission()
+                }
+            } else if (!hasAutoPromptedMic) {
+                hasAutoPromptedMic = true
                 pendingLudoVoiceJoin = true
                 ludoAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
             }
         }
     }
-    DisposableEffect(Unit) {
+    val isBlueMicOn = voiceStates[LudoColor.BLUE] ?: true
+    LaunchedEffect(hasMicPermission, isAgoraLudoVoiceActive, isBlueMicOn, agoraState.isJoinedChannel, ludoMicTag) {
+        if (hasMicPermission && isAgoraLudoVoiceActive && isBlueMicOn && !agoraState.isJoinedChannel) {
+            LiveMicHelper.startMonitoring(context, ludoMicTag)
+        } else {
+            LiveMicHelper.stopMonitoring(ludoMicTag)
+        }
+    }
+    DisposableEffect(ludoMicTag) {
         onDispose {
+            LiveMicHelper.stopMonitoring(ludoMicTag)
             if (isAgoraLudoVoiceActive) {
                 com.example.data.AgoraCallManager.leaveCall()
             }
@@ -252,10 +285,10 @@ fun LudoKingFullGame(
     val currentUserProfile = viewModel?.currentUser?.collectAsState()?.value
     val playerAvatars = remember(currentUserProfile) {
         mapOf(
-            LudoColor.BLUE to (currentUserProfile?.avatarUrl?.ifBlank { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150" } ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150"),
-            LudoColor.RED to "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-            LudoColor.GREEN to "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150",
-            LudoColor.YELLOW to "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150"
+            LudoColor.BLUE to (currentUserProfile?.avatarUrl.orEmpty()),
+            LudoColor.RED to "",
+            LudoColor.GREEN to "",
+            LudoColor.YELLOW to ""
         )
     }
 
@@ -637,8 +670,19 @@ fun LudoKingFullGame(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = if (isAgoraLudoVoiceActive) Color(0xFF2E7D32) else Color(0xFF1E3A5F),
-                        border = BorderStroke(1.dp, if (isAgoraLudoVoiceActive) Color(0xFF00E676) else Color(0xFF64B5F6)),
+                        color = when {
+                            !hasMicPermission -> Color(0xFFB71C1C)
+                            isAgoraLudoVoiceActive && isBlueMicOn -> Color(0xFF2E7D32)
+                            else -> Color(0xFF1E3A5F)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            when {
+                                !hasMicPermission -> Color(0xFFFF8A80)
+                                isAgoraLudoVoiceActive && isBlueMicOn -> Color(0xFF00E676)
+                                else -> Color(0xFF64B5F6)
+                            }
+                        ),
                         modifier = Modifier.clickable { toggleLudoAgoraVoice() }
                     ) {
                         Row(
@@ -646,14 +690,14 @@ fun LudoKingFullGame(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = if (isAgoraLudoVoiceActive) Icons.Default.Mic else Icons.Default.MicOff,
-                                contentDescription = "Agora Voice",
+                                imageVector = if (hasMicPermission && isAgoraLudoVoiceActive && isBlueMicOn) Icons.Default.Mic else Icons.Default.MicOff,
+                                contentDescription = "Live Voice Mic",
                                 tint = Color.White,
                                 modifier = Modifier.size(13.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (isAgoraLudoVoiceActive) "ভয়েস ON" else "ভয়েস",
+                                text = if (!hasMicPermission) "মাইক দিন" else if (isAgoraLudoVoiceActive && isBlueMicOn) "মাইক ON" else "ভয়েস",
                                 color = Color.White,
                                 fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold
@@ -1210,52 +1254,61 @@ fun LudoKingFullGame(
                         color = Color.White.copy(alpha = 0.85f),
                         fontSize = 12.sp
                     )
-                    SampleData.profileFriends.take(5).forEach { friend ->
-                        val isInvited = friend.id in invitedFriendIds
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFF132F52))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            AsyncImage(
-                                model = friend.avatarUrl,
-                                contentDescription = friend.name,
-                                modifier = Modifier.size(34.dp).clip(CircleShape),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = friend.name,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Button(
-                                onClick = {
-                                    if (!isInvited) {
-                                        invitedFriendIds = invitedFriendIds + friend.id
-                                        roomPlayersCount = (roomPlayersCount + 1).coerceAtMost(4)
-                                        Toast.makeText(context, "${friend.name}-কে লুডু রুমে আমন্ত্রণ পাঠানো হয়েছে!", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                enabled = !isInvited,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (isInvited) Color(0xFF334155) else Color(0xFF00E676)
-                                )
+                    val onlineFriends = SampleData.profileFriends.take(5)
+                    if (onlineFriends.isEmpty()) {
+                        Text(
+                            text = "এখনো কোনো অনলাইন বন্ধু পাওয়া যায়নি। রিয়েল বন্ধু যুক্ত হলে এখান থেকে রুম কোড দিয়ে ডাকতে পারবেন।",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        onlineFriends.forEach { friend ->
+                            val isInvited = friend.id in invitedFriendIds
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFF132F52))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = if (isInvited) "আমন্ত্রিত ✓" else "ডাকুন",
-                                    color = if (isInvited) Color.White else Color.Black,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                FotoFilmAvatar(
+                                    imageUrl = friend.avatarUrl,
+                                    name = friend.name,
+                                    modifier = Modifier.size(34.dp),
+                                    iconSize = 16.dp
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = friend.name,
+                                    color = Color.White,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        if (!isInvited) {
+                                            invitedFriendIds = invitedFriendIds + friend.id
+                                            roomPlayersCount = (roomPlayersCount + 1).coerceAtMost(4)
+                                            Toast.makeText(context, "${friend.name}-কে লুডু রুমে আমন্ত্রণ পাঠানো হয়েছে!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    enabled = !isInvited,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isInvited) Color(0xFF334155) else Color(0xFF00E676)
+                                    )
+                                ) {
+                                    Text(
+                                        text = if (isInvited) "আমন্ত্রিত ✓" else "ডাকুন",
+                                        color = if (isInvited) Color.White else Color.Black,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }
@@ -1325,12 +1378,26 @@ fun LudoProfilePlayerCard(
                         border = BorderStroke(1.5.dp, Color.White),
                         modifier = Modifier.size(32.dp)
                     ) {
-                        AsyncImage(
-                            model = avatarUrl,
-                            contentDescription = name,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        if (avatarUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = avatarUrl,
+                                contentDescription = name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = name,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
 
                     // Online green dot
@@ -2219,6 +2286,9 @@ fun AdMobBannerView(
     adUnitId: String = GoogleAdConfig.BANNER_ID,
     modifier: Modifier = Modifier
 ) {
+    val isMasterEnabled by com.example.data.NiyonOwnerControlStore.isAdMobMasterEnabled.collectAsState()
+    val isBannerEnabled by com.example.data.NiyonOwnerControlStore.isAdMobBannerEnabled.collectAsState()
+    if (!isMasterEnabled || !isBannerEnabled) return
     Surface(
         color = Color(0xFF1E293B),
         border = BorderStroke(1.dp, Color(0xFF334155)),
@@ -2249,6 +2319,10 @@ fun AdMobBannerView(
  * Google AdMob Interstitial Ad Helper (shows on Game Win)
  */
 fun showInterstitialAd(context: Context, onDismiss: () -> Unit = {}) {
+    if (!com.example.data.NiyonOwnerControlStore.isInterstitialAdEffectiveEnabled()) {
+        onDismiss()
+        return
+    }
     try {
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(

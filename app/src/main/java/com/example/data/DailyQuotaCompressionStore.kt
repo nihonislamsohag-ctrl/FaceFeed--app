@@ -105,8 +105,10 @@ object DailyQuotaCompressionStore {
         val today = todayKey()
         val storedDate = prefs.getString(KEY_DATE, null)
 
-        val autoCompress = prefs.getBoolean(KEY_AUTO_COMPRESS, true)
-        val dailyLimit = prefs.getBoolean(KEY_DAILY_LIMIT, true)
+        val autoCompress = prefs.getBoolean(KEY_AUTO_COMPRESS, true) &&
+            NiyonOwnerControlStore.isAutoCompressionEnabled.value
+        val dailyLimit = prefs.getBoolean(KEY_DAILY_LIMIT, true) &&
+            NiyonOwnerControlStore.isDaily43MbLimitEnabled.value
 
         val loadedList = if (storedDate == today) {
             parseUsagesJson(prefs.getString(KEY_USAGES_JSON, null), today)
@@ -157,16 +159,20 @@ object DailyQuotaCompressionStore {
         publishList(list, userId, _config.value.isAutoCompressionEnabled, _config.value.isDaily43MbLimitEnabled)
     }
 
-    fun setAutoCompressionEnabled(enabled: Boolean) {
+    fun setAutoCompressionEnabled(enabled: Boolean, isOwner: Boolean = true): Boolean {
+        if (!NiyonOwnerControlStore.setAutoCompressionEnabled(enabled, isOwner)) return false
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             ?.edit()?.putBoolean(KEY_AUTO_COMPRESS, enabled)?.apply()
         _config.value = _config.value.copy(isAutoCompressionEnabled = enabled)
+        return true
     }
 
-    fun setDaily43MbLimitEnabled(enabled: Boolean) {
+    fun setDaily43MbLimitEnabled(enabled: Boolean, isOwner: Boolean = true): Boolean {
+        if (!NiyonOwnerControlStore.setDaily43MbLimitEnabled(enabled, isOwner)) return false
         appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             ?.edit()?.putBoolean(KEY_DAILY_LIMIT, enabled)?.apply()
         _config.value = _config.value.copy(isDaily43MbLimitEnabled = enabled)
+        return true
     }
 
     fun checkQuotaBeforeUpload(
@@ -191,7 +197,7 @@ object DailyQuotaCompressionStore {
                 if (usage.reelCount >= MAX_REEL_COUNT) {
                     QuotaCheckVerdict(
                         allowed = false,
-                        reasonBn = "আজকের ১টি ফ্রি রিল ভিডিও (৮ MB / ৩০ সেকেন্ড) কোটা পূর্ণ হয়েছে। আগামীকাল আবার ফ্রি পাবেন!"
+                        reasonBn = "আজকের ১টি ফ্রি শর্ট ভিডিও (৮ MB / ৩০ সেকেন্ড) কোটা পূর্ণ হয়েছে। আগামীকাল আবার ফ্রি পাবেন!"
                     )
                 } else QuotaCheckVerdict(allowed = true)
             }

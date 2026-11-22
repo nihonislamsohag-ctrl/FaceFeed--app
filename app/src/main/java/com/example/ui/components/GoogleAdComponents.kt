@@ -63,26 +63,26 @@ object GoogleAdInventory {
             title = "Google Cloud & AI Studio Build",
             sponsorName = "Google Cloud",
             description = "Build and monetize modern Android apps faster with high performance cloud infrastructure.",
-            iconUrl = "https://images.unsplash.com/photo-1573164713988-8665fc963095?w=200",
-            bannerUrl = "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800",
+            iconUrl = "",
+            bannerUrl = "",
             ctaText = "Learn More"
         ),
         GoogleAdCreative(
             id = "ad_2",
             title = "ProLevelCut - 4K Video Editor",
-            sponsorName = "Niyon Islam Sohag",
-            description = "অসাধারণ ৪কে রিলস ও ইউটিউব ভিডিও এডিটিং অ্যাপ। আজই ডাউনলোড করুন সম্পূর্ণ ফ্রিতে!",
-            iconUrl = "https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=200",
-            bannerUrl = "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800",
+            sponsorName = "FotoFilm Studio",
+            description = "অসাধারণ ৪কে শর্ট ভিডিও ও ভিডিও এডিটিং অ্যাপ। আজই ব্যবহার করুন সম্পূর্ণ ফ্রিতে!",
+            iconUrl = "",
+            bannerUrl = "",
             ctaText = "Install Now"
         ),
         GoogleAdCreative(
             id = "ad_3",
-            title = "Best E-Commerce Super Deals",
-            sponsorName = "Daraz Bangladesh",
-            description = "সেরা পণ্যে ৫০% পর্যন্ত আকর্ষণীয় ছাড় ও ফ্রি হোম ডেলিভারি অফার। অর্ডার করুন এখনই!",
-            iconUrl = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=200",
-            bannerUrl = "https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=800",
+            title = "FotoFilm Marketplace",
+            sponsorName = "FotoFilm Commerce",
+            description = "সেরা পণ্যে আকর্ষণীয় ছাড় ও নিরাপদ কেনাকাটার সুবিধা।",
+            iconUrl = "",
+            bannerUrl = "",
             ctaText = "Shop Now"
         )
     )
@@ -103,6 +103,10 @@ fun AdBanner(
     creativeIndex: Int = 0
 ) {
     val context = LocalContext.current
+    val isMasterEnabled by com.example.data.NiyonOwnerControlStore.isAdMobMasterEnabled.collectAsState()
+    val isBannerEnabled by com.example.data.NiyonOwnerControlStore.isAdMobBannerEnabled.collectAsState()
+    if (!isMasterEnabled || !isBannerEnabled) return
+
     val creative = GoogleAdInventory.creatives[creativeIndex % GoogleAdInventory.creatives.size]
 
     Card(
@@ -169,14 +173,31 @@ fun AdBanner(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = creative.iconUrl,
-                    contentDescription = creative.title,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                if (creative.iconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = creative.iconUrl,
+                        contentDescription = creative.title,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(FacebookBlue.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = creative.title,
+                            tint = FacebookBlue,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(10.dp))
 
@@ -261,6 +282,12 @@ fun VideoMidAd(
     var countdown by remember { mutableIntStateOf(5) }
     var canSkip by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val isMasterEnabled by com.example.data.NiyonOwnerControlStore.isAdMobMasterEnabled.collectAsState()
+    val isInterstitialEnabled by com.example.data.NiyonOwnerControlStore.isAdMobInterstitialEnabled.collectAsState()
+    if (!isMasterEnabled || !isInterstitialEnabled) {
+        LaunchedEffect(Unit) { onAdFinished() }
+        return
+    }
     val creative = GoogleAdInventory.creatives[creativeIndex % GoogleAdInventory.creatives.size]
 
     LaunchedEffect(Unit) {
@@ -279,14 +306,26 @@ fun VideoMidAd(
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.95f))
     ) {
-        // Ad Background Media Image
-        AsyncImage(
-            model = creative.bannerUrl,
-            contentDescription = creative.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.82f
-        )
+        // Ad Background Media Image or Clean Gradient
+        if (creative.bannerUrl.isNotBlank()) {
+            AsyncImage(
+                model = creative.bannerUrl,
+                contentDescription = creative.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+                alpha = 0.82f
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364))
+                        )
+                    )
+            )
+        }
 
         // Gradient Protection
         Box(
@@ -384,14 +423,31 @@ fun VideoMidAd(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = creative.iconUrl,
-                    contentDescription = creative.title,
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                if (creative.iconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = creative.iconUrl,
+                        contentDescription = creative.title,
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = creative.title,
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(10.dp))
 
@@ -465,6 +521,10 @@ fun StickyVideoBottomBanner(
     creativeIndex: Int = 0
 ) {
     val context = LocalContext.current
+    val isMasterEnabled by com.example.data.NiyonOwnerControlStore.isAdMobMasterEnabled.collectAsState()
+    val isBannerEnabled by com.example.data.NiyonOwnerControlStore.isAdMobBannerEnabled.collectAsState()
+    if (!isMasterEnabled || !isBannerEnabled) return
+
     val creative = GoogleAdInventory.creatives[creativeIndex % GoogleAdInventory.creatives.size]
 
     Surface(
@@ -501,14 +561,31 @@ fun StickyVideoBottomBanner(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
 
-                AsyncImage(
-                    model = creative.iconUrl,
-                    contentDescription = creative.title,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                if (creative.iconUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = creative.iconUrl,
+                        contentDescription = creative.title,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(6.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(FacebookBlue.copy(alpha = 0.25f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = creative.title,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(8.dp))
 

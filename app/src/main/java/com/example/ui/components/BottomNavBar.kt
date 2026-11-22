@@ -47,10 +47,10 @@ fun FaceFeedBottomNavBar(
             icon = {
                 Icon(
                     imageVector = if (activeTab == AppTab.HOME) Icons.Filled.Home else Icons.Outlined.Home,
-                    contentDescription = "Feed"
+                    contentDescription = "Hum"
                 )
             },
-            label = { Text("Feed", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Hum", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = FacebookBlue,
                 selectedTextColor = FacebookBlue,
@@ -66,7 +66,7 @@ fun FaceFeedBottomNavBar(
                 Box(contentAlignment = Alignment.TopEnd) {
                     Icon(
                         imageVector = if (activeTab == AppTab.MESSAGES) Icons.Filled.ChatBubble else Icons.Outlined.ChatBubbleOutline,
-                        contentDescription = "Chats"
+                        contentDescription = "Chat"
                     )
                     if (messagesBadgeCount > 0) {
                         Box(
@@ -79,7 +79,7 @@ fun FaceFeedBottomNavBar(
                     }
                 }
             },
-            label = { Text("Chats", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Chat", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = BangladeshGreen,
                 selectedTextColor = BangladeshGreen,
@@ -94,10 +94,10 @@ fun FaceFeedBottomNavBar(
             icon = {
                 Icon(
                     imageVector = if (activeTab == AppTab.VIDEOS) Icons.Filled.OndemandVideo else Icons.Outlined.OndemandVideo,
-                    contentDescription = "Watch"
+                    contentDescription = "Video"
                 )
             },
-            label = { Text("Watch", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Video", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = BangladeshGreen,
                 selectedTextColor = BangladeshGreen,
@@ -112,10 +112,10 @@ fun FaceFeedBottomNavBar(
             icon = {
                 Icon(
                     imageVector = if (activeTab == AppTab.REELS) Icons.Filled.Movie else Icons.Outlined.Movie,
-                    contentDescription = "Reels"
+                    contentDescription = "Short Video"
                 )
             },
-            label = { Text("Reels", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Short Video", fontSize = 8.sp, maxLines = 1, softWrap = false) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = BangladeshGreen,
                 selectedTextColor = BangladeshGreen,
@@ -130,10 +130,10 @@ fun FaceFeedBottomNavBar(
             icon = {
                 Icon(
                     imageVector = if (activeTab == AppTab.GROUPS) Icons.Filled.Groups else Icons.Outlined.Groups,
-                    contentDescription = "Groups"
+                    contentDescription = "Group"
                 )
             },
-            label = { Text("Groups", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Group", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = BangladeshGreen,
                 selectedTextColor = BangladeshGreen,
@@ -149,7 +149,7 @@ fun FaceFeedBottomNavBar(
                 Box(contentAlignment = Alignment.TopEnd) {
                     Icon(
                         imageVector = if (activeTab == AppTab.FRIENDS) Icons.Filled.People else Icons.Outlined.People,
-                        contentDescription = "Friends"
+                        contentDescription = "Friend"
                     )
                     if (friendsBadgeCount > 0) {
                         Box(
@@ -162,7 +162,7 @@ fun FaceFeedBottomNavBar(
                     }
                 }
             },
-            label = { Text("Friends", fontSize = 10.sp, maxLines = 1) },
+            label = { Text("Friend", fontSize = 10.sp, maxLines = 1) },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = BangladeshGreen,
                 selectedTextColor = BangladeshGreen,

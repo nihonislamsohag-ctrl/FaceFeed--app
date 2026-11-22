@@ -164,24 +164,8 @@ fun PageDetailScreen(
         }
     }
 
-    // Local posts on this page (matching Screenshot 5: কুয়াকাটা সমুদ্র সৈকত 🏖️🏖️)
-    val pagePosts = remember {
-        mutableStateListOf(
-            Post(
-                id = "page_post_kuakata",
-                author = User(
-                    id = "usr_nihon",
-                    username = "nihon_islam_sohag",
-                    fullName = "Nihon Islam Sohag",
-                    avatarUrl = page.avatarUrl
-                ),
-                timestamp = "Just now • 🌐",
-                text = "কুয়াকাটা সমুদ্র সৈকত 🏖️🏖️",
-                images = listOf("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"),
-                shareCount = 24
-            )
-        )
-    }
+    // Local posts on this page (real user posts only)
+    val pagePosts = remember { mutableStateListOf<Post>() }
 
     BackHandler {
         onBack()
@@ -553,8 +537,8 @@ fun PageDetailScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Horizontal Navigation Tabs: All, Photos, Reels, Mentions
-                    val pageTabs = listOf("All", "Photos", "Reels", "Mentions")
+                    // Horizontal Navigation Tabs: All, Photos, Short Video, Mentions
+                    val pageTabs = listOf("All", "Photos", "Short Video", "Mentions")
                     TabRow(
                         selectedTabIndex = selectedTab,
                         containerColor = MaterialTheme.colorScheme.surface
@@ -687,7 +671,7 @@ fun PageDetailScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "What's on your mind?",
+                                        text = "Share your moment?",
                                         fontSize = 14.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -719,10 +703,10 @@ fun PageDetailScreen(
                                 Text("Photo", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
 
-                            TextButton(onClick = { toastMessage = "রিল ভিডিও আপলোড চালু হয়েছে 🎬" }) {
+                            TextButton(onClick = { toastMessage = "শর্ট ভিডিও আপলোড চালু হয়েছে 🎬" }) {
                                 Icon(Icons.Default.Videocam, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Reels", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                Text("Short Video", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
 
                             TextButton(onClick = { toastMessage = "লাইফ ইভেন্ট যুক্ত করুন" }) {
@@ -922,13 +906,18 @@ fun PageDetailScreen(
 
                     Button(
                         onClick = {
-                            val media = profileImageUri?.toString() ?: page.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800" }
-                            viewModel.addStory(
-                                mediaUrl = media,
-                                caption = "🌟 ${page.name} পেইজের অফিসিয়াল প্রোফাইল স্টোরি!"
-                            )
-                            showAddToStoryDialog = false
-                            toastMessage = "প্রোফাইল ছবি স্টোরিতে সফলভাবে পোস্ট হয়েছে! 🌟"
+                            val media = profileImageUri?.toString() ?: page.avatarUrl
+                            if (media.isNotBlank()) {
+                                viewModel.addStory(
+                                    mediaUrl = media,
+                                    caption = "🌟 ${page.name} পেইজের অফিসিয়াল প্রোফাইল স্টোরি!"
+                                )
+                                showAddToStoryDialog = false
+                                toastMessage = "প্রোফাইল ছবি স্টোরিতে সফলভাবে পোস্ট হয়েছে! 🌟"
+                            } else {
+                                showAddToStoryDialog = false
+                                storyPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue),
                         modifier = Modifier.fillMaxWidth(),
@@ -971,7 +960,7 @@ fun PageDetailScreen(
                 PageProfileFrame("none", "কোনো ফ্রেম নেই (Normal)", "স্বাভাবিক প্রোফাইল ছবি", null, "", ""),
                 PageProfileFrame("bd_50", "বাংলাদেশ ৫০ বছর / জাতীয় পতাকা 🇧🇩", "লাল-সবুজ গৌরবের ফ্রেম", Color(0xFF006A4E), "🇧🇩", "বাংলাদেশ"),
                 PageProfileFrame("vip_gold", "FotoFilm গোল্ডেন ভিআইপি 👑", "গোল্ডেন ক্রাউন ভিআইপি ফ্রেম", Color(0xFFFFD700), "👑", "VIP"),
-                PageProfileFrame("verified_blue", "FotoFilm ভেরিফাইড 💎", "ব্লু ভেরিফাইড মেম্বার ফ্রেম", Color(0xFF1877F2), "💎", "VERIFIED"),
+                PageProfileFrame("verified_green", "FotoFilm ভেরিফাইড 💎", "সবুজ-হলুদ ভেরিফাইড মেম্বার ফ্রেম", Color(0xFF159947), "💎", "VERIFIED"),
                 PageProfileFrame("eid_mubarak", "ঈদ মোবারক ফ্রেম 🌙", "পবিত্র ঈদ মোবারক ফ্রেম", Color(0xFF4CAF50), "🌙", "EID MUBARAK"),
                 PageProfileFrame("love_heart", "লাভ & হার্ট ফ্রেম ❤️", "ভালোবাসা ও লাভ ফ্রেম", Color(0xFFE91E63), "❤️", "LOVE"),
                 PageProfileFrame("flower_crown", "ফুলের রিং ক্রাউন 🌺", "গোলাপ ও রঙিন ফুলের ফ্রেম", Color(0xFFFF4081), "🌺", "FLOWER")
@@ -1052,16 +1041,12 @@ fun PageDetailScreen(
     // ----------------------------------------------------
     // Functional Dialog: Select Photo on FotoFilm (প্রোফাইল)
     // ----------------------------------------------------
+    // ----------------------------------------------------
+    // Functional Dialog: Select Photo on FotoFilm (প্রোফাইল)
+    // ----------------------------------------------------
     if (showSelectPhotoFotoFilmDialog) {
-        val sampleFotoFilmPhotos = remember {
-            listOf(
-                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800", // Kuakata Beach
-                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800", // Aesthetic Portrait
-                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800", // Man Portrait
-                "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800", // Green Nature
-                "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=800", // City Lights
-                "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800"  // Tech Team
-            )
+        val pageGalleryPhotos = remember(pagePosts) {
+            pagePosts.flatMap { it.images }.filter { it.isNotBlank() }.distinct()
         }
 
         AlertDialog(
@@ -1073,7 +1058,6 @@ fun PageDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Open Phone Gallery Button
                     Button(
                         onClick = {
                             showSelectPhotoFotoFilmDialog = false
@@ -1088,34 +1072,40 @@ fun PageDetailScreen(
                         Text("📁 ফোনের গ্যালারি থেকে পছন্দ করুন", fontWeight = FontWeight.Bold)
                     }
 
-                    Text("FotoFilm ফটো কালেকশন থেকে বেছে নিন:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(3),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(sampleFotoFilmPhotos) { photoUrl ->
-                            Surface(
-                                onClick = {
-                                    profileImageUri = Uri.parse(photoUrl)
-                                    profileBitmap = null
-                                    showSelectPhotoFotoFilmDialog = false
-                                    toastMessage = "FotoFilm থেকে প্রোফাইল ছবি সফলভাবে সেট করা হয়েছে! 📸"
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.size(80.dp),
-                                shadowElevation = 2.dp
-                            ) {
-                                AsyncImage(
-                                    model = photoUrl,
-                                    contentDescription = "FotoFilm Photo",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                    if (pageGalleryPhotos.isEmpty()) {
+                        Text(
+                            text = "পেইজে এখনো কোনো ছবি পোস্ট করা হয়নি। ফোনের গ্যালারি থেকে নতুন ছবি নির্বাচন করুন।",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(pageGalleryPhotos) { photoUrl ->
+                                Surface(
+                                    onClick = {
+                                        profileImageUri = Uri.parse(photoUrl)
+                                        profileBitmap = null
+                                        showSelectPhotoFotoFilmDialog = false
+                                        toastMessage = "FotoFilm থেকে প্রোফাইল ছবি সফলভাবে সেট করা হয়েছে! 📸"
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.size(80.dp),
+                                    shadowElevation = 2.dp
+                                ) {
+                                    AsyncImage(
+                                        model = photoUrl,
+                                        contentDescription = "FotoFilm Photo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                         }
                     }
@@ -1134,15 +1124,8 @@ fun PageDetailScreen(
     // Functional Dialog: Select Cover Photo on FotoFilm (কভার)
     // ----------------------------------------------------
     if (showSelectCoverFotoFilmDialog) {
-        val sampleFotoFilmCovers = remember {
-            listOf(
-                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200", // Kuakata Beach
-                "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1200", // Mountain
-                "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=1200", // Nature
-                "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200", // Abstract Gradient
-                "https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200", // City Night
-                "https://images.unsplash.com/photo-1585829365295-ab7cd400c167?w=1200"  // Bangladesh River
-            )
+        val pageCoverPhotos = remember(pagePosts) {
+            pagePosts.flatMap { it.images }.filter { it.isNotBlank() }.distinct()
         }
 
         AlertDialog(
@@ -1154,7 +1137,6 @@ fun PageDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Open Phone Gallery Button
                     Button(
                         onClick = {
                             showSelectCoverFotoFilmDialog = false
@@ -1169,34 +1151,40 @@ fun PageDetailScreen(
                         Text("📁 ফোনের গ্যালারি থেকে কভার ছবি বাছুন", fontWeight = FontWeight.Bold)
                     }
 
-                    Text("FotoFilm কভার কালেকশন থেকে বেছে নিন:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(sampleFotoFilmCovers) { coverUrl ->
-                            Surface(
-                                onClick = {
-                                    coverImageUri = Uri.parse(coverUrl)
-                                    coverBitmap = null
-                                    showSelectCoverFotoFilmDialog = false
-                                    toastMessage = "FotoFilm থেকে কভার ছবি সফলভাবে সেট করা হয়েছে! 🖼️"
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(70.dp),
-                                shadowElevation = 2.dp
-                            ) {
-                                AsyncImage(
-                                    model = coverUrl,
-                                    contentDescription = "FotoFilm Cover",
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
+                    if (pageCoverPhotos.isEmpty()) {
+                        Text(
+                            text = "পেইজে এখনো কোনো কভার ছবি নেই। ফোনের গ্যালারি থেকে নতুন কভার ছবি বাছুন।",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(pageCoverPhotos) { coverUrl ->
+                                Surface(
+                                    onClick = {
+                                        coverImageUri = Uri.parse(coverUrl)
+                                        coverBitmap = null
+                                        showSelectCoverFotoFilmDialog = false
+                                        toastMessage = "FotoFilm থেকে কভার ছবি সফলভাবে সেট করা হয়েছে! 🖼️"
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(70.dp),
+                                    shadowElevation = 2.dp
+                                ) {
+                                    AsyncImage(
+                                        model = coverUrl,
+                                        contentDescription = "FotoFilm Cover",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                         }
                     }
@@ -1732,7 +1720,7 @@ fun PageDetailScreen(
         val buttonsList = listOf(
             "Send Messenger Message",
             "Send WhatsApp Message",
-            "Call Now (+8801812345678)",
+            "Call Now",
             "Send Email",
             "Learn More",
             "Shop Now"
@@ -1783,8 +1771,7 @@ fun PageDetailScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("আর্কাইভ করা পোস্ট ও কনটেন্ট:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("📦 কুয়াকাটা ট্রাভেল ড্রাফট পোস্ট - সংরক্ষিত", fontSize = 12.sp)
-                    Text("📦 পুরনো স্টোরি আর্কাইভ - সংরক্ষিত", fontSize = 12.sp)
+                    Text("বর্তমানে কোনো আর্কাইভ করা পোস্ট বা স্টোরি নেই।", fontSize = 12.sp, color = Color.Gray)
                     Text("এখানে সংরক্ষিত কনটেন্ট দর্শনার্থীরা দেখতে পাবে না।", fontSize = 11.sp, color = Color.Gray)
                 }
             },
@@ -1804,10 +1791,8 @@ fun PageDetailScreen(
             title = { Text("Activity log (অ্যাক্টিভিটি লগ)", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("• You updated the cover photo - Just now", fontSize = 12.sp)
-                    Text("• You updated the profile picture - Just now", fontSize = 12.sp)
-                    Text("• You published: কুয়াকাটা সমুদ্র সৈকত 🏖️ - 2h ago", fontSize = 12.sp)
-                    Text("• Page created: ${page.name} - 1d ago", fontSize = 12.sp)
+                    Text("• Page: ${page.name}", fontSize = 12.sp)
+                    Text("• Category: ${page.category}", fontSize = 12.sp)
                 }
             },
             confirmButton = {
@@ -1912,36 +1897,34 @@ fun PageDetailScreen(
 
     // 9. Invite Friends Dialog (ACTIVE)
     if (showInviteFriendsDialog) {
-        val friends = listOf(
-            "MD Mohiuddin",
-            "Joy Ahmed",
-            "Yousuf Farazi",
-            "Hasan Mahmud",
-            "Rini Islam",
-            "Gazi Mehede Hasan"
-        )
+        val allUsers by viewModel.allAppUsers.collectAsState()
+        val realFriends = allUsers.filter { it.id != currentUser.id }.map { it.fullName }
         AlertDialog(
             onDismissRequest = { showInviteFriendsDialog = false },
             icon = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = FacebookBlue) },
             title = { Text("Invite people to connect", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("আপনার বন্ধুদের পেইজে ইনভাইট পাঠান:", fontSize = 13.sp)
-                    friends.forEach { friend ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Surface(shape = CircleShape, color = Color(0xFFE4E6EB), modifier = Modifier.size(28.dp)) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp))
+                    if (realFriends.isEmpty()) {
+                        Text("ইনভাইট করার মতো কোনো বন্ধু পাওয়া যায়নি।", fontSize = 13.sp, color = Color.Gray)
+                    } else {
+                        Text("আপনার বন্ধুদের পেইজে ইনভাইট পাঠান:", fontSize = 13.sp)
+                        realFriends.forEach { friend ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Surface(shape = CircleShape, color = Color(0xFFE4E6EB), modifier = Modifier.size(28.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
                                 }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(friend, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                Text("ইনভাইট ✓", color = FacebookBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(friend, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Text("ইনভাইট ✓", color = FacebookBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

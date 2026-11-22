@@ -20,7 +20,10 @@ data class ChatMessage(
     val userReaction: String? = null,
     val isAudioVoice: Boolean = false,
     val audioDurationSeconds: Int = 0,
-    val status: MessageDeliveryStatus = MessageDeliveryStatus.DELIVERED
+    val status: MessageDeliveryStatus = MessageDeliveryStatus.DELIVERED,
+    val callLogType: CallType? = null,
+    val callDurationSeconds: Int = 0,
+    val isMissedCall: Boolean = false
 )
 
 data class Conversation(

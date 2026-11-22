@@ -66,6 +66,10 @@ fun LivePartyRoomHubDialog(
     val context = LocalContext.current
     val currentUser by viewModel.currentUser.collectAsState()
     val allGroups by viewModel.groups.collectAsState()
+    val hangoutPresetRooms by viewModel.hangoutPresetRooms.collectAsState()
+    val presetActiveMap = remember(hangoutPresetRooms) {
+        hangoutPresetRooms.associate { it.roomKey to it.isActive }
+    }
 
     var selectedTab by remember { mutableStateOf("Room") } // "Room" or "Explore"
     var selectedFilterCategory by remember { mutableStateOf("Trending") }
@@ -81,7 +85,7 @@ fun LivePartyRoomHubDialog(
     var showLudoPolicyDialog by remember { mutableStateOf(false) }
     var ludoSelectedMode by remember { mutableStateOf<GameMode?>(null) }
 
-    val presetRoomsOnlineBase = 52
+    val presetRoomsOnlineBase = 0
     val totalGroupsOnlineBase = remember(allGroups) {
         allGroups.sumOf { it.memberCount } + presetRoomsOnlineBase
     }
@@ -105,7 +109,23 @@ fun LivePartyRoomHubDialog(
         ).show()
     }
 
+    fun isRoomEnabled(roomKey: String): Boolean {
+        if (roomKey.startsWith("group_")) {
+            val groupId = roomKey.removePrefix("group_")
+            return allGroups.find { it.id == groupId }?.isActive ?: true
+        }
+        return presetActiveMap[roomKey] ?: true
+    }
+
     fun openRoom(roomKey: String, data: PartyRoomData) {
+        if (!isRoomEnabled(roomKey)) {
+            Toast.makeText(
+                context,
+                "🔴 অ্যাডমিন এই \"${data.title}\" গ্রুপটি সাময়িকভাবে বন্ধ রেখেছেন",
+                Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
         activeEnteredRoomKey = roomKey
         val effectiveCount = data.memberCount + 1
         activePartyRoom = data.copy(memberCount = effectiveCount)
@@ -397,7 +417,8 @@ fun LivePartyRoomHubDialog(
                                     title = group.name,
                                     memberCount = group.memberCount + delta,
                                     isVerified = true,
-                                    isLive = true,
+                                    isLive = group.isActive,
+                                    isAdminPaused = !group.isActive,
                                     onClick = {
                                         openRoom(
                                             rKey,
@@ -415,113 +436,22 @@ fun LivePartyRoomHubDialog(
 
                             // Ludo King Group Card in My Room
                             item {
+                                val ludoEnabled = isRoomEnabled("ludo_king_live")
                                 val ludoDelta = if (joinedRoomKeys.contains("ludo_king_live")) 1 else 0
                                 MyRoomHorizontalCard(
-                                    coverUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
+                                    coverUrl = currentUser.avatarUrl,
                                     title = "🎲 লুডু কিং",
                                     badgeText = "🎲 লুডু লাইভ",
-                                    memberCount = 4 + ludoDelta,
+                                    memberCount = ludoDelta,
                                     isVerified = true,
-                                    isLive = true,
+                                    isLive = ludoEnabled,
+                                    isAdminPaused = !ludoEnabled,
                                     onClick = {
-                                        showLudoPolicyDialog = true
-                                    }
-                                )
-                            }
-
-                            // Preset Rooms from User Screenshot
-                            item {
-                                val rKey = "preset_fm"
-                                val delta = if (joinedRoomKeys.contains(rKey)) 1 else 0
-                                MyRoomHorizontalCard(
-                                    coverUrl = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
-                                    title = "FM 🎙️ ইসলাঁমিঁক ...",
-                                    badgeText = "FM ইসলামিক রেডিও শো",
-                                    memberCount = 3 + delta,
-                                    isLive = true,
-                                    onClick = {
-                                        openRoom(
-                                            rKey,
-                                            PartyRoomData(
-                                                title = "FM 🎙️ ইসলামিক রেডিও শো",
-                                                creatorName = "হাফেজ মাওলানা রহীম",
-                                                coverUrl = "https://images.unsplash.com/photo-1542838132-92c53300491e?w=400",
-                                                memberCount = 3,
-                                                tag = "🕌 ইসলামিক আলোচনা"
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-
-                            item {
-                                val rKey = "preset_162"
-                                val delta = if (joinedRoomKeys.contains(rKey)) 1 else 0
-                                MyRoomHorizontalCard(
-                                    coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
-                                    title = "✔ ①62💖Cha...",
-                                    memberCount = 19 + delta,
-                                    isVerified = true,
-                                    isLive = true,
-                                    onClick = {
-                                        openRoom(
-                                            rKey,
-                                            PartyRoomData(
-                                                title = "①62💖 Chat & Fun Party",
-                                                creatorName = "Sweet Angel",
-                                                coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
-                                                memberCount = 19,
-                                                tag = "💖 মিষ্টি আড্ডা"
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-
-                            item {
-                                val rKey = "preset_rk"
-                                val delta = if (joinedRoomKeys.contains(rKey)) 1 else 0
-                                MyRoomHorizontalCard(
-                                    coverUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400",
-                                    title = "✔ ⓇⓀ... বিনোদন",
-                                    badgeText = "মেঘ-বাড়ী বিনোদন ক্লাব",
-                                    memberCount = 15 + delta,
-                                    isVerified = true,
-                                    isLive = true,
-                                    onClick = {
-                                        openRoom(
-                                            rKey,
-                                            PartyRoomData(
-                                                title = "মেঘ-বাড়ী বিনোদন ক্লাব",
-                                                creatorName = "রাজকুমার তানভীর",
-                                                coverUrl = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=400",
-                                                memberCount = 15,
-                                                tag = "🎸 গানের আসর"
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-
-                            item {
-                                val rKey = "preset_rainbow"
-                                val delta = if (joinedRoomKeys.contains(rKey)) 1 else 0
-                                MyRoomHorizontalCard(
-                                    coverUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400",
-                                    title = "রংধনু",
-                                    memberCount = delta,
-                                    isLive = delta > 0,
-                                    onClick = {
-                                        openRoom(
-                                            rKey,
-                                            PartyRoomData(
-                                                title = "রংধনু স্পেশাল আড্ডা",
-                                                creatorName = "রংধনু আপু",
-                                                coverUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400",
-                                                memberCount = 1,
-                                                tag = "🌈 রঙের আড্ডা"
-                                            )
-                                        )
+                                        if (!ludoEnabled) {
+                                            Toast.makeText(context, "🔴 অ্যাডমিন লুডু কিং গ্রুপটি সাময়িকভাবে বন্ধ রেখেছেন", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            showLudoPolicyDialog = true
+                                        }
                                     }
                                 )
                             }
@@ -606,81 +536,18 @@ fun LivePartyRoomHubDialog(
                             )
                         }
 
-                        // 2. Ludo Room 1: ৪ জন লাইভ ভিডিও কলে লুডু ম্যাচ
+                        // Official Host Ludo Room
                         item {
                             RecommendedRoomCard(
-                                title = "🎲 লুডু কিং - ৪ জন লাইভ ভিডিও কল রুম",
-                                creatorName = "Niyon Islam Sohag",
-                                quote = "🎲 বন্ধুদের সাথে লাইভ ভিডিও কলে লুডু কিং খেলুন! ৬ পড়লে গুটি ঘুরবে ও কাটলে ফস সাউন্ড!",
-                                avatarUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200",
-                                memberCount = 4,
+                                title = "🎲 লুডু কিং - লাইভ ভিডিও কল রুম",
+                                creatorName = currentUser.fullName,
+                                quote = "🎲 বন্ধুদের সাথে লাইভ ভিডিও কলে লুডু কিং খেলুন!",
+                                avatarUrl = currentUser.avatarUrl,
+                                memberCount = 1,
                                 categoryTag = "🎲 লুডু কিং Pro",
                                 isGroup = true,
                                 isOnline = true,
-                                participants = listOf(
-                                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                                    SampleData.friendMdMohiuddin.avatarUrl,
-                                    SampleData.friendRahim.avatarUrl,
-                                    SampleData.friendHasanMiaHowlader.avatarUrl
-                                ),
-                                 onClick = { showLudoPolicyDialog = true }
-                            )
-                        }
-
-                        // 3. Ludo Room 2: ২/৪ জন জোড়া টিম লুডু টুর্নামেন্ট
-                        item {
-                            RecommendedRoomCard(
-                                title = "🏆 ২/৪ জন জোড়া টিম লুডু টুর্নামেন্ট",
-                                creatorName = "FotoFilm Ludo League",
-                                quote = "🏆 লাইভ টিম লুডু চ্যালেঞ্জ! পার্টনারের সাথে এক হয়ে অন্য টিমকে হারানোর রোমাঞ্চকর খেলা!",
-                                avatarUrl = "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=200",
-                                memberCount = 8,
-                                categoryTag = "🏆 লুডু টুর্নামেন্ট",
-                                isGroup = true,
-                                isOnline = true,
-                                participants = listOf(
-                                    SampleData.friendTanvir.avatarUrl,
-                                    SampleData.friendSamrat.avatarUrl,
-                                    SampleData.friendSadia.avatarUrl
-                                ),
-                                onClick = { showLudoPolicyDialog = true }
-                            )
-                        }
-
-                        // 4. Ludo Room 3: ক্লাসিক ফ্রেন্ডস লুডু আড্ডা
-                        item {
-                            RecommendedRoomCard(
-                                title = "🎲 ক্লাসিক ফ্রেন্ডস লুডু আড্ডা (Friends Match)",
-                                creatorName = "MD Mohiuddin",
-                                quote = "🔥 বড় ছক্কা ডাইস, সাউন্ড ইফেক্ট, ভয়েস কল ও ৫টি ইমোজি সহ আসল লুডু কিং!",
-                                avatarUrl = SampleData.friendMdMohiuddin.avatarUrl,
-                                memberCount = 4,
-                                categoryTag = "🎲 ফ্রেন্ডস লুডু",
-                                isGroup = true,
-                                isOnline = true,
-                                participants = listOf(
-                                    SampleData.friendMdMohiuddin.avatarUrl,
-                                    SampleData.friendRahim.avatarUrl
-                                ),
-                                onClick = { showLudoPolicyDialog = true }
-                            )
-                        }
-
-                        // 5. Ludo Room 4: কুইক ৫ মিনিট লুডু চ্যালেঞ্জ
-                        item {
-                            RecommendedRoomCard(
-                                title = "⚡ কুইক ৫ মিনিট লুডু চ্যালেঞ্জ রুম",
-                                creatorName = "Abdur Rahim",
-                                quote = "⚡ দ্রুত গতির ৫ মিনিটের স্পেশাল লুডু ম্যাচ! কে নেবে প্রথম স্থান?",
-                                avatarUrl = SampleData.friendRahim.avatarUrl,
-                                memberCount = 2,
-                                categoryTag = "⚡ কুইক লুডু",
-                                isGroup = true,
-                                isOnline = true,
-                                participants = listOf(
-                                    SampleData.friendRahim.avatarUrl,
-                                    SampleData.friendTanvir.avatarUrl
-                                ),
+                                participants = emptyList(),
                                 onClick = { showLudoPolicyDialog = true }
                             )
                         }
@@ -709,12 +576,9 @@ fun LivePartyRoomHubDialog(
                                 memberCount = group.memberCount + if (isJoined) 1 else 0,
                                 categoryTag = "🌿 গ্রুপ লাইভ আড্ডা",
                                 isGroup = true,
-                                isOnline = true,
-                                participants = listOf(
-                                    group.coverUrl,
-                                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                                    SampleData.friendMdMohiuddin.avatarUrl
-                                ),
+                                isOnline = group.isActive,
+                                isAdminPaused = !group.isActive,
+                                participants = group.admins.map { it.avatarUrl }.filter { it.isNotBlank() },
                                 isJoined = isJoined,
                                 onToggleJoin = { toggleGroupMembership(rKey, group.name) },
                                 onClick = {
@@ -733,120 +597,40 @@ fun LivePartyRoomHubDialog(
                         }
                     }
 
-                    // ----------------------------------------------------
-                    // Section D: Static Recommended Rooms from Screenshot
-                    // ----------------------------------------------------
-
-                    // Card 1: Rafi Islam's Room
-                    item {
-                        if (searchQuery.isBlank() || "Rafi Islam".contains(searchQuery, ignoreCase = true)) {
-                            val rKey = "rec_rafi"
-                            val isJoined = joinedRoomKeys.contains(rKey)
-                            RecommendedRoomCard(
-                                title = "Rafi Islam's Room",
-                                creatorName = "Rafi Islam",
-                                quote = "🥰 পাগল খানায় সিঙ্গেল ছেলে মেয়ে পাওয়া যায় 🥰",
-                                avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-                                memberCount = 4 + if (isJoined) 1 else 0,
-                                categoryTag = "💡 অজানা তথ্য",
-                                isOnline = true,
-                                participants = listOf(
-                                    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                                    "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200",
-                                    "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"
-                                ),
-                                isJoined = isJoined,
-                                onToggleJoin = { toggleGroupMembership(rKey, "Rafi Islam's Room") },
-                                onClick = {
-                                    openRoom(
-                                        rKey,
-                                        PartyRoomData(
-                                            title = "Rafi Islam's Room",
-                                            creatorName = "Rafi Islam",
-                                            coverUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-                                            memberCount = 4,
-                                            tag = "💡 অজানা তথ্য"
-                                        )
+                    if (allGroups.isEmpty() && selectedFilterCategory != "Ludo") {
+                        item {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = Color.White,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "এখনো কোনো লাইভ আড্ডা রুম তৈরি হয়নি",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF1B1B1B)
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = "নিচের '+ নতুন গ্রুপ/রুম' বাটনে চাপ দিয়ে আপনার নিজস্ব লাইভ আড্ডা রুম তৈরি করুন।",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF757575),
+                                        textAlign = TextAlign.Center
                                     )
                                 }
-                            )
+                            }
                         }
                     }
 
-                    // Promotional Banner matching Screenshot: NEWBIE GROWTH TASK
+                    // Google AdMob Banner inside Hangout Hub
                     item {
-                        NewbieGrowthTaskBanner()
-                    }
-
-                    // Card 2: 💖–ālįşħā–😄 Room
-                    item {
-                        if (searchQuery.isBlank() || "alisha".contains(searchQuery, ignoreCase = true)) {
-                            val rKey = "rec_alisha"
-                            val isJoined = joinedRoomKeys.contains(rKey)
-                            RecommendedRoomCard(
-                                title = "💖–ālįşħā–😄",
-                                creatorName = "Alisha",
-                                quote = "$, 🕊️ সিঙ্গেল ছেলে মেয়ে রা আসো মিঙ্গেল করে দিবো,...",
-                                avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-                                memberCount = 2 + if (isJoined) 1 else 0,
-                                categoryTag = "👩‍❤️‍👨 ডেটিং",
-                                isOnline = true,
-                                participants = listOf(
-                                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                                    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200"
-                                ),
-                                isJoined = isJoined,
-                                onToggleJoin = { toggleGroupMembership(rKey, "💖–ālįşħā–😄") },
-                                onClick = {
-                                    openRoom(
-                                        rKey,
-                                        PartyRoomData(
-                                            title = "💖–ālįşħā–😄 এর আড্ডা",
-                                            creatorName = "Alisha",
-                                            coverUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-                                            memberCount = 2,
-                                            tag = "👩‍❤️‍👨 ডেটিং"
-                                        )
-                                    )
-                                }
-                            )
-                        }
-                    }
-
-                    // Card 3: Tumi sudhu Amar's Room
-                    item {
-                        if (searchQuery.isBlank() || "Tumi sudhu Amar".contains(searchQuery, ignoreCase = true)) {
-                            val rKey = "rec_tumi"
-                            val isJoined = joinedRoomKeys.contains(rKey)
-                            RecommendedRoomCard(
-                                title = "Tumi sudhu Amar's Room",
-                                creatorName = "Tumi sudhu Amar",
-                                quote = "🎶 মন ভালো করার সুর ও কবিতা পাঠ... সবাই স্বাগতম 🌹",
-                                avatarUrl = "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200",
-                                memberCount = 5 + if (isJoined) 1 else 0,
-                                categoryTag = "🎵 গান ও কবিতা",
-                                isOnline = true,
-                                participants = listOf(
-                                    "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200",
-                                    "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200",
-                                    "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200"
-                                ),
-                                isJoined = isJoined,
-                                onToggleJoin = { toggleGroupMembership(rKey, "Tumi sudhu Amar's Room") },
-                                onClick = {
-                                    openRoom(
-                                        rKey,
-                                        PartyRoomData(
-                                            title = "Tumi sudhu Amar's Room",
-                                            creatorName = "Tumi sudhu Amar",
-                                            coverUrl = "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200",
-                                            memberCount = 5,
-                                            tag = "🎵 গান ও কবিতা"
-                                        )
-                                    )
-                                }
-                            )
-                        }
+                        AdBanner(creativeIndex = 1)
                     }
                 }
             }
@@ -922,6 +706,7 @@ fun MyRoomHorizontalCard(
     memberCount: Int,
     isVerified: Boolean = false,
     isLive: Boolean = true,
+    isAdminPaused: Boolean = false,
     onClick: () -> Unit
 ) {
     Column(
@@ -937,10 +722,8 @@ fun MyRoomHorizontalCard(
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFFE0E0E0))
         ) {
-            AsyncImage(
-                model = coverUrl,
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
+            FotoFilmCoverBackground(
+                imageUrl = coverUrl,
                 modifier = Modifier.fillMaxSize()
             )
 
@@ -994,8 +777,24 @@ fun MyRoomHorizontalCard(
                 }
             }
 
-            // Green Online Dot on top left
-            if (isLive) {
+            // Green Online Dot or Admin Paused Badge on top left
+            if (isAdminPaused) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFD32F2F),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(5.dp)
+                ) {
+                    Text(
+                        text = "বন্ধ",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                }
+            } else if (isLive) {
                 Box(
                     modifier = Modifier
                         .padding(6.dp)
@@ -1044,6 +843,7 @@ fun RecommendedRoomCard(
     categoryTag: String,
     isGroup: Boolean = false,
     isOnline: Boolean = true,
+    isAdminPaused: Boolean = false,
     isVerified: Boolean = true,
     participants: List<String> = emptyList(),
     isJoined: Boolean = false,
@@ -1053,9 +853,9 @@ fun RecommendedRoomCard(
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(16.dp),
-        color = Color.White,
+        color = if (isAdminPaused) Color(0xFFFFF5F5) else Color.White,
         shadowElevation = 1.dp,
-        border = BorderStroke(0.6.dp, Color(0xFFE5E5EA)),
+        border = BorderStroke(0.8.dp, if (isAdminPaused) Color(0xFFE57373) else Color(0xFFE5E5EA)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -1069,24 +869,22 @@ fun RecommendedRoomCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box {
-                    AsyncImage(
-                        model = avatarUrl,
+                    FotoFilmAvatar(
+                        imageUrl = avatarUrl,
+                        name = creatorName,
                         contentDescription = title,
-                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(36.dp)
                             .clip(CircleShape)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     )
-                    if (isOnline) {
-                        Box(
-                            modifier = Modifier
-                                .size(9.dp)
-                                .background(Color(0xFF00E676), CircleShape)
-                                .border(1.5.dp, Color.White, CircleShape)
-                                .align(Alignment.BottomEnd)
-                        )
-                    }
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .background(if (isAdminPaused) Color(0xFFD32F2F) else if (isOnline) Color(0xFF00E676) else Color.Gray, CircleShape)
+                            .border(1.5.dp, Color.White, CircleShape)
+                            .align(Alignment.BottomEnd)
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(10.dp))
@@ -1107,7 +905,14 @@ fun RecommendedRoomCard(
                             FidaVerifiedBadge(size = 14.dp)
                         }
                     }
-                    if (isGroup) {
+                    if (isAdminPaused) {
+                        Text(
+                            text = "🔴 অ্যাডমিন কর্তৃক সাময়িকভাবে বন্ধ",
+                            fontSize = 11.sp,
+                            color = Color(0xFFC62828),
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else if (isGroup) {
                         Text(
                             text = "🟢 অনলাইনে আছে • $memberCount জন সক্রিয়",
                             fontSize = 11.sp,

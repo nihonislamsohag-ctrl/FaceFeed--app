@@ -104,40 +104,14 @@ fun LudoFriendsClubLobbyDialog(
     // Joined seats list (Host + friends joining one-by-one up to targetPlayerCount)
     val joinedFriends = remember { mutableStateListOf<User>() }
     val invitedIds = remember { mutableStateListOf<String>() }
-    val totalOnlineInLudo = 1248 + onlineFriends.count { it.isOnline } + joinedFriends.size
+    val totalOnlineInLudo = onlineFriends.count { it.isOnline } + joinedFriends.size + 1
 
     var chatInput by remember { mutableStateOf("") }
     var fullScreenPhotoPreview by remember { mutableStateOf<Pair<Uri?, String?>?>(null) }
     var showScreenshotPickerDialog by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    val chatMessages = remember {
-        mutableStateListOf(
-            LudoLobbyChatMessage(
-                id = "lm_1",
-                senderName = "Tanvir Ahmed",
-                senderAvatar = SampleData.friendTanvir.avatarUrl,
-                text = "কে কে এখন ২/৩/৪ জনে লুডু খেলবে? জয়েন দাও সবাই 🎲",
-                time = "2m ago"
-            ),
-            LudoLobbyChatMessage(
-                id = "lm_2",
-                senderName = "Nusrat Jahan",
-                senderAvatar = SampleData.friendNusrat.avatarUrl,
-                text = "আগের ম্যাচের উইন স্ক্রিনশট দিলাম 📸🏆",
-                time = "1m ago",
-                isScreenshotCard = true,
-                screenshotSummary = "🏆 ৪ প্লেয়ার ম্যাচ জয়ী: Nusrat Jahan (+500 কয়েন)"
-            ),
-            LudoLobbyChatMessage(
-                id = "lm_3",
-                senderName = "MD Samrat",
-                senderAvatar = SampleData.friendSamrat.avatarUrl,
-                text = "আমি লাইনে আছি, রুম ইনভাইট পাঠাও ভাই 🤝",
-                time = "Just now"
-            )
-        )
-    }
+    val chatMessages = remember { mutableStateListOf<LudoLobbyChatMessage>() }
 
     LaunchedEffect(chatMessages.size) {
         if (chatMessages.isNotEmpty()) {
@@ -674,13 +648,13 @@ fun LudoFriendsClubLobbyDialog(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Box {
-                                        AsyncImage(
-                                            model = friend.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200" },
+                                        FotoFilmAvatar(
+                                            imageUrl = friend.avatarUrl,
+                                            name = friend.fullName,
                                             contentDescription = friend.fullName,
                                             modifier = Modifier
                                                 .size(42.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                                .clip(CircleShape)
                                         )
                                         if (friend.isOnline) {
                                             Box(

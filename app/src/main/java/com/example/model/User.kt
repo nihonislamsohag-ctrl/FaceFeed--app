@@ -15,7 +15,7 @@ data class ProfileFriend(
     val name: String,
     val username: String = "",
     val avatarUrl: String,
-    val mutualFriendsCount: String = "0 mutual friends",
+    val mutualFriendsCount: String = "0 mutual friend",
     val isOnline: Boolean = true
 )
 
@@ -26,7 +26,7 @@ data class User(
     val email: String = "",
     val avatarUrl: String = "",
     val coverUrl: String = "",
-    val bio: String = "Alhamdulillah for everything ✨ | Excited to join Face Feed",
+    val bio: String = "Alhamdulillah for everything ✨ | Excited to join FotoFilm",
     val isVerified: Boolean = false,
     val isOnline: Boolean = true,
     val lastSeenMinutesAgo: Int = 0,
@@ -170,7 +170,24 @@ data class UserVerificationAuditEntry(
     val userUsername: String,
     val userAvatar: String, // তারিখ ও প্রোফাইল আইকন সহ
     val totalTimesVerifiedTaken: Int, // আমার কাছ থেকে ১ জনে কতো বার ভেরিফাই নিছে (যেমন: ৩ বার)
-    val currentBadgeStatus: String = "সক্রিয় ভেরিফাইড 🔵",
+    val currentBadgeStatus: String = "সক্রিয় ভেরিফাইড ✅",
     val historyInstances: List<VerificationInstanceRecord> = emptyList()
 )
+
+data class FakeIdReport(
+    val id: String,
+    val attemptedName: String,
+    val attemptedUsername: String,
+    val attemptedEmail: String,
+    val selectedGender: String,
+    val detectedSignal: String,
+    val violationType: String, // "STOLEN_PHOTO", "MALE_TO_FEMALE_FAKE", "FEMALE_TO_MALE_FAKE", "LIMIT_3_ACCOUNTS"
+    val violationDetails: String,
+    val attemptedAvatarUrl: String = "",
+    val matchedExistingUser: String = "",
+    val deviceModel: String = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+    val timestamp: String,
+    val status: String = "AUTO_BLOCKED" // "AUTO_BLOCKED", "PERMANENT_BANNED"
+)
+
 

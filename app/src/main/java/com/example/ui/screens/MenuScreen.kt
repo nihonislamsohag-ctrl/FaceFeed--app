@@ -1,14 +1,19 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
@@ -40,6 +45,7 @@ import coil.compose.AsyncImage
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
+import com.example.util.FakeIdDetector
 import com.example.util.PrivacyPolicyHelper
 import com.example.viewmodel.AppTab
 import com.example.model.AppLanguage
@@ -67,10 +73,13 @@ fun MenuScreen(
     modifier: Modifier = Modifier
 ) {
     val currentUser by viewModel.currentUser.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val isOwnerSession by viewModel.isOwnerSession.collectAsState()
     val accounts by viewModel.userAccounts.collectAsState()
     val isVerified by viewModel.isFidaVerified.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
     val currentLanguage by viewModel.currentLanguage.collectAsState()
+    val isNiyonOwner = isLoggedIn && isOwnerSession && viewModel.isCurrentUserNiyonIslamSohag()
     val context = LocalContext.current
 
     var showSwitchAccountDropdown by remember { mutableStateOf(false) }
@@ -102,6 +111,7 @@ fun MenuScreen(
     var showOrdersPaymentsDialog by remember { mutableStateOf(false) }
     var showDarkModeDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showOwnerQuickUnlockDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -134,12 +144,21 @@ fun MenuScreen(
                             )
                         }
 
+                        @OptIn(ExperimentalFoundationApi::class)
                         Text(
                             text = "Menu",
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        if (isNiyonOwner) viewModel.openRightManagerFida()
+                                        else showOwnerQuickUnlockDialog = true
+                                    }
+                                )
                         )
 
                         // Switch Profile Shortcut Icon (⇄)
@@ -281,13 +300,20 @@ fun MenuScreen(
 
                             Spacer(modifier = Modifier.width(12.dp))
 
-                            Text(
-                                text = "Switch account",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Switch account",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "১ ব্যক্তি সর্বোচ্চ ৩টি আইডি খুলতে পারবেন (${accounts.size}/৩টি)",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (accounts.size >= FakeIdDetector.MAX_ACCOUNTS_PER_PERSON) Color(0xFFD32F2F) else BangladeshGreen
+                                )
+                            }
 
                             Icon(
                                 imageVector = if (showSwitchAccountDropdown) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
@@ -318,12 +344,38 @@ fun MenuScreen(
                                     )
                                 }
 
+                                val isLimitReached = accounts.size >= FakeIdDetector.MAX_ACCOUNTS_PER_PERSON
+                                if (isLimitReached) {
+                                    Surface(
+                                        color = Color(0xFFFFEBEE),
+                                        shape = RoundedCornerShape(10.dp),
+                                        border = BorderStroke(1.dp, Color(0xFFEF9A9A)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                                    ) {
+                                        Text(
+                                            text = "⛔ ১ ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (৩/৩ আইডি পূর্ণ হয়েছে)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFFB71C1C),
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                        )
+                                    }
+                                }
+
                                 // + Add account option inside the dropdown
                                 Surface(
                                     color = Color.Transparent,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { showAddAccountDialog = true }
+                                        .clickable {
+                                            if (isLimitReached) {
+                                                showDashboardSnackbar = "⛔ ১ জন ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (৩/৩ পূর্ণ হয়েছে)"
+                                            } else {
+                                                showAddAccountDialog = true
+                                            }
+                                        }
                                         .padding(horizontal = 16.dp, vertical = 10.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -331,23 +383,33 @@ fun MenuScreen(
                                             modifier = Modifier
                                                 .size(38.dp)
                                                 .clip(CircleShape)
-                                                .background(FacebookBlue.copy(alpha = 0.12f)),
+                                                .background(
+                                                    if (isLimitReached) Color.Red.copy(alpha = 0.12f)
+                                                    else FacebookBlue.copy(alpha = 0.12f)
+                                                ),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Add,
+                                                imageVector = if (isLimitReached) Icons.Default.Block else Icons.Default.Add,
                                                 contentDescription = "Add Account",
-                                                tint = FacebookBlue,
+                                                tint = if (isLimitReached) Color.Red else FacebookBlue,
                                                 modifier = Modifier.size(20.dp)
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(14.dp))
-                                        Text(
-                                            text = "+ আরেকটি আইডি যোগ করুন",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = FacebookBlue
-                                        )
+                                        Column {
+                                            Text(
+                                                text = if (isLimitReached) "সর্বোচ্চ ৩টি আইডি পূর্ণ (${accounts.size}/৩)" else "+ আরেকটি আইডি যোগ করুন (${accounts.size}/৩)",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = if (isLimitReached) Color.Red else FacebookBlue
+                                            )
+                                            Text(
+                                                text = "অন্যের ছবি বা বিপরীত লিঙ্গের নামে আইডি অটো-ব্লক হবে",
+                                                fontSize = 10.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -367,7 +429,7 @@ fun MenuScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 14.dp)
                         .clickable {
-                            showDashboardSnackbar = "FaceFeed ইনভাইট লিঙ্ক কপি হয়েছে! বন্ধুদের সাথে শেয়ার করুন ❤️"
+                            showDashboardSnackbar = "FotoFilm ইনভাইট লিঙ্ক কপি হয়েছে! বন্ধুদের সাথে শেয়ার করুন ❤️"
                         }
                 ) {
                     Row(
@@ -389,13 +451,55 @@ fun MenuScreen(
             // Shortcuts 2-Column Grid
             item {
                 Spacer(modifier = Modifier.height(14.dp))
-                Text(
-                    text = "সব ফিচারসমূহ",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    @OptIn(ExperimentalFoundationApi::class)
+                    Text(
+                        text = "সব ফিচারসমূহ",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.combinedClickable(
+                            onClick = {},
+                            onLongClick = {
+                                if (isNiyonOwner) viewModel.openRightManagerFida()
+                                else showOwnerQuickUnlockDialog = true
+                            }
+                        )
+                    )
+                    if (isNiyonOwner) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFFFFE4EC),
+                            border = BorderStroke(1.dp, Color(0xFFFF4081)),
+                            modifier = Modifier.clickable { viewModel.openRightManagerFida() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocalFlorist,
+                                    contentDescription = "Right Manager Fida",
+                                    tint = Color(0xFFFF4081),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Right Manager Fida 🔒",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFC2185B)
+                                )
+                            }
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
 
                 Column(
@@ -404,42 +508,45 @@ fun MenuScreen(
                         .padding(horizontal = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Row 1: Dashboard, Messages
+                    // Row 1: Film Dashboard, ChatFilm
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Dashboard",
+                            title = "Film Dashboard",
                             icon = Icons.Default.BarChart,
                             iconColor = Color(0xFF00B2FE),
+                            showVerifiedBadge = true,
                             onClick = { showProfessionalDashboardDialog = true }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Messages",
+                            title = "ChatFilm",
                             icon = Icons.Default.ChatBubble,
                             iconColor = Color(0xFF006AFF),
+                            showVerifiedBadge = true,
                             onClick = { viewModel.setTab(AppTab.MESSAGES) }
                         )
                     }
 
-                    // Row 2: Groups, Marketplace
+                    // Row 2: Film Group, Shopping Mall
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Groups",
+                            title = "Film Group",
                             icon = Icons.Default.Groups,
                             iconColor = Color(0xFF00C853),
+                            showVerifiedBadge = true,
                             onClick = { viewModel.openGroupsTab() }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Marketplace",
+                            title = "Shopping Mall",
                             icon = Icons.Default.Storefront,
                             iconColor = Color(0xFF00B0FF),
                             showVerifiedBadge = true,
@@ -447,28 +554,30 @@ fun MenuScreen(
                         )
                     }
 
-                    // Row 3: Friends, Reels
+                    // Row 3: Friends, Short Video
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Friends",
+                            title = "Film Friend",
                             icon = Icons.Default.People,
                             iconColor = Color(0xFF0091EA),
+                            showVerifiedBadge = true,
                             onClick = { showFriendsListDialog = true }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Reels",
+                            title = "Short Video",
                             icon = Icons.Default.Movie,
                             iconColor = Color(0xFFFF4081),
+                            showVerifiedBadge = true,
                             onClick = { viewModel.setTab(AppTab.REELS) }
                         )
                     }
 
-                    // Row 4: Fida AI (Replaces Meta AI!), Pages
+                    // Row 4: Fida AI, Film Page
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -480,61 +589,66 @@ fun MenuScreen(
                             iconColor = Color(0xFF8A2BE2),
                             isGradient = true,
                             badge = "নতুন",
+                            showVerifiedBadge = true,
                             onClick = { viewModel.openFidaAI() }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Pages",
+                            title = "Film Page",
                             icon = Icons.Default.Flag,
                             iconColor = Color(0xFFFF9800),
+                            showVerifiedBadge = true,
                             onClick = { viewModel.openPagesTab() }
                         )
                     }
 
-                    // Row 5: Saved, Memories
+                    // Row 5: Film Save, Menu
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Saved",
+                            title = "Film Save",
                             icon = Icons.Default.Bookmark,
                             iconColor = Color(0xFF9C27B0),
+                            showVerifiedBadge = true,
                             onClick = { showSavedVideosDialog = true }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Memories",
+                            title = "Menu",
                             icon = Icons.Default.History,
                             iconColor = Color(0xFF00ACC1),
+                            showVerifiedBadge = true,
                             onClick = { showMemoriesDialog = true }
                         )
                     }
 
-                    // Row 6: Birthdays, Events
+                    // Row 6: Jonmodin, Film Event
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Birthdays",
+                            title = "Jonmodin",
                             icon = Icons.Default.CardGiftcard,
                             iconColor = Color(0xFF00B0FF),
+                            showVerifiedBadge = true,
                             onClick = { showBirthdaysDialog = true }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Events",
+                            title = "Film Event",
                             icon = Icons.Default.Event,
                             iconColor = Color(0xFFE91E63),
+                            showVerifiedBadge = true,
                             onClick = { showEventsDialog = true }
                         )
                     }
 
-                    // Row 7: Fida Verified (Green Badge! Replaces Meta Verified), Feeds
-                    // (Note: Instagram Lite is completely removed!)
+                    // Row 7: Fida Verified, Hum
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -543,23 +657,23 @@ fun MenuScreen(
                             modifier = Modifier.weight(1f),
                             title = "Fida Verified",
                             icon = Icons.Default.Verified,
-                            iconColor = FacebookBlue,
-                            badge = if (isVerified) "সক্রিয় 🔵" else "পান",
+                            iconColor = BangladeshGreen,
+                            badge = if (isVerified) "সক্রিয় ✅" else "পান",
                             showVerifiedBadge = true,
                             onClick = { viewModel.openFidaVerified() }
                         )
                         ShortcutGridItem(
                             modifier = Modifier.weight(1f),
-                            title = "Feeds",
+                            title = "Hum",
                             icon = Icons.Default.DynamicFeed,
                             iconColor = Color(0xFFFF5722),
+                            showVerifiedBadge = true,
                             onClick = { viewModel.setTab(AppTab.HOME) }
                         )
                     }
 
                     // Right Manager Fida (Flower Logo 🌸 - Exclusively for Niyon Islam Sohag only!)
-                    // Note: Face AD এডমিন has been moved inside Right Manager Fida per user request
-                    if (viewModel.isCurrentUserNiyonIslamSohag()) {
+                    if (isNiyonOwner) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -569,7 +683,8 @@ fun MenuScreen(
                                 title = "Right Manager Fida",
                                 icon = Icons.Default.LocalFlorist,
                                 iconColor = Color(0xFFFF4081),
-                                badge = "🔒 ২৫টি ফিচার + পিন তালা",
+                                badge = "🔒 ২৮টি ফিচার + পিন তালা",
+                                showVerifiedBadge = true,
                                 onClick = { viewModel.openRightManagerFida() }
                             )
                         }
@@ -604,6 +719,7 @@ fun MenuScreen(
                             iconColor = BangladeshGreen,
                             isGradient = true,
                             badge = "📶 ৬ সিম চালু ⚡",
+                            showVerifiedBadge = true,
                             onClick = { showSixSimDialog = true }
                         )
                     }
@@ -620,6 +736,7 @@ fun MenuScreen(
                             iconColor = Color(0xFF00C853),
                             isGradient = true,
                             badge = "🎬 ফ্রী এডিট ও APK",
+                            showVerifiedBadge = true,
                             onClick = { showProLevelCutDialog = true }
                         )
                     }
@@ -639,6 +756,7 @@ fun MenuScreen(
                             icon = Icons.Default.Spa,
                             iconColor = Color(0xFF00ACC1),
                             badge = "ফুল অ্যাপ ২",
+                            showVerifiedBadge = true,
                             onClick = { showFlowerLotusDialog = true }
                         )
                     }
@@ -700,7 +818,7 @@ fun MenuScreen(
                                 SettingsPrivacySubItem(
                                     icon = Icons.Default.AccountBalanceWallet,
                                     title = "Orders and payments (অর্ডার ও পেমেন্ট)",
-                                    subtitle = "FaceFeed Pay, বিকাশ/নগদ ও ট্রানজ্যাকশন",
+                                    subtitle = "FotoFilm Pay, বিকাশ/নগদ ও ট্রানজ্যাকশন",
                                     onClick = { showOrdersPaymentsDialog = true }
                                 )
 
@@ -747,7 +865,7 @@ fun MenuScreen(
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                                     .padding(start = 56.dp, end = 16.dp, top = 8.dp, bottom = 8.dp)
                             ) {
-                                Text("• FaceFeed হেল্প সেন্টার", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+                                Text("• FotoFilm হেল্প সেন্টার", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
                                 Text(
                                     text = "• 🎧 সাপোর্ট টিমে মেসেজ ও ৫টি ছবি/স্ক্রিনশট পাঠান (ছাপোড)",
                                     fontSize = 13.sp,
@@ -757,7 +875,7 @@ fun MenuScreen(
                                         .padding(vertical = 4.dp)
                                         .clickable { showSupportMessageDialog = true }
                                 )
-                                Text("• সমস্যা রিপোর্ট করুন", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+                                Text("• সমস্যা জন্য রিপোর্ট করুন", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
                                 Text("• Fida AI সহায়তা নিন", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp).clickable { viewModel.openFidaAI() })
                                 Text("• 🌐 গুগল ও ক্রোমে ব্যবহার / ডাউনলোড হাব", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = FacebookBlue, modifier = Modifier.padding(vertical = 4.dp).clickable { viewModel.openAppDownloadWebHub() })
                             }
@@ -768,8 +886,14 @@ fun MenuScreen(
                         // 3. Add account
                         MenuListItem(
                             icon = Icons.Default.PersonAdd,
-                            title = "Add account",
-                            onClick = { showAddAccountDialog = true }
+                            title = "Add account (${accounts.size}/৩)",
+                            onClick = {
+                                if (accounts.size >= FakeIdDetector.MAX_ACCOUNTS_PER_PERSON) {
+                                    showDashboardSnackbar = "⛔ ১ জন ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (৩/৩ পূর্ণ হয়েছে)"
+                                } else {
+                                    showAddAccountDialog = true
+                                }
+                            }
                         )
 
                         Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
@@ -843,11 +967,22 @@ fun MenuScreen(
         if (showAddAccountDialog) {
             AddAccountDialog(
                 onDismiss = { showAddAccountDialog = false },
-                onAccountCreated = { name, handle ->
-                    viewModel.addNewAccount(name, handle)
-                    showDashboardSnackbar = "নতুন আইডি '$name' সফলভাবে যুক্ত হয়েছে! Switch account-এ দেখতে পাবেন 🌟"
-                    showAddAccountDialog = false
-                    showSwitchAccountDropdown = true
+                onCreateAttempt = { name, handle, gender, avatarUrl ->
+                    val (success, errorMsg) = viewModel.addNewAccount(
+                        name = name,
+                        handle = handle,
+                        gender = gender,
+                        avatarUrl = avatarUrl,
+                        context = context
+                    )
+                    if (success) {
+                        showDashboardSnackbar = "নতুন আইডি '$name' সফলভাবে যুক্ত হয়েছে! Switch account-এ দেখতে পাবেন 🌟"
+                        showAddAccountDialog = false
+                        showSwitchAccountDropdown = true
+                        null
+                    } else {
+                        errorMsg ?: "⛔ আইডি তৈরি করা যায়নি!"
+                    }
                 }
             )
         }
@@ -954,6 +1089,68 @@ fun MenuScreen(
             SupportMessageDialog(
                 viewModel = viewModel,
                 onDismiss = { showSupportMessageDialog = false }
+            )
+        }
+
+        if (showOwnerQuickUnlockDialog) {
+            var secretInput by remember { mutableStateOf("") }
+            var secretError by remember { mutableStateOf<String?>(null) }
+            AlertDialog(
+                onDismissRequest = { showOwnerQuickUnlockDialog = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.LocalFlorist,
+                        contentDescription = null,
+                        tint = Color(0xFFFF4081),
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text("মালিকানা যাচাই (Niyon Islam Sohag)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "আপনার গোপন পিন অথবা মালিকানা পাসওয়ার্ড দিয়ে যাচাই করুন:",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedTextField(
+                            value = secretInput,
+                            onValueChange = {
+                                secretInput = it
+                                secretError = null
+                            },
+                            label = { Text("গোপন পিন / পাসওয়ার্ড") },
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        secretError?.let { err ->
+                            Text(text = err, color = Color.Red, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (viewModel.verifyAndActivateOwnerSession(secretInput, context)) {
+                                showOwnerQuickUnlockDialog = false
+                                showDashboardSnackbar = "স্বাগতম Niyon Islam Sohag 🌸 Right Manager Fida সক্রিয় হয়েছে!"
+                            } else {
+                                secretError = "❌ ভুল পিন বা পাসওয়ার্ড!"
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63))
+                    ) {
+                        Text("যাচাই ও চালু করুন", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showOwnerQuickUnlockDialog = false }) {
+                        Text("বাতিল")
+                    }
+                }
             )
         }
 
@@ -1227,7 +1424,7 @@ private fun GramFilmShortcutGridItem(
                 }
             }
 
-            // Green & Red colored title "GramFilm"
+            // Green & Red colored title "GramFilm" + Blue Verified Badge
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "Gram",
@@ -1246,6 +1443,8 @@ private fun GramFilmShortcutGridItem(
                     text = "🎬",
                     fontSize = 12.sp
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                FidaVerifiedBadge(size = 14.dp)
             }
         }
     }
@@ -1293,10 +1492,22 @@ private fun MenuListItem(
 @Composable
 private fun AddAccountDialog(
     onDismiss: () -> Unit,
-    onAccountCreated: (name: String, handle: String) -> Unit
+    onCreateAttempt: (name: String, handle: String, gender: String, avatarUrl: String) -> String?
 ) {
     var name by remember { mutableStateOf("") }
     var handle by remember { mutableStateOf("") }
+    var selectedGender by remember { mutableStateOf("পুরুষ") }
+    var avatarUrl by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            avatarUrl = uri.toString()
+            errorMessage = null
+        }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1307,47 +1518,79 @@ private fun AddAccountDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(54.dp)
+                        .size(60.dp)
                         .clip(CircleShape)
-                        .background(FacebookBlue.copy(alpha = 0.12f)),
+                        .background(FacebookBlue.copy(alpha = 0.12f))
+                        .clickable {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PersonAdd,
-                        contentDescription = null,
-                        tint = FacebookBlue,
-                        modifier = Modifier.size(28.dp)
+                    if (avatarUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = "নির্বাচিত প্রোফাইল ছবি",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AddAPhoto,
+                            contentDescription = "নিজের ছবি যুক্ত করুন",
+                            tint = FacebookBlue,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                TextButton(
+                    onClick = {
+                        photoPickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    }
+                ) {
+                    Text(
+                        text = if (avatarUrl.isBlank()) "নিজের ছবি আপলোড করুন (ঐচ্ছিক)" else "অন্য ছবি পরিবর্তন করুন",
+                        fontSize = 12.sp,
+                        color = FacebookBlue,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
-
                 Text(
-                    text = "নতুন FaceFeed আইডি যোগ করুন",
+                    text = "নতুন FotoFilm আইডি যোগ করুন",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "একই অ্যাপে একাধিক আইডি খুলে সহজেই সুইচ করতে পারবেন",
-                    fontSize = 12.sp,
+                    text = "১ ব্যক্তি সর্বোচ্চ ৩টি আইডি • অন্যের ছবি বা বিপরীত লিঙ্গের নামে ফেইক আইডি ব্লক হবে",
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
-                    label = { Text("আইডির পুরো নাম") },
-                    placeholder = { Text("উদা: Sohag Official") },
+                    onValueChange = {
+                        name = it
+                        errorMessage = null
+                    },
+                    label = { Text("আইডির পুরো নাম *") },
+                    placeholder = { Text("আপনার আসল নাম লিখুন") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     singleLine = true
@@ -1357,15 +1600,67 @@ private fun AddAccountDialog(
 
                 OutlinedTextField(
                     value = handle,
-                    onValueChange = { handle = it },
+                    onValueChange = {
+                        handle = it
+                        errorMessage = null
+                    },
                     label = { Text("ইউজারনেম / হ্যান্ডেল") },
-                    placeholder = { Text("উদা: @sohagofficial") },
+                    placeholder = { Text("@username") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("পুরুষ" to "পুরুষ (ছেলে)", "নারী" to "নারী (মেয়ে)").forEach { (value, label) ->
+                        val isSelected = selectedGender == value
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (isSelected) FacebookBlue else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                                .clickable {
+                                    selectedGender = value
+                                    errorMessage = null
+                                }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                errorMessage?.let { err ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color(0xFFFFEBEE),
+                        border = BorderStroke(1.dp, Color(0xFFEF5350)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = err,
+                            color = Color(0xFFB71C1C),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1378,7 +1673,10 @@ private fun AddAccountDialog(
                     Button(
                         onClick = {
                             if (name.isNotBlank()) {
-                                onAccountCreated(name.trim(), handle.trim())
+                                val err = onCreateAttempt(name.trim(), handle.trim(), selectedGender, avatarUrl)
+                                if (err != null) {
+                                    errorMessage = err
+                                }
                             }
                         },
                         enabled = name.isNotBlank(),
@@ -1531,7 +1829,7 @@ private fun SettingsDetailModalDialog(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Meta", fontWeight = FontWeight.Black, fontSize = 14.sp, color = FacebookBlue)
+                                Text("FotoFilm", fontWeight = FontWeight.Black, fontSize = 14.sp, color = FacebookBlue)
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Accounts Center", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
@@ -1961,34 +2259,25 @@ private fun RecentAdActivityModalDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "FaceFeed-এ সম্প্রতি আপনি যেসব বিজ্ঞাপনের সাথে মিথস্ক্রিয়া করেছেন:",
+                    text = "FotoFilm-এ সম্প্রতি আপনি যেসব বিজ্ঞাপনের সাথে মিথস্ক্রিয়া করেছেন:",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(10.dp))
 
-                listOf(
-                    Triple("দারাজ বাংলাদেশ ১১.১১ মেগা অফার 🛍️", "স্পনসরড শপিং অ্যাড • ৩ দিন আগে", "https://daraz.com.bd"),
-                    Triple("গ্রিন টেক স্মার্ট গ্যাজেটস 📱", "স্মার্টওয়াচ ও এয়ারবাডস অফার • গতকাল", "https://greentech.bd"),
-                    Triple("রকমারি বইমেলা স্পেশাল সেল 📚", "বেস্টসেলার বইয়ে ৪০% ছাড় • ১ সপ্তাহ আগে", "https://rokomari.com")
-                ).forEach { (title, subtitle, _) ->
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Campaign, contentDescription = null, tint = FacebookBlue, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                                Text(subtitle, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Icon(Icons.Default.BookmarkBorder, contentDescription = "Save", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                        }
-                    }
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "সাম্প্রতিক কোনো বিজ্ঞাপন অ্যাক্টিভিটি নেই।",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(14.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -2032,7 +2321,7 @@ private fun OrdersAndPaymentsModalDialog(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Orders and payments", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text("Meta Pay / FaceFeed ওয়ালেট ও পেমেন্ট", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("FotoFilm Pay / ওয়ালেট ও পেমেন্ট", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = "Close") }
                 }
@@ -2046,7 +2335,7 @@ private fun OrdersAndPaymentsModalDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
-                        Text("FaceFeed Pay ওয়ালেট ব্যালেন্স", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                        Text("FotoFilm Pay ওয়ালেট ব্যালেন্স", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("৳ ১,৪৫০.০০", fontWeight = FontWeight.Black, fontSize = 22.sp, color = Color.White)
                         Spacer(modifier = Modifier.height(8.dp))
@@ -2249,7 +2538,7 @@ private fun LanguageSelectorModalDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "FaceFeed অ্যাপের জন্য আপনার পছন্দের ভাষা নির্বাচন করুন:",
+                    text = "FotoFilm অ্যাপের জন্য আপনার পছন্দের ভাষা নির্বাচন করুন:",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

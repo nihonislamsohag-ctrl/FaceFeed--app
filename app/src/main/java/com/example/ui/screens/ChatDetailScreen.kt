@@ -1,10 +1,11 @@
 package com.example.ui.screens
 
-import android.media.AudioManager
-import android.media.ToneGenerator
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -13,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -46,6 +48,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 import com.example.ui.components.BlockedChatFooter
+import com.example.ui.components.FotoFilmAvatar
 import com.example.ui.components.GoogleAdConfig
 import com.example.ui.components.LudoKingGroupDialog
 import com.example.ui.components.StickyVideoBottomBanner
@@ -55,6 +58,7 @@ import com.example.ui.theme.OnlineGreen
 import com.example.viewmodel.FaceFeedViewModel
 import com.example.util.AppSoundManager
 import com.example.util.MediaSaveHelper
+import com.example.util.VoiceAudioManager
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.window.Dialog
@@ -73,7 +77,10 @@ fun ChatDetailScreen(
     val strings = Translations.get(currentLang)
     val currentUser by viewModel.currentUser.collectAsState()
     val blockedUserIds by viewModel.blockedUserIds.collectAsState()
+    val typingConversationId by viewModel.typingConversationId.collectAsState()
+    val isPartnerTyping = typingConversationId == conversation.id
     val isBlocked = conversation.isBlocked || blockedUserIds.contains(conversation.friend.id)
+    val chatListState = rememberLazyListState()
 
     var messageText by remember { mutableStateOf("") }
     var replyingToMessage by remember { mutableStateOf<ChatMessage?>(null) }
@@ -94,27 +101,58 @@ fun ChatDetailScreen(
     var forwardingMessage by remember { mutableStateOf<ChatMessage?>(null) }
     val allConversations by viewModel.conversations.collectAsState()
 
-    // Audio Voice Message Recording States
-    var isRecordingVoice by remember { mutableStateOf(false) }
-    var recordingSeconds by remember { mutableIntStateOf(0) }
-    var isRecordingPaused by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    // Audio voice recording timer
-    LaunchedEffect(isRecordingVoice, isRecordingPaused) {
-        if (isRecordingVoice) {
-            while (isRecordingVoice) {
-                delay(1000)
-                if (!isRecordingPaused) {
-                    recordingSeconds++
-                }
-            }
+    // Real Voice Recording Engine States (MediaRecorder + AAC .m4a)
+    val isRecordingVoice by VoiceAudioManager.isRecording.collectAsState()
+    val isRecordingPaused by VoiceAudioManager.isRecordingPaused.collectAsState()
+    val recordingSeconds by VoiceAudioManager.recordingSeconds.collectAsState()
+    val recordingAmplitude by VoiceAudioManager.recordingAmplitude.collectAsState()
+    val voiceError by VoiceAudioManager.lastError.collectAsState()
+    var pendingStartVoiceRecord by remember { mutableStateOf(false) }
+
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && pendingStartVoiceRecord) {
+            pendingStartVoiceRecord = false
+            VoiceAudioManager.startRecording(context, "chat_${conversation.id}")
         } else {
-            recordingSeconds = 0
-            isRecordingPaused = false
+            pendingStartVoiceRecord = false
+            if (!granted) {
+                Toast.makeText(context, "ভয়েস রেকর্ড করতে মাইক্রোফোন পারমিশন দিন", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
-    val context = LocalContext.current
+    val startVoiceRecord: () -> Unit = {
+        val hasPerm = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (hasPerm) {
+            VoiceAudioManager.startRecording(context, "chat_${conversation.id}")
+        } else {
+            pendingStartVoiceRecord = true
+            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(voiceError) {
+        voiceError?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            VoiceAudioManager.clearError()
+        }
+    }
+
+    DisposableEffect(conversation.id) {
+        onDispose {
+            VoiceAudioManager.stopPlayback()
+            if (VoiceAudioManager.isRecording.value) {
+                VoiceAudioManager.cancelRecording()
+            }
+        }
+    }
 
     // System File Manager picker (avoids empty photo picker)
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -192,13 +230,13 @@ fun ChatDetailScreen(
                                     Icon(Icons.Default.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                                 }
                             } else {
-                                AsyncImage(
-                                    model = conversation.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                                FotoFilmAvatar(
+                                    imageUrl = conversation.friend.avatarUrl,
+                                    name = conversation.friend.fullName,
                                     contentDescription = conversation.friend.fullName,
                                     modifier = Modifier
                                         .size(38.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                        .clip(CircleShape)
                                 )
                                 if (conversation.friend.isOnline) {
                                     Box(
@@ -343,7 +381,7 @@ fun ChatDetailScreen(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "📶 ${currentSim.banglaName} ফ্রি মেসেঞ্জার: ০ এমবিতে আনলিমিটেড চ্যাট, ছবি ও রিপ্লাই সক্রিয় ⚡",
+                            text = "📶 ${currentSim.banglaName} ফ্রি ChatFilm: টেক্সট মেসেজ, রিপ্লাই ও ছবি দেখা-দেওয়া ফ্রি ⚡",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
@@ -352,15 +390,23 @@ fun ChatDetailScreen(
                 }
             }
 
+            LaunchedEffect(conversation.messages.size, isPartnerTyping) {
+                val totalCount = conversation.messages.size + if (isPartnerTyping) 1 else 0
+                if (totalCount > 0) {
+                    chatListState.animateScrollToItem(totalCount - 1)
+                }
+            }
+
             // Messages List
             LazyColumn(
+                state = chatListState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(conversation.messages) { msg ->
+                items(conversation.messages, key = { it.id }) { msg ->
                     ChatBubble(
                         message = msg,
                         isRecipientOnline = if (conversation.isGroup) true else conversation.friend.isOnline,
@@ -385,8 +431,25 @@ fun ChatDetailScreen(
                             if (!opened) {
                                 Toast.makeText(context, "এই আইডির প্রোফাইল লিংক খুঁজে পাওয়া যায়নি", Toast.LENGTH_SHORT).show()
                             }
+                        },
+                        onCallBack = { isVideoCall ->
+                            if (isBlocked) {
+                                showUnblockDialog = true
+                            } else if (isVideoCall) {
+                                viewModel.startVideoCall(conversation.friend)
+                            } else {
+                                viewModel.startAudioCall(conversation.friend)
+                            }
                         }
                     )
+                }
+                if (isPartnerTyping) {
+                    item(key = "typing_indicator") {
+                        MessengerTypingBubbleRow(
+                            friendName = conversation.friend.fullName,
+                            avatarUrl = conversation.friend.avatarUrl
+                        )
+                    }
                 }
             }
 
@@ -452,7 +515,7 @@ fun ChatDetailScreen(
                         onUnblockClick = { showUnblockDialog = true }
                     )
                 } else if (isRecordingVoice) {
-                    // Audio Voice Recording Mode
+                    // Real Audio Voice Recording Mode (MediaRecorder)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -462,9 +525,7 @@ fun ChatDetailScreen(
                         // Cancel / Delete Voice Recording
                         IconButton(
                             onClick = {
-                                isRecordingVoice = false
-                                recordingSeconds = 0
-                                isRecordingPaused = false
+                                VoiceAudioManager.cancelRecording()
                             },
                             modifier = Modifier
                                 .size(40.dp)
@@ -481,7 +542,7 @@ fun ChatDetailScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Recording status and live waveform
+                        // Recording status and live amplitude waveform
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = FacebookBlue.copy(alpha = 0.10f),
@@ -521,14 +582,15 @@ fun ChatDetailScreen(
                                     )
                                 }
 
-                                // Animated audio waveform bars
+                                // Live audio amplitude waveform bars
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(2.5.dp)
                                 ) {
-                                    val waveHeights = listOf(8.dp, 16.dp, 24.dp, 12.dp, 22.dp, 14.dp, 20.dp, 10.dp, 18.dp, 24.dp, 16.dp, 8.dp)
-                                    waveHeights.forEachIndexed { index, defaultHeight ->
-                                        val barHeight = if (isRecordingPaused) 6.dp else defaultHeight
+                                    val waveHeights = listOf(8f, 16f, 24f, 12f, 22f, 14f, 20f, 10f, 18f, 24f, 16f, 8f)
+                                    waveHeights.forEachIndexed { idx, defaultHeight ->
+                                        val ampFactor = if (isRecordingPaused) 0.25f else (0.35f + recordingAmplitude * (0.65f + (idx % 3) * 0.18f))
+                                        val barHeight = (defaultHeight * ampFactor).coerceIn(5f, 26f).dp
                                         Box(
                                             modifier = Modifier
                                                 .width(3.dp)
@@ -541,7 +603,7 @@ fun ChatDetailScreen(
 
                                 // Pause / Resume recording toggle
                                 IconButton(
-                                    onClick = { isRecordingPaused = !isRecordingPaused },
+                                    onClick = { VoiceAudioManager.togglePauseRecording() },
                                     modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
@@ -556,19 +618,21 @@ fun ChatDetailScreen(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Send Voice Message Button
+                        // Send Real Recorded Voice Message Button
                         IconButton(
                             onClick = {
-                                val duration = recordingSeconds.coerceAtLeast(3)
-                                viewModel.sendVoiceMessage(
-                                    conversationId = conversation.id,
-                                    durationSeconds = duration,
-                                    replyTo = replyingToMessage
-                                )
-                                isRecordingVoice = false
-                                recordingSeconds = 0
-                                isRecordingPaused = false
-                                replyingToMessage = null
+                                val recorded = VoiceAudioManager.stopRecording()
+                                if (recorded != null) {
+                                    viewModel.sendVoiceMessage(
+                                        conversationId = conversation.id,
+                                        durationSeconds = recorded.durationSeconds,
+                                        audioUrl = recorded.fileUri,
+                                        replyTo = replyingToMessage
+                                    )
+                                    replyingToMessage = null
+                                } else {
+                                    Toast.makeText(context, "কমপক্ষে ১ সেকেন্ড কথা বলে ভয়েস পাঠান", Toast.LENGTH_SHORT).show()
+                                }
                             },
                             modifier = Modifier
                                 .size(42.dp)
@@ -611,19 +675,21 @@ fun ChatDetailScreen(
 
                         // Audio Voice button (dedicated on left)
                         IconButton(
-                            onClick = {
-                                isRecordingVoice = true
-                                isRecordingPaused = false
-                                recordingSeconds = 0
-                            }
+                            onClick = { startVoiceRecord() }
                         ) {
                             Icon(Icons.Default.Mic, contentDescription = "ভয়েস রেকর্ড", tint = FacebookBlue)
                         }
 
-                        // Message text field
+                        // Message text field (plays warm Messenger typing sound as user writes)
                         OutlinedTextField(
                             value = messageText,
-                            onValueChange = { messageText = it },
+                            onValueChange = { newText ->
+                                val hasChanged = newText != messageText
+                                messageText = newText
+                                if (hasChanged && newText.isNotEmpty()) {
+                                    viewModel.onUserTypingInChat(true)
+                                }
+                            },
                             placeholder = { Text(strings.typeMessage, fontSize = 14.sp) },
                             modifier = Modifier.weight(1f),
                             shape = RoundedCornerShape(24.dp),
@@ -654,11 +720,7 @@ fun ChatDetailScreen(
                         } else {
                             // Quick Mic trigger button
                             IconButton(
-                                onClick = {
-                                    isRecordingVoice = true
-                                    isRecordingPaused = false
-                                    recordingSeconds = 0
-                                }
+                                onClick = { startVoiceRecord() }
                             ) {
                                 Icon(Icons.Default.Mic, contentDescription = "ভয়েস মেসেজ", tint = FacebookBlue)
                             }
@@ -818,7 +880,8 @@ fun ChatBubble(
     onLongPress: () -> Unit = {},
     onViewMedia: (String, Boolean) -> Unit,
     onPlayLudo: () -> Unit = {},
-    onOpenProfileLink: (String) -> Unit = {}
+    onOpenProfileLink: (String) -> Unit = {},
+    onCallBack: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val bubbleScope = rememberCoroutineScope()
@@ -833,36 +896,24 @@ fun ChatBubble(
         label = "swipeToReply"
     )
 
-    // Audio Voice Message Player States
-    var isVoicePlaying by remember { mutableStateOf(false) }
-    var voicePlaybackSeconds by remember { mutableIntStateOf(0) }
-    val totalVoiceSeconds = if (message.audioDurationSeconds > 0) message.audioDurationSeconds else 5
-
-    // Real audio tone generator sound playback effect
-    LaunchedEffect(isVoicePlaying) {
-        if (isVoicePlaying) {
-            var toneGen: ToneGenerator? = null
-            try {
-                toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 85)
-            } catch (e: Exception) {}
-
-            while (isVoicePlaying && voicePlaybackSeconds < totalVoiceSeconds) {
-                try {
-                    toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
-                } catch (e: Exception) {}
-                delay(1000)
-                if (isVoicePlaying) {
-                    voicePlaybackSeconds++
-                }
-            }
-            isVoicePlaying = false
-            voicePlaybackSeconds = 0
-            try {
-                toneGen?.release()
-            } catch (e: Exception) {}
-        } else {
-            voicePlaybackSeconds = 0
-        }
+    // Real Continuous MediaPlayer Voice Playback States (No ToneGenerator beeps!)
+    val activeVoiceId by VoiceAudioManager.playingItemId.collectAsState()
+    val isAudioEnginePlaying by VoiceAudioManager.isPlaying.collectAsState()
+    val playbackPosMs by VoiceAudioManager.playbackPositionMs.collectAsState()
+    val playbackDurMs by VoiceAudioManager.playbackDurationMs.collectAsState()
+    val isCurrentTrackLoaded = activeVoiceId == message.id
+    val isVoicePlaying = isAudioEnginePlaying && isCurrentTrackLoaded
+    val totalVoiceSeconds = if (isCurrentTrackLoaded && playbackDurMs > 0) {
+        (playbackDurMs / 1000).coerceAtLeast(1)
+    } else if (message.audioDurationSeconds > 0) {
+        message.audioDurationSeconds
+    } else {
+        5
+    }
+    val voicePlaybackSeconds = if (isCurrentTrackLoaded) {
+        (playbackPosMs / 1000).coerceIn(0, totalVoiceSeconds)
+    } else {
+        0
     }
 
     Column(
@@ -958,10 +1009,10 @@ fun ChatBubble(
         ) {
             // Recipient Small Avatar for friend's messages (Matching Screenshot 3)
             if (!isMe) {
-                AsyncImage(
-                    model = recipientAvatar.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = recipientAvatar,
+                    name = message.senderName,
                     contentDescription = message.senderName,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .padding(end = 6.dp)
                         .size(28.dp)
@@ -1058,7 +1109,7 @@ fun ChatBubble(
                             }
                         }
 
-                        // 1. Audio Voice Message Player
+                        // 1. Real Audio Voice Message Player (MediaPlayer)
                         if (message.isAudioVoice) {
                             Row(
                                 modifier = Modifier
@@ -1068,7 +1119,18 @@ fun ChatBubble(
                             ) {
                                 // Play / Pause Button
                                 IconButton(
-                                    onClick = { isVoicePlaying = !isVoicePlaying },
+                                    onClick = {
+                                        val mediaSource = message.mediaUrl?.trim().orEmpty()
+                                        if (mediaSource.isNotBlank()) {
+                                            VoiceAudioManager.togglePlay(context, message.id, mediaSource)
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "ভয়েস অডিও ফাইল পাওয়া যায়নি — নতুন ভয়েস রেকর্ড করুন",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    },
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
@@ -1084,7 +1146,7 @@ fun ChatBubble(
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                // Waveform & Playback Duration
+                                // Waveform & Smooth Playback Duration
                                 Column(modifier = Modifier.weight(1f)) {
                                     Row(
                                         modifier = Modifier
@@ -1094,8 +1156,13 @@ fun ChatBubble(
                                         horizontalArrangement = Arrangement.spacedBy(2.5.dp)
                                     ) {
                                         val waveHeights = listOf(6.dp, 12.dp, 18.dp, 10.dp, 16.dp, 20.dp, 12.dp, 18.dp, 22.dp, 14.dp, 8.dp, 16.dp, 10.dp, 6.dp)
+                                        val progressFrac = if (isCurrentTrackLoaded && playbackDurMs > 0) {
+                                            (playbackPosMs.toFloat() / playbackDurMs.toFloat()).coerceIn(0f, 1f)
+                                        } else {
+                                            0f
+                                        }
                                         waveHeights.forEachIndexed { i, h ->
-                                            val played = (i.toFloat() / waveHeights.size) <= (voicePlaybackSeconds.toFloat() / totalVoiceSeconds.coerceAtLeast(1))
+                                            val played = (i.toFloat() / waveHeights.size) <= progressFrac
                                             val barColor = if (isMe) {
                                                 if (played || isVoicePlaying) Color.White else Color.White.copy(alpha = 0.5f)
                                             } else {
@@ -1117,9 +1184,8 @@ fun ChatBubble(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        val curSec = if (isVoicePlaying) voicePlaybackSeconds else 0
                                         Text(
-                                            text = String.format("%02d:%02d", curSec / 60, curSec % 60),
+                                            text = String.format("%02d:%02d", voicePlaybackSeconds / 60, voicePlaybackSeconds % 60),
                                             fontSize = 11.sp,
                                             color = if (isMe) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -1264,9 +1330,133 @@ fun ChatBubble(
                             if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(6.dp))
                         }
 
-                        // 4. Ludo Challenge Invite Card, Profile Link Card, or Standard Text Content
+                        // 4. Messenger Audio/Video Call Bubble, Ludo Challenge Invite Card, Profile Link Card, or Standard Text Content
                         val profileLinkInMsg = MediaSaveHelper.extractProfileLink(message.text)
-                        if (message.text.contains("invited you to play Ludo King") || message.text.contains("লুডু খেলার আমন্ত্রণ") || message.text.contains("🎲")) {
+                        val isLegacyMissedOrCall = message.text.contains("Missed audio call", ignoreCase = true) ||
+                            message.text.contains("Missed video call", ignoreCase = true) ||
+                            message.text.contains("মিসড অডিও কল") ||
+                            message.text.contains("মিসড ভিডিও কল")
+                        val effectiveCallType = message.callLogType ?: when {
+                            isLegacyMissedOrCall && (message.text.contains("video", ignoreCase = true) || message.text.contains("ভিডিও")) -> com.example.model.CallType.VIDEO
+                            isLegacyMissedOrCall -> com.example.model.CallType.AUDIO
+                            else -> null
+                        }
+                        if (effectiveCallType != null) {
+                            val isVideoLog = effectiveCallType != com.example.model.CallType.AUDIO
+                            val isMissedLog = message.isMissedCall ||
+                                message.text.contains("মিসড") ||
+                                message.text.contains("উত্তর নেই") ||
+                                message.text.contains("missed", ignoreCase = true)
+                            val callCardBg = if (isMe) {
+                                Color.White.copy(alpha = 0.16f)
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            }
+                            val callBadgeColor = when {
+                                isMissedLog -> Color(0xFFFA3E3E)
+                                isMe -> Color.White.copy(alpha = 0.25f)
+                                else -> FacebookBlue.copy(alpha = 0.14f)
+                            }
+                            val callBadgeIconTint = when {
+                                isMissedLog -> Color.White
+                                isMe -> Color.White
+                                else -> FacebookBlue
+                            }
+                            val callTitle = when {
+                                isMissedLog && isVideoLog && !isMe -> "মিসড ভিডিও কল"
+                                isMissedLog && !isMe -> "মিসড অডিও কল"
+                                isVideoLog -> "ভিডিও কল"
+                                effectiveCallType == com.example.model.CallType.GROUP -> "গ্রুপ ভিডিও কল"
+                                else -> "অডিও কল"
+                            }
+                            val callSubtitle = when {
+                                message.text.contains("রিং হচ্ছে") -> "রিং হচ্ছে..."
+                                message.text.contains("চলছে") -> "কল চলছে..."
+                                isMissedLog && isMe -> "উত্তর পাওয়া যায়নি"
+                                isMissedLog && !isMe -> "কল ব্যাক করতে ট্যাপ করুন"
+                                message.callDurationSeconds > 0 -> {
+                                    val m = message.callDurationSeconds / 60
+                                    val s = message.callDurationSeconds % 60
+                                    String.format(java.util.Locale.US, "কথা বলার সময় %02d:%02d", m, s)
+                                }
+                                else -> message.text
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = callCardBg,
+                                border = if (!isMe) BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)) else null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(callBadgeColor),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = when {
+                                                    isMissedLog -> Icons.Default.PhoneMissed
+                                                    isVideoLog -> Icons.Default.Videocam
+                                                    else -> Icons.Default.Call
+                                                },
+                                                contentDescription = callTitle,
+                                                tint = callBadgeIconTint,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = callTitle,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                color = if (isMe) Color.White else if (isMissedLog) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = callSubtitle,
+                                                fontSize = 12.sp,
+                                                color = if (isMe) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Surface(
+                                        onClick = { onCallBack(isVideoLog) },
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = if (isMe) Color.White else FacebookBlue.copy(alpha = 0.14f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(vertical = 7.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isVideoLog) Icons.Default.Videocam else Icons.Default.Call,
+                                                contentDescription = null,
+                                                tint = FacebookBlue,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isVideoLog) "আবার ভিডিও কল দিন" else "আবার অডিও কল দিন",
+                                                color = FacebookBlue,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (message.text.contains("invited you to play Ludo King") || message.text.contains("লুডু খেলার আমন্ত্রণ") || message.text.contains("🎲")) {
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1404,20 +1594,19 @@ fun ChatBubble(
 
                             if (isMe) {
                                 Spacer(modifier = Modifier.width(6.dp))
-                                // Delivery status: Offline -> Sent (ছেন্ড) / Online -> Delivered (ডেলিভারি) / Seen (দেখা হয়েছে)
-                                when {
-                                    !isRecipientOnline || message.status == MessageDeliveryStatus.SENT -> {
-                                        // Recipient Offline: Sent / ছেন্ড
+                                // Facebook Messenger style live progression: Sent ✓ -> Delivered ✓✓ -> Seen (avatar)
+                                when (message.status) {
+                                    MessageDeliveryStatus.SENT -> {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(Color.White.copy(alpha = 0.20f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .background(Color.White.copy(alpha = 0.18f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(11.dp)
+                                                    .size(12.dp)
                                                     .clip(CircleShape)
                                                     .border(1.dp, Color.White.copy(alpha = 0.9f), CircleShape),
                                                 contentAlignment = Alignment.Center
@@ -1429,27 +1618,26 @@ fun ChatBubble(
                                                 text = "সেন্ড",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = Color.White.copy(alpha = 0.9f)
+                                                color = Color.White.copy(alpha = 0.92f)
                                             )
                                         }
                                     }
-                                    message.status == MessageDeliveryStatus.DELIVERED -> {
-                                        // Recipient Online: Delivered / ডেলিভারি
+                                    MessageDeliveryStatus.DELIVERED -> {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(Color.White.copy(alpha = 0.25f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .background(Color.White.copy(alpha = 0.26f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .size(11.dp)
+                                                    .size(13.dp)
                                                     .clip(CircleShape)
                                                     .background(Color.White),
                                                 contentAlignment = Alignment.Center
                                             ) {
-                                                Text(text = "✓", fontSize = 7.sp, color = FacebookBlue, fontWeight = FontWeight.Bold)
+                                                Text(text = "✓✓", fontSize = 6.5.sp, color = FacebookBlue, fontWeight = FontWeight.ExtraBold)
                                             }
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
@@ -1460,40 +1648,40 @@ fun ChatBubble(
                                             )
                                         }
                                     }
-                                    message.status == MessageDeliveryStatus.SEEN -> {
-                                        // Recipient Seen / দেখা হয়েছে
+                                    MessageDeliveryStatus.SEEN -> {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(8.dp))
-                                                .background(Color.White.copy(alpha = 0.22f))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                .background(Color.White.copy(alpha = 0.24f))
+                                                .padding(horizontal = 5.dp, vertical = 1.dp)
                                         ) {
                                             if (recipientAvatar.isNotBlank()) {
                                                 AsyncImage(
                                                     model = recipientAvatar,
                                                     contentDescription = "Seen",
                                                     modifier = Modifier
-                                                        .size(11.dp)
-                                                        .clip(CircleShape),
+                                                        .size(12.dp)
+                                                        .clip(CircleShape)
+                                                        .border(0.8.dp, Color.White, CircleShape),
                                                     contentScale = ContentScale.Crop
                                                 )
                                             } else {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(11.dp)
+                                                        .size(13.dp)
                                                         .clip(CircleShape)
-                                                    .background(Color.White),
+                                                        .background(Color.White),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    Text(text = "✓✓", fontSize = 6.sp, color = FacebookBlue, fontWeight = FontWeight.Bold)
+                                                    Text(text = "✓✓", fontSize = 6.5.sp, color = FacebookBlue, fontWeight = FontWeight.ExtraBold)
                                                 }
                                             }
                                             Spacer(modifier = Modifier.width(3.dp))
                                             Text(
                                                 text = "দেখা হয়েছে",
                                                 fontSize = 9.sp,
-                                                fontWeight = FontWeight.Medium,
+                                                fontWeight = FontWeight.SemiBold,
                                                 color = Color.White
                                             )
                                         }
@@ -1961,3 +2149,85 @@ fun FullScreenVideoViewerDialog(
         }
     }
 }
+
+@Composable
+fun MessengerTypingBubbleRow(
+    friendName: String,
+    avatarUrl: String
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "messenger_typing")
+    val dot1Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(420, delayMillis = 0, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot1"
+    )
+    val dot2Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(420, delayMillis = 140, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot2"
+    )
+    val dot3Alpha by infiniteTransition.animateFloat(
+        initialValue = 0.25f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(420, delayMillis = 280, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot3"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start
+    ) {
+        FotoFilmAvatar(
+            imageUrl = avatarUrl,
+            name = friendName,
+            contentDescription = friendName,
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 1.dp,
+            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                listOf(dot1Alpha, dot2Alpha, dot3Alpha).forEach { alpha ->
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(FacebookBlue.copy(alpha = alpha))
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "লিখছে...",
+                    fontSize = 10.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    }
+}
+

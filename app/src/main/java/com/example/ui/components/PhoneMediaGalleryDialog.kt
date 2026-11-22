@@ -62,7 +62,6 @@ fun PhoneMediaGalleryDialog(
         )
     }
     var selectedUrls by remember { mutableStateOf(initialSelectedUrls.toSet()) }
-    var cameraFlashState by remember { mutableStateOf(false) }
 
     val allItems = remember { SampleData.galleryMediaItems }
 
@@ -141,13 +140,10 @@ fun PhoneMediaGalleryDialog(
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Instant Camera Capture Button
+                    // Instant Camera / Device Photo Button -> Launches real system picker
                     FilledTonalButton(
                         onClick = {
-                            cameraFlashState = true
-                            // Capture new live camera shot
-                            val newPhotoUrl = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800"
-                            selectedUrls = if (allowMultiple) selectedUrls + newPhotoUrl else setOf(newPhotoUrl)
+                            onLaunchSystemFilePicker()
                         },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
@@ -197,6 +193,37 @@ fun PhoneMediaGalleryDialog(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 // Photos & Videos Grid
+                if (filteredItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "কোনো ডেমো ছবি বা ভিডিও নেই",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "উপরের মেমোরি / ফাইলস বাটনে চাপ দিয়ে ফোনের আসল ছবি ও ভিডিও নিন।",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier
@@ -304,6 +331,7 @@ fun PhoneMediaGalleryDialog(
                             }
                         }
                     }
+                }
                 }
             }
         }

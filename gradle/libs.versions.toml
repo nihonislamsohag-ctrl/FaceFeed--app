@@ -43,6 +43,7 @@ credentials = "1.5.0"
 googleid = "1.1.1"
 playServicesAds = "23.0.0"
 agoraLiteSdk = "4.6.4"
+media3 = "1.11.1"
 
 
 [libraries]
@@ -104,6 +105,8 @@ androidx-credentials-play-services = { group = "androidx.credentials", name = "c
 googleid = { group = "com.google.android.libraries.identity.googleid", name = "googleid", version.ref = "googleid" }
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 agora-lite-sdk = { group = "io.agora.rtc", name = "lite-sdk", version.ref = "agoraLiteSdk" }
+androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 
 
 [plugins]

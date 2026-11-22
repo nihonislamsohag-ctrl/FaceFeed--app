@@ -2,13 +2,16 @@ package com.example.ui.components
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,17 +19,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
 import com.example.model.Post
 import com.example.model.ReactionType
-import com.example.model.SocialAd
-import com.example.data.SampleData
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
@@ -47,58 +47,50 @@ fun VideoPlayerDialog(
     val isShortVideo = post?.isReel == true
     val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val resolvedMedia = remember(post?.id, videoUrl) {
+        resolvePlayableVideoSource(post = post, rawUrl = videoUrl)
+    }
+
     var isPlaying by remember { mutableStateOf(true) }
     var isMuted by remember { mutableStateOf(false) }
     var currentSeconds by remember { mutableIntStateOf(0) }
-    val totalSeconds = if (isShortVideo) 20 else 45 // Simulated video duration
+    var totalSeconds by remember { mutableIntStateOf(if (isShortVideo) 20 else 45) }
+    var seekRequestMs by remember { mutableStateOf<Long?>(null) }
     var showControls by remember { mutableStateOf(true) }
-    var isLiked by remember { mutableStateOf(false) }
+    var isLiked by remember { mutableStateOf(post?.userReaction != null) }
     var likeCount by remember { mutableIntStateOf(post?.totalReactions ?: 1250) }
-    var selectedQuality by remember { mutableStateOf("1080p HD") }
+    val selectedQuality = "1080p HD"
     var showVideoOptionsSheet by remember { mutableStateOf(false) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
 
-    // Google AdMob Interstitial State (Rules 1, 2, 3)
+    // Google AdMob Interstitial State
     var showGoogleInterstitialAd by remember { mutableStateOf(false) }
     var hasTriggeredMidAd by remember { mutableStateOf(false) }
     var isEndVideoAd by remember { mutableStateOf(false) }
 
-    // Playback loop and Google AdMob Interstitial triggers
-    // রিল ভিডিও: ৫ সেকেন্ড চলার পর এড চালু হবে এবং এড শেষ হলে আবার ঐখান থেকেই (৫ সে.) চলা শুরু হবে।
-    // সাধারণ ভিডিও: ৩ সেকেন্ড পর এড চালু হবে।
     val midAdTriggerSeconds = if (isShortVideo) 5 else 3
+
+    DisposableEffect(Unit) {
+        onDispose {
+            VideoPlaybackCoordinator.pauseActiveVideo()
+        }
+    }
 
     LaunchedEffect(isPlaying, currentSeconds) {
         if (currentSeconds == midAdTriggerSeconds && !hasTriggeredMidAd) {
             hasTriggeredMidAd = true
-            isPlaying = false // Pause video at 5s (for reels) or 3s (for videos)!
+            isPlaying = false
             isEndVideoAd = false
             showGoogleInterstitialAd = true
-        } else if (currentSeconds >= totalSeconds && !showGoogleInterstitialAd) {
-            // Rule 3: Video completed -> Trigger End Interstitial Ad immediately
-            isPlaying = false
-            isEndVideoAd = true
-            showGoogleInterstitialAd = true
-        }
-    }
-
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            delay(1000)
-            if (currentSeconds < totalSeconds) {
-                currentSeconds++
-            } else {
-                // Video finished
-                isPlaying = false
-                isEndVideoAd = true
-                showGoogleInterstitialAd = true
-            }
         }
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = {
+            VideoPlaybackCoordinator.pauseActiveVideo()
+            onDismiss()
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
@@ -110,32 +102,31 @@ fun VideoPlayerDialog(
                     .fillMaxSize()
                     .clickable { showControls = !showControls }
             ) {
-                // Video visual representation
-                AsyncImage(
-                    model = videoUrl.ifBlank { "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=1200" },
-                    contentDescription = title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                // Real Media3 ExoPlayer Video + Audio Surface
+                FotoFilmExoVideoSurface(
+                    ownerKey = "dialog_${post?.id ?: videoUrl.hashCode()}",
+                    videoUrl = resolvedMedia.videoUrl,
+                    thumbnailUrl = resolvedMedia.thumbnailUrl,
+                    isActivePage = !showGoogleInterstitialAd,
+                    isPaused = !isPlaying || showGoogleInterstitialAd,
+                    isMuted = isMuted,
+                    fillCrop = isShortVideo,
+                    repeatLoop = false,
+                    seekRequestMs = seekRequestMs,
+                    onSeekConsumed = { seekRequestMs = null },
+                    onProgressUpdate = { cur, tot ->
+                        currentSeconds = cur
+                        if (tot > 0) totalSeconds = tot
+                    },
+                    onVideoEnded = {
+                        if (!showGoogleInterstitialAd) {
+                            isPlaying = false
+                            isEndVideoAd = true
+                            showGoogleInterstitialAd = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
-
-                // Subtle animated scanline or ambient pulse to indicate active playing
-                if (isPlaying) {
-                    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-                    val alpha by infiniteTransition.animateFloat(
-                        initialValue = 0.05f,
-                        targetValue = 0.15f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(1200, easing = FastOutSlowInEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "alpha"
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White.copy(alpha = alpha))
-                    )
-                }
 
                 // Overlay Controls (when visible)
                 AnimatedVisibility(
@@ -145,7 +136,7 @@ fun VideoPlayerDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f))
+                            .background(Color.Black.copy(alpha = 0.4f))
                     ) {
                         // Top Bar: Back, Title, Quality badge
                         Row(
@@ -156,18 +147,26 @@ fun VideoPlayerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(onClick = onDismiss) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        VideoPlaybackCoordinator.pauseActiveVideo()
+                                        onDismiss()
+                                    }
+                                ) {
                                     Icon(
-                                        imageVector = Icons.Default.ArrowBack,
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Back",
                                         tint = Color.White
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
                                 Column {
                                     Text(
-                                        text = title.ifBlank { "FaceFeed HD Video Player" },
+                                        text = title.ifBlank { "FotoFilm HD Video Player" },
                                         color = Color.White,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,
@@ -181,7 +180,6 @@ fun VideoPlayerDialog(
                                 }
                             }
 
-                            // Free Stream & Quality Badge + Download Button + 3-dots Menu
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
@@ -198,7 +196,6 @@ fun VideoPlayerDialog(
 
                                 Spacer(modifier = Modifier.width(4.dp))
 
-                                // Direct Download Video Button (সবার ভিডিও ডাউনলোড করার সুবিধা)
                                 IconButton(
                                     onClick = {
                                         isDownloading = true
@@ -209,13 +206,17 @@ fun VideoPlayerDialog(
                                                 delay(100)
                                                 downloadProgress = p / 10f
                                             }
-                                            delay(150)
+                                            val result = com.example.util.MediaSaveHelper.saveMediaToGallery(
+                                                context = context,
+                                                mediaUrl = resolvedMedia.videoUrl,
+                                                isVideo = true
+                                            )
+                                            result.onSuccess {
+                                                Toast.makeText(context, "✅ গ্যালারিতে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+                                            }.onFailure { err ->
+                                                Toast.makeText(context, "⚠️ ডাউনলোড ব্যর্থ: ${err.message ?: "পুনরায় চেষ্টা করুন"}", Toast.LENGTH_SHORT).show()
+                                            }
                                             isDownloading = false
-                                            Toast.makeText(
-                                                context,
-                                                "✅ ভিডিওটি সফলভাবে ডাউনলোড হয়ে আপনার ফোনের গ্যালারি ও ডাউনলোডে সংরক্ষিত হয়েছে!",
-                                                Toast.LENGTH_LONG
-                                            ).show()
                                         }
                                     }
                                 ) {
@@ -226,7 +227,6 @@ fun VideoPlayerDialog(
                                     )
                                 }
 
-                                // 3 Dots Button (Screenshot 2 Features)
                                 IconButton(onClick = { showVideoOptionsSheet = true }) {
                                     Icon(
                                         imageVector = Icons.Default.MoreVert,
@@ -257,19 +257,21 @@ fun VideoPlayerDialog(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 56.dp)
+                                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 58.dp)
                                 .align(Alignment.BottomCenter)
                         ) {
-                            // Progress bar & time
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val progress = currentSeconds.toFloat() / totalSeconds.toFloat()
+                                val safeTotal = totalSeconds.coerceAtLeast(1)
+                                val progress = (currentSeconds.toFloat() / safeTotal.toFloat()).coerceIn(0f, 1f)
                                 Slider(
                                     value = progress,
                                     onValueChange = { newProgress ->
-                                        currentSeconds = (newProgress * totalSeconds).toInt()
+                                        val targetSec = (newProgress * safeTotal).toInt()
+                                        currentSeconds = targetSec
+                                        seekRequestMs = targetSec * 1000L
                                     },
                                     modifier = Modifier.weight(1f),
                                     colors = SliderDefaults.colors(
@@ -282,7 +284,7 @@ fun VideoPlayerDialog(
                                 Spacer(modifier = Modifier.width(8.dp))
 
                                 val currentFormatted = String.format("%02d:%02d", currentSeconds / 60, currentSeconds % 60)
-                                val totalFormatted = String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+                                val totalFormatted = String.format("%02d:%02d", safeTotal / 60, safeTotal % 60)
 
                                 Text(
                                     text = "$currentFormatted / $totalFormatted",
@@ -292,20 +294,44 @@ fun VideoPlayerDialog(
                                 )
                             }
 
-                            // Bottom Buttons: Mute, Like, Fullscreen
+                            // Bottom Buttons: Sound Mute/Unmute + Like
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // Mute/Unmute
-                                    IconButton(onClick = { isMuted = !isMuted }) {
-                                        Icon(
-                                            imageVector = if (isMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                                            contentDescription = "Mute",
-                                            tint = Color.White
-                                        )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Facebook-style Sound Toggle Button
+                                    Surface(
+                                        shape = RoundedCornerShape(18.dp),
+                                        color = if (isMuted) BangladeshRed.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.55f),
+                                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                                        modifier = Modifier
+                                            .heightIn(min = 38.dp)
+                                            .clickable { isMuted = !isMuted }
+                                            .testTag("dialog_video_sound_toggle")
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                                contentDescription = if (isMuted) "সাউন্ড চালু" else "সাউন্ড বন্ধ",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = if (isMuted) "সাউন্ড বন্ধ" else "সাউন্ড চালু",
+                                                color = Color.White,
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
 
                                     // Like
@@ -313,6 +339,9 @@ fun VideoPlayerDialog(
                                         onClick = {
                                             isLiked = !isLiked
                                             likeCount += if (isLiked) 1 else -1
+                                            if (post != null && viewModel != null) {
+                                                viewModel.reactToPost(post.id, ReactionType.LOVE)
+                                            }
                                         }
                                     ) {
                                         Icon(
@@ -331,21 +360,20 @@ fun VideoPlayerDialog(
 
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
-                                        text = "সবাই ফ্রিতে ভিডিও দেখতে পারবে",
-                                        color = Color.White.copy(alpha = 0.7f),
+                                        text = "সবাই ফ্রিতে দেখতে পারবে",
+                                        color = Color.White.copy(alpha = 0.8f),
                                         fontSize = 11.sp
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = null,
                                         tint = BangladeshGreen,
-                                        modifier = Modifier.size(16.dp)
+                                        modifier = Modifier.size(15.dp)
                                     )
                                 }
                             }
 
-                            // AdMob Status Badge
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
                                 color = FacebookBlue.copy(alpha = 0.2f),
@@ -361,22 +389,20 @@ fun VideoPlayerDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = if (isShortVideo) "📢 AdMob: রিলস ৫ সে. পর Interstitial • শেষে Interstitial" else "📢 AdMob: ৩ সে. পর Interstitial • শেষে Interstitial",
+                                        text = if (isShortVideo) "📢 AdMob: শর্ট ভিডিও ৫ সে. পর Interstitial • শেষে Interstitial" else "📢 AdMob: ৩ সে. পর Interstitial • শেষে Interstitial",
                                         color = Color.White,
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold
                                     )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        TextButton(
-                                            onClick = {
-                                                isPlaying = false
-                                                isEndVideoAd = false
-                                                showGoogleInterstitialAd = true
-                                            },
-                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text("টেস্ট এড", color = Color(0xFF64B5F6), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
+                                    TextButton(
+                                        onClick = {
+                                            isPlaying = false
+                                            isEndVideoAd = false
+                                            showGoogleInterstitialAd = true
+                                        },
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("টেস্ট এড", color = Color(0xFF64B5F6), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -384,14 +410,35 @@ fun VideoPlayerDialog(
                     }
                 }
 
-                // Google AdMob Interstitial Video Ad Overlay (Rule 2: at 5s for reels or 3s for videos, Rule 3: at video end)
-                // 5-sec countdown & Skip button, pauses main video and resumes from pause point
+                // Persistent Sound Toggle pill even when overlay controls are hidden
+                if (!showControls && !showGoogleInterstitialAd) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.55f),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 64.dp)
+                            .size(48.dp)
+                            .clickable { isMuted = !isMuted }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = if (isMuted) "Unmute" else "Mute",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
+
                 if (showGoogleInterstitialAd) {
                     VideoMidAd(
                         adTitle = if (isEndVideoAd) {
                             "Google AdMob Interstitial (ভিডিও সমাপ্ত বিজ্ঞাপন)"
                         } else if (isShortVideo) {
-                            "Google AdMob Interstitial (রিলস ৫ সে. পর বিজ্ঞাপন)"
+                            "Google AdMob Interstitial (শর্ট ভিডিও ৫ সে. পর বিজ্ঞাপন)"
                         } else {
                             "Google AdMob Interstitial (৩ সে. পর বিজ্ঞাপন)"
                         },
@@ -399,23 +446,23 @@ fun VideoPlayerDialog(
                         onAdFinished = {
                             viewModel?.recordUserAdEvent(
                                 userId = "user_me",
-                                adType = if (isEndVideoAd) "ভিডিও সমাপ্তি Interstitial" else if (isShortVideo) "রিলস ৫ সে. Interstitial" else "ভিডিও ৩ সে. Interstitial",
+                                adType = if (isEndVideoAd) "ভিডিও সমাপ্তি Interstitial" else if (isShortVideo) "শর্ট ভিডিও ৫ সে. Interstitial" else "ভিডিও ৩ সে. Interstitial",
                                 wasSkipped = false
                             )
                             showGoogleInterstitialAd = false
                             if (isEndVideoAd) {
+                                seekRequestMs = 0L
                                 currentSeconds = 0
                                 hasTriggeredMidAd = false
-                                isPlaying = true // Restart video
+                                isPlaying = true
                             } else {
-                                isPlaying = true // Resumes right from where it stopped (5s for reel, 3s for video)!
+                                isPlaying = true
                             }
                         },
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
 
-                // Rule 4: আর যেকোনো ভিডিওর নিচে সবসময় ১টা ছোট Banner এড লেগে থাকবে। স্ক্রল করলেও যাবে না।
                 StickyVideoBottomBanner(
                     modifier = Modifier.align(Alignment.BottomCenter),
                     adUnitId = GoogleAdConfig.BANNER_ID

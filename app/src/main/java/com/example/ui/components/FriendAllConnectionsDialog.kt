@@ -50,50 +50,19 @@ fun FriendAllConnectionsDialog(
     var selectedTab by remember { mutableStateOf(0) } // 0: All Friends, 1: Mutual Friends, 2: Followers, 3: Following
     var searchQuery by remember { mutableStateOf("") }
 
-    // Sample list of connections for this user
-    val allFriendsList = remember {
-        listOf(
-            ProfileFriend("f_1", "Rahim Aly", "rahim_aly", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "65 mutual friends", isOnline = true),
-            ProfileFriend("f_2", "Joy Ahmed", "joy_ahmed", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", "135 mutual friends", isOnline = true),
-            ProfileFriend("f_3", "Yousuf Farazi", "yousuf_farazi", "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200", "12 mutual friends", isOnline = false),
-            ProfileFriend("f_4", "হাসান মাহমুদ সাইফুল্লাহ", "hasan_mahmud_s", "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200", "161 mutual friends", isOnline = true),
-            ProfileFriend("f_5", "Mohammad Ali", "mohammad_ali", "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200", "42 mutual friends", isOnline = true),
-            ProfileFriend("f_6", "Lamia Islam", "lamia_islam", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", "18 mutual friends", isOnline = true),
-            ProfileFriend("f_7", "Niyon Islam Sohag", "niyon_sohag", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "FotoFilm Founder • 250 mutual friends", isOnline = true),
-            ProfileFriend("f_8", "Tanvir Ahmed", "tanvir_ahmed", "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200", "34 mutual friends", isOnline = true),
-            ProfileFriend("f_9", "Sadia Afrin", "sadia_afrin", "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200", "29 mutual friends", isOnline = false),
-            ProfileFriend("f_10", "MD Samrat", "md_samrat", "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=200", "88 mutual friends", isOnline = true)
-        )
-    }
+    val allFriendsList = remember { emptyList<ProfileFriend>() }
 
-    val mutualFriendsList = remember {
-        allFriendsList.filter { it.mutualFriendsCount.contains("mutual") }
-    }
+    val mutualFriendsList = remember { emptyList<ProfileFriend>() }
 
-    val followersList = remember {
-        listOf(
-            ProfileFriend("fl_1", "Farhana Akter", "farhana_a", "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200", "Followed since Jan 2026", isOnline = true),
-            ProfileFriend("fl_2", "Kamrul Hassan", "kamrul_h", "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200", "Followed since Feb 2026", isOnline = true),
-            ProfileFriend("fl_3", "Rifat Hossain", "rifat_h", "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200", "Followed recently", isOnline = false),
-            ProfileFriend("fl_4", "Mehedi Hasan", "mehedi_hasan", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "Followed since Mar 2026", isOnline = true),
-            ProfileFriend("fl_5", "Nusrat Jahan", "nusrat_j", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "Followed recently", isOnline = true)
-        )
-    }
+    val followersList = remember { emptyList<ProfileFriend>() }
 
-    val followingList = remember {
-        listOf(
-            ProfileFriend("fg_1", "FotoFilm Official", "fotofilm_corp", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200", "Verified Page • 5.2M Followers", isOnline = true),
-            ProfileFriend("fg_2", "Niyon Islam Sohag", "niyon_sohag", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "Founder & CEO, FotoFilm", isOnline = true),
-            ProfileFriend("fg_3", "Bangladesh Tech Community", "bd_tech", "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200", "Public Group • 45.8K Members", isOnline = true),
-            ProfileFriend("fg_4", "Barisal Photographers Club", "barisal_photo", "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=200", "Community Page", isOnline = false)
-        )
-    }
+    val followingList = remember { emptyList<ProfileFriend>() }
 
     val tabs = listOf(
-        "সব ফ্রেন্ড (6,420)",
-        "মিউচুয়াল (12)",
-        "ফলোয়ার্স (12.5K)",
-        "ফলোয়িং (340)"
+        "সব ফ্রেন্ড (${allFriendsList.size})",
+        "মিউচুয়াল (${mutualFriendsList.size})",
+        "ফলোয়ার্স (${followersList.size})",
+        "ফলোয়িং (${followingList.size})"
     )
 
     val currentDisplayList = when (selectedTab) {
@@ -354,7 +323,7 @@ fun FriendAllConnectionsDialog(
                                                 ) {
                                                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(13.dp), tint = BangladeshGreen)
                                                     Spacer(modifier = Modifier.width(3.dp))
-                                                    Text("Friends", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    Text("Friend", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         }

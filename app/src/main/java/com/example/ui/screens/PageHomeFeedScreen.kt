@@ -91,39 +91,8 @@ fun PageHomeFeedScreen(
         )
     }
 
-    // Default Page Posts
-    val initialPagePosts = remember(page.id) {
-        mutableStateListOf(
-            Post(
-                id = "p_araf_english",
-                author = User(
-                    id = "usr_araf",
-                    username = "english_with_araf",
-                    fullName = "English with Araf",
-                    avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300",
-                    isVerified = true
-                ),
-                timestamp = "2d • 🌐 Public",
-                title = "Learn English - ডেইলি স্পোকেন ইংলিশ চার্ট",
-                text = "প্রতিদিনের প্রয়োজনীয় ইংরেজি বাক্যের নিয়মাবলী ও বাংলা অর্থ সহ চার্ট। শেয়ার করে টাইমলাইনে রাখুন!",
-                hashtags = listOf("#SpokenEnglish", "#BanglaToEnglish", "#FotoFilm"),
-                images = listOf("https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800"),
-                reachViews = "142K",
-                shareCount = 380
-            ),
-            Post(
-                id = "p_kuakata_official",
-                author = pageAuthor,
-                timestamp = "Just now • 🌐 Public",
-                title = "কুয়াকাটা সমুদ্র সৈকত 🏖️🏖️",
-                text = "${page.name} পেইজে স্বাগতম! সূর্যাস্ত ও সূর্যোদয়ের অপরূপ প্রাকৃতিক সৌন্দর্যের কুয়াকাটা সমুদ্র সৈকত।",
-                hashtags = listOf("#Kuakata", "#BangladeshTourism", "#FotoFilmPage"),
-                images = listOf("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"),
-                reachViews = "18.5K",
-                shareCount = 142
-            )
-        )
-    }
+    // Real Page Posts only
+    val initialPagePosts = remember(page.id) { mutableStateListOf<Post>() }
 
     // Filter page posts from ViewModel + initial page posts
     val displayFeedPosts = remember(allPosts, initialPagePosts) {
@@ -320,7 +289,7 @@ fun PageHomeFeedScreen(
                             Box {
                                 Icon(
                                     imageVector = Icons.Default.OndemandVideo,
-                                    contentDescription = "Videos & Reels",
+                                    contentDescription = "Videos & Short Video",
                                     tint = if (activeTopTab == 2) BangladeshGreen else Color(0xFF65676B),
                                     modifier = Modifier.size(25.dp)
                                 )
@@ -539,7 +508,7 @@ fun PageHomeFeedScreen(
                                         TextButton(onClick = { activeTopTab = 2 }) {
                                             Icon(Icons.Default.Videocam, contentDescription = null, tint = Color(0xFFD32F2F), modifier = Modifier.size(16.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("ভিডিও/রিল", fontSize = 12.sp, color = Color(0xFF374151), fontWeight = FontWeight.Bold)
+                                            Text("ভিডিও/শর্ট ভিডিও", fontSize = 12.sp, color = Color(0xFF374151), fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -624,34 +593,6 @@ fun PageHomeFeedScreen(
                                         }
                                     }
 
-                                    // Suggested Stories
-                                    listOf(
-                                        "Jairzinho" to "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
-                                        "Soul Travel" to "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=400"
-                                    ).forEach { (name, img) ->
-                                        Surface(
-                                            onClick = { toastMessage = "$name এর স্টোরি চলছে" },
-                                            shape = RoundedCornerShape(12.dp),
-                                            modifier = Modifier.size(100.dp, 160.dp),
-                                            shadowElevation = 2.dp
-                                        ) {
-                                            Box(modifier = Modifier.fillMaxSize()) {
-                                                AsyncImage(model = img, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                                                Box(
-                                                    modifier = Modifier.fillMaxSize().background(
-                                                        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))
-                                                    )
-                                                )
-                                                Text(
-                                                    name,
-                                                    color = Color.White,
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
-                                                )
-                                            }
-                                        }
-                                    }
                                 }
                             }
 

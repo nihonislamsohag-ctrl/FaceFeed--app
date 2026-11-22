@@ -57,15 +57,6 @@ fun SupportMessageDialog(
     var attachedImages by remember { mutableStateOf<List<String>>(emptyList()) }
     var isSubmitting by remember { mutableStateOf(false) }
 
-    // Sample fallback screenshots from device for easy testing in preview
-    val sampleGalleryScreenshots = listOf(
-        "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500",
-        "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500",
-        "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=500",
-        "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=500",
-        "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?w=500"
-    )
-
     // Gallery Picker Launcher
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -287,11 +278,7 @@ fun SupportMessageDialog(
                                 try {
                                     galleryLauncher.launch("image/*")
                                 } catch (e: Exception) {
-                                    // Fallback to demo images
-                                    val needed = 5 - attachedImages.size
-                                    val toAdd = sampleGalleryScreenshots.take(needed)
-                                    attachedImages = attachedImages + toAdd
-                                    Toast.makeText(context, "${toAdd.size}টি স্ক্রিনশট যুক্ত হয়েছে", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "ফোনের গ্যালারি খোলা যায়নি", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
                                 Toast.makeText(context, "সর্বোচ্চ ৫টি ছবি বা স্ক্রিনশট যুক্ত করা যাবে", Toast.LENGTH_SHORT).show()
@@ -305,22 +292,6 @@ fun SupportMessageDialog(
                         Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(text = "গ্যালারি থেকে যোগ (${5 - attachedImages.size})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    // Quick Sample Screenshots Button
-                    if (attachedImages.size < 5) {
-                        FilledTonalButton(
-                            onClick = {
-                                val needed = 5 - attachedImages.size
-                                val toAdd = sampleGalleryScreenshots.take(needed)
-                                attachedImages = attachedImages + toAdd
-                                AppSoundManager.playReactionChime()
-                                Toast.makeText(context, "৫টি ডেমো স্ক্রিনশট সফলভাবে যুক্ত হয়েছে!", Toast.LENGTH_SHORT).show()
-                            },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("নমুনা স্ক্রিনশট 📱", fontSize = 11.5.sp)
-                        }
                     }
                 }
 

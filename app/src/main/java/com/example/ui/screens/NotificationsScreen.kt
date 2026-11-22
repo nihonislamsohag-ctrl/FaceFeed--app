@@ -33,6 +33,7 @@ import com.example.model.AppNotification
 import com.example.model.NotificationType
 import com.example.model.Translations
 import com.example.model.User
+import com.example.ui.components.FotoFilmAvatar
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
@@ -533,14 +534,14 @@ fun NotificationCardItem(
     ) {
         // Actor avatar with small badge overlay
         Box(contentAlignment = Alignment.BottomEnd) {
-            AsyncImage(
-                model = notification.actor.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+            FotoFilmAvatar(
+                imageUrl = notification.actor.avatarUrl,
+                name = notification.actor.fullName,
                 contentDescription = notification.actor.fullName,
                 modifier = Modifier
                     .size(56.dp)
                     .clip(CircleShape)
-                    .clickable { viewModel.openUserProfile(notification.actor) },
-                contentScale = ContentScale.Crop
+                    .clickable { viewModel.openUserProfile(notification.actor) }
             )
 
             // Overlaid badge matching Screenshot 2
@@ -817,13 +818,13 @@ fun NotificationOptionsDialog(
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
-                AsyncImage(
-                    model = notification.actor.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = notification.actor.avatarUrl,
+                    name = notification.actor.fullName,
                     contentDescription = null,
                     modifier = Modifier
                         .size(34.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
@@ -923,7 +924,7 @@ fun NotificationSettingsDialog(
                     .heightIn(max = 380.dp)
             ) {
                 Text(
-                    text = "Control what alerts and notifications you receive on FaceFeed.",
+                    text = "Control what alerts and notifications you receive on FotoFilm.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1033,7 +1034,7 @@ fun TaxInfoDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Complete your official tax and payment details to receive monetization earnings on FaceFeed.",
+                    text = "Complete your official tax and payment details to receive monetization earnings on FotoFilm.",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

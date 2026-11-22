@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -16,18 +18,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.Comment
 import com.example.model.Post
+import com.example.model.PostAudioTrack
 import com.example.model.ReactionType
 import com.example.model.SocialPage
 import com.example.model.User
 import com.example.ui.components.FidaVerifiedBadge
 import com.example.ui.components.ReactionUsersDialog
 import com.example.ui.theme.BangladeshGreen
+import com.example.ui.theme.FacebookBlue
+import com.example.util.AppSoundManager
 import com.example.viewmodel.FaceFeedViewModel
 
 /**
@@ -51,6 +58,22 @@ fun PagePostItemCard(
     var newCommentText by remember { mutableStateOf("") }
     var replyingToCommentId by remember { mutableStateOf<String?>(null) }
     var replyText by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val currentPlayingTrackId by AppSoundManager.currentPlayingTrackId.collectAsState()
+    val isAudioEnginePlaying by AppSoundManager.isAudioPlaying.collectAsState()
+
+    val attachedAudio = remember(post.id, post.audioTrack, post.musicInfo) {
+        post.audioTrack ?: post.musicInfo?.takeIf { it.isNotBlank() }?.let { info ->
+            PostAudioTrack("aud_page_${post.id}", info, "শিল্পীগোষ্ঠী", "অডিও গান", "৩:৩০")
+        }
+    }
+    val isThisAudioPlaying = attachedAudio != null && isAudioEnginePlaying && (currentPlayingTrackId == attachedAudio.id)
+    val toggleAttachedAudio = {
+        if (attachedAudio != null) {
+            if (isThisAudioPlaying) AppSoundManager.pauseAudio()
+            else AppSoundManager.playAudio(attachedAudio, context)
+        }
+    }
 
     val pageAuthor = remember(page) {
         User(
@@ -130,6 +153,40 @@ fun PagePostItemCard(
                             color = Color(0xFF65676B),
                             fontSize = 11.sp
                         )
+                        if (attachedAudio != null) {
+                            val musicHeaderText = remember(post.musicInfo, attachedAudio) {
+                                post.musicInfo?.takeIf { it.isNotBlank() } ?: listOfNotNull(
+                                    attachedAudio.artist.takeIf { it.isNotBlank() && it != "শিল্পীগোষ্ঠী" },
+                                    attachedAudio.title.takeIf { it.isNotBlank() }
+                                ).joinToString(" • ")
+                            }
+                            if (musicHeaderText.isNotBlank()) {
+                                Text("•", fontSize = 11.sp, color = Color(0xFF65676B))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .clickable { toggleAttachedAudio() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = "Attached Audio",
+                                        tint = if (isThisAudioPlaying) BangladeshGreen else Color(0xFF65676B),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        text = musicHeaderText,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isThisAudioPlaying) BangladeshGreen else FacebookBlue,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text("•", fontSize = 11.sp, color = Color(0xFF65676B))
+                            }
+                        }
                         Icon(
                             imageVector = Icons.Default.Public,
                             contentDescription = "Public",
@@ -183,14 +240,38 @@ fun PagePostItemCard(
             // Post Images
             if (post.images.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                AsyncImage(
-                    model = post.images.first(),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 320.dp),
-                    contentScale = ContentScale.Crop
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    AsyncImage(
+                        model = post.images.first(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp),
+                        contentScale = ContentScale.Crop
+                    )
+
+                    if (attachedAudio != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isThisAudioPlaying) BangladeshGreen.copy(alpha = 0.88f) else Color.Black.copy(alpha = 0.65f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(34.dp)
+                                .clickable { toggleAttachedAudio() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isThisAudioPlaying) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                    contentDescription = if (isThisAudioPlaying) "Mute post audio" else "Play post audio",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Reaction Counts & Comments Stats Row
@@ -587,7 +668,15 @@ fun PagePostItemCard(
     if (showReactorsDialog) {
         ReactionUsersDialog(
             post = post,
-            onDismiss = { showReactorsDialog = false }
+            onDismiss = { showReactorsDialog = false },
+            onOpenUserProfile = { targetUser ->
+                showReactorsDialog = false
+                viewModel.openUserProfile(targetUser)
+            },
+            onMessageUser = { targetUser ->
+                showReactorsDialog = false
+                viewModel.openChatWithUser(targetUser)
+            }
         )
     }
 }

@@ -1,8 +1,13 @@
 package com.example.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,18 +16,35 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -33,6 +55,7 @@ import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
 import com.example.viewmodel.FaceFeedViewModel
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PostCard(
     post: Post,
@@ -54,6 +77,9 @@ fun PostCard(
     val currentPlayingTrackId by com.example.util.AppSoundManager.currentPlayingTrackId.collectAsState()
     val isAudioEnginePlaying by com.example.util.AppSoundManager.isAudioPlaying.collectAsState()
     val audioProgress by com.example.util.AppSoundManager.playbackProgress.collectAsState()
+    val audioPositionMs by com.example.util.AppSoundManager.playbackPositionMs.collectAsState()
+    val audioDurationMs by com.example.util.AppSoundManager.playbackDurationMs.collectAsState()
+    val postCardContext = androidx.compose.ui.platform.LocalContext.current
     var showBoostDialog by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
     var showPostActionMenu by remember { mutableStateOf(false) }
@@ -69,6 +95,22 @@ fun PostCard(
         onDispose {
             if (showComments) {
                 viewModel.stopObservingCommentsForPost(post.id)
+            }
+        }
+    }
+
+    val attachedAudio = remember(post.id, post.audioTrack, post.musicInfo) {
+        post.audioTrack ?: post.musicInfo?.let { info ->
+            PostAudioTrack("aud_post_${post.id}", info, "শিল্পীগোষ্ঠী", "অডিও গান", "৩:৩০")
+        }
+    }
+    val isThisAudioPlaying = attachedAudio != null && isAudioEnginePlaying && (currentPlayingTrackId == attachedAudio.id)
+    val toggleAttachedAudio = {
+        if (attachedAudio != null) {
+            if (isThisAudioPlaying) {
+                com.example.util.AppSoundManager.pauseAudio()
+            } else {
+                com.example.util.AppSoundManager.playAudio(attachedAudio, postCardContext)
             }
         }
     }
@@ -98,13 +140,13 @@ fun PostCard(
                 ) {
                     // Avatar with online status
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        AsyncImage(
-                            model = post.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                        FotoFilmAvatar(
+                            imageUrl = post.author.avatarUrl,
+                            name = post.author.fullName,
                             contentDescription = post.author.fullName,
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         if (post.author.isOnline) {
                             Box(
@@ -161,17 +203,48 @@ fun PostCard(
                             Text(
                                 text = post.timestamp,
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
                             )
-                            if (post.musicInfo != null) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "• 🎵 ${post.musicInfo}",
-                                    fontSize = 12.sp,
-                                    color = FacebookBlue,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            if (attachedAudio != null) {
+                                val musicHeaderText = remember(post.musicInfo, attachedAudio) {
+                                    post.musicInfo?.takeIf { it.isNotBlank() } ?: run {
+                                        val artistPart = attachedAudio.artist.takeIf { it.isNotBlank() && it != "শিল্পীগোষ্ঠী" }
+                                        listOfNotNull(artistPart, attachedAudio.title.takeIf { it.isNotBlank() })
+                                            .joinToString(" • ")
+                                    }
+                                }
+                                if (musicHeaderText.isNotBlank()) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "•",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .weight(1f, fill = false)
+                                            .clickable { toggleAttachedAudio() }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = "Attached Audio",
+                                            tint = if (isThisAudioPlaying) BangladeshGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(2.dp))
+                                        Text(
+                                            text = musicHeaderText,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (isThisAudioPlaying) BangladeshGreen else FacebookBlue,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
@@ -289,10 +362,34 @@ fun PostCard(
 
             // Media Grid: Up to 15 Pictures
             if (post.images.isNotEmpty() && !post.isVideo) {
-                TenPhotoGrid(
-                    images = post.images,
-                    onImageClick = { fullscreenImageUrl = it }
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    TenPhotoGrid(
+                        images = post.images,
+                        onImageClick = { fullscreenImageUrl = it }
+                    )
+
+                    if (attachedAudio != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isThisAudioPlaying) BangladeshGreen.copy(alpha = 0.88f) else Color.Black.copy(alpha = 0.65f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(34.dp)
+                                .clickable { toggleAttachedAudio() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isThisAudioPlaying) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                    contentDescription = if (isThisAudioPlaying) "Mute post audio" else "Play post audio",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
 
                 // User requested: যে কোনো ছবির নিচে Banner এই এড চালু করে দেন
                 StickyVideoBottomBanner(
@@ -370,7 +467,7 @@ fun PostCard(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = post.videoTitle ?: if (post.isReel) "FaceFeed Reel" else "Video",
+                            text = post.videoTitle ?: if (post.isReel) "FotoFilm Short Video" else "Video",
                             color = Color.White,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -391,11 +488,7 @@ fun PostCard(
             }
 
             // Attached Audio Track / Music Player Bar
-            val attachedAudio = post.audioTrack ?: post.musicInfo?.let { info ->
-                PostAudioTrack("aud_post_${post.id}", info, "শিল্পীগোষ্ঠী", "অডিও গান", "৩:৩০")
-            }
             if (attachedAudio != null) {
-                val isThisAudioPlaying = isAudioEnginePlaying && (currentPlayingTrackId == attachedAudio.id)
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = if (isThisAudioPlaying) BangladeshGreen.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -424,7 +517,7 @@ fun PostCard(
                                         if (isThisAudioPlaying) {
                                             com.example.util.AppSoundManager.pauseAudio()
                                         } else {
-                                            com.example.util.AppSoundManager.playAudio(attachedAudio)
+                                            com.example.util.AppSoundManager.playAudio(attachedAudio, postCardContext)
                                         }
                                     }
                             ) {
@@ -503,8 +596,14 @@ fun PostCard(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val posSec = (audioPositionMs / 1000).coerceAtLeast(0)
+                                val durSec = (audioDurationMs / 1000).coerceAtLeast(1)
                                 Text(
-                                    text = "🔊 সাউন্ড প্লে হচ্ছে (ফোন স্পিকার চালু)",
+                                    text = if (!attachedAudio.audioUrl.isNullOrBlank()) {
+                                        String.format("🔊 ভয়েস/অডিও চলছে (%02d:%02d / %02d:%02d)", posSec / 60, posSec % 60, durSec / 60, durSec % 60)
+                                    } else {
+                                        "🔊 সাউন্ড প্লে হচ্ছে (ফোন স্পিকার চালু)"
+                                    },
                                     fontSize = 10.sp,
                                     color = BangladeshGreen,
                                     fontWeight = FontWeight.Bold
@@ -521,35 +620,28 @@ fun PostCard(
                 }
             }
 
-            // Reaction Counts Bar & Reactor Names (Clicking opens details dialog with all 10 reaction tabs)
+            // Facebook-Style Stats Summary Row (Screenshot 1: ❤️👍 Md ... and others    16 comments • 👁️ 751)
             val totalReactions = post.totalReactions
+            val syncedCommentCount = maxOf(post.comments.size, post.cloudCommentCount)
+            val formattedViews = post.reachViews.replace("🚀", "").trim().ifBlank { "0" }
             val reactorNameText = remember(post.reactors, post.userReaction, totalReactions) {
                 val recordedReactors = post.reactors
                 when {
                     recordedReactors.isNotEmpty() -> {
                         val first = recordedReactors.first()
                         val name = if (first.user.id == currentUser.id) "আপনি (${first.user.fullName})" else first.user.fullName
-                        if (totalReactions > 1) {
-                            "$name এবং আরও ${totalReactions - 1} জন"
-                        } else {
-                            name
-                        }
+                        if (totalReactions > 1) "$name এবং আরও ${totalReactions - 1} জন" else name
                     }
                     post.userReaction != null -> {
-                        if (totalReactions > 1) {
-                            "আপনি (${currentUser.fullName}) এবং আরও ${totalReactions - 1} জন"
-                        } else {
-                            "আপনি (${currentUser.fullName})"
-                        }
+                        if (totalReactions > 1) "আপনি এবং আরও ${totalReactions - 1} জন" else currentUser.fullName
                     }
                     totalReactions > 0 -> {
-                        "Tanvir Ahmed এবং আরও ${totalReactions - 1} জন"
+                        "$totalReactions জন"
                     }
-                    else -> ""
+                    else -> "0"
                 }
             }
 
-            // Reaction, Comment, Share, View Stats Bar (Matching Screenshot 2: 👍 17  💬 2  ↗ 106  👁 751)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -557,99 +649,119 @@ fun PostCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Like / Reactions Count (Clicking opens Reactors list Dialog)
+                // Left: Overlapping ❤️👍 circles + reactor summary + quick 10-reaction trigger
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
+                        .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .clickable { showReactorsDialog = true }
                         .padding(vertical = 2.dp)
                 ) {
-                    val topReactionEmoji = post.userReaction?.emoji ?: "👍"
-                    Text(text = topReactionEmoji, fontSize = 15.sp)
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .width(32.dp)
+                            .height(19.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(19.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFFE53935))
+                                .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "❤️", fontSize = 9.sp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .offset(x = 12.dp)
+                                .size(19.dp)
+                                .clip(CircleShape)
+                                .background(FacebookBlue)
+                                .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = post.userReaction?.emoji ?: "👍", fontSize = 9.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
                     Text(
-                        text = if (totalReactions > 0) "$totalReactions" else "17",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = reactorNameText,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Small 10-reactions picker quick trigger
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clickable { showReactionPicker = !showReactionPicker }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.AddReaction,
+                                contentDescription = "সব রিঅ্যাকশন",
+                                tint = FacebookBlue,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
                 }
 
-                // Comments, Shares & Views (Exact layout from user's screenshot: 💬 2   ↗ 106   👁 751)
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Right: Comments & Views count
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Comment count
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { showComments = !showComments }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ChatBubbleOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        val syncedCommentCount = maxOf(post.comments.size, post.cloudCommentCount)
-                        Text(
-                            text = "$syncedCommentCount",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Share count
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { viewModel.sharePost(post.id) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${post.shareCount}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // View count (e.g. 👁 751 or 1.2M)
+                    Text(
+                        text = "$syncedCommentCount comments",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.clickable { showComments = true }
+                    )
+                    Text(
+                        text = "•",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.clickable { showBoostDialog = true }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = null,
+                            imageVector = Icons.Outlined.Visibility,
+                            contentDescription = "ভিউ",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = post.reachViews.replace("🚀", "").trim().ifBlank { "751" },
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = formattedViews,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
                     }
                 }
             }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 14.dp),
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-            )
-
-            // Interactive Floating Reaction Picker (10 REACTION EMOJIS: 5 on top, 5 on bottom as requested: 👍👎👌❤️🥰 😮😄😢😡💯)
+            // Interactive Floating Reaction Picker (10 REACTION EMOJIS: 5 on top, 5 on bottom)
             Box(modifier = Modifier.fillMaxWidth()) {
                 if (showReactionPicker) {
                     Surface(
@@ -665,19 +777,17 @@ fun PostCard(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            // Row 1 (প্রথম ৫টি): Like 👍, Dislike 👎, Nice 👌, Love ❤️, Adorable 🥰
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val top5 = listOf(
+                                listOf(
                                     ReactionType.LIKE,
                                     ReactionType.DISLIKE,
                                     ReactionType.OK,
                                     ReactionType.LOVE,
                                     ReactionType.CARE
-                                )
-                                top5.forEach { rx ->
+                                ).forEach { rx ->
                                     Surface(
                                         onClick = {
                                             viewModel.reactToPost(post.id, rx)
@@ -703,19 +813,17 @@ fun PostCard(
                                 }
                             }
 
-                            // Row 2 (পরের ৫টি): Wow 😮, Happy 😄, Sad 😢, Angry 😡, 100 💯
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                val bottom5 = listOf(
+                                listOf(
                                     ReactionType.WOW,
                                     ReactionType.HAHA,
                                     ReactionType.SAD,
                                     ReactionType.ANGRY,
                                     ReactionType.HUNDRED
-                                )
-                                bottom5.forEach { rx ->
+                                ).forEach { rx ->
                                     Surface(
                                         onClick = {
                                             viewModel.reactToPost(post.id, rx)
@@ -744,145 +852,204 @@ fun PostCard(
                     }
                 }
 
-                // Actions: Like, Comment, Share Buttons
+                // Facebook Rounded Pill Action Bar (Screenshot 1: Like, Comment, Share, Views, Boost)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceAround
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Like button (toggles default LIKE or opens 10-reaction picker)
-                    TextButton(
-                        onClick = {
-                            if (post.userReaction == null) {
-                                viewModel.reactToPost(post.id, ReactionType.LIKE)
-                                com.example.util.AppSoundManager.playReactionChime()
-                            } else {
-                                viewModel.reactToPost(post.id, post.userReaction)
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
+                    val pillBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f)
+
+                    // 1. Like Pill (Tap to Like/Unlike, Long-Press for all 10 reactions)
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (post.userReaction != null) Color(post.userReaction.colorHex).copy(alpha = 0.14f) else pillBg,
+                        modifier = Modifier
+                            .weight(1.05f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .combinedClickable(
+                                onClick = {
+                                    if (post.userReaction == null) {
+                                        viewModel.reactToPost(post.id, ReactionType.LIKE)
+                                        com.example.util.AppSoundManager.playReactionChime()
+                                    } else {
+                                        viewModel.reactToPost(post.id, post.userReaction)
+                                    }
+                                },
+                                onLongClick = {
+                                    showReactionPicker = !showReactionPicker
+                                }
+                            )
+                            .testTag("post_like_button")
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             if (post.userReaction != null) {
-                                Text(text = post.userReaction.emoji, fontSize = 18.sp)
+                                Text(text = post.userReaction.emoji, fontSize = 15.sp)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = if (currentLang == AppLanguage.BENGALI) post.userReaction.bengaliName else post.userReaction.englishName,
+                                    text = "${if (totalReactions > 0) totalReactions else 1}",
                                     color = Color(post.userReaction.colorHex),
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.ThumbUp,
+                                    imageVector = Icons.Outlined.ThumbUp,
                                     contentDescription = strings.like,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(17.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = strings.like,
+                                    text = "${if (totalReactions > 0) totalReactions else 40}",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
 
-                    // Long press / quick toggle button to open all 10 reactions
-                    IconButton(
-                        onClick = { showReactionPicker = !showReactionPicker },
-                        modifier = Modifier.size(36.dp)
+                    // 2. Comment Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = pillBg,
+                        modifier = Modifier
+                            .weight(0.95f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { showComments = true }
+                            .testTag("post_comment_button")
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AddReaction,
-                            contentDescription = "All Reactions",
-                            tint = FacebookBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Comment Button
-                    TextButton(
-                        onClick = { showComments = !showComments },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.ChatBubbleOutline,
+                                imageVector = Icons.Outlined.ChatBubbleOutline,
                                 contentDescription = strings.comment,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = strings.comment,
+                                text = "$syncedCommentCount",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
 
-                    // Share Button
-                    TextButton(
-                        onClick = { showShareDialog = true },
-                        modifier = Modifier.weight(1f)
+                    // 3. Share Pill (Curved Facebook Share arrow + count)
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = pillBg,
+                        modifier = Modifier
+                            .weight(0.95f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { showShareDialog = true }
+                            .testTag("post_share_button")
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.Share,
+                                imageVector = Icons.AutoMirrored.Filled.Reply,
                                 contentDescription = strings.share,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier
+                                    .size(17.dp)
+                                    .graphicsLayer { scaleX = -1f }
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = strings.share,
+                                text = if (post.shareCount > 0) "${post.shareCount}" else strings.share,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
 
-                    // View / Insights Action Button (লাইক, কমেন্ট, শেয়ার, ভিউ)
-                    TextButton(
-                        onClick = { showBoostDialog = true },
-                        modifier = Modifier.weight(1f)
+                    // 4. Views Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = pillBg,
+                        modifier = Modifier
+                            .weight(1.0f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { showBoostDialog = true }
+                            .testTag("post_views_button")
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
                             Icon(
-                                imageVector = Icons.Default.Visibility,
+                                imageVector = Icons.Outlined.Visibility,
                                 contentDescription = "ভিউ",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(17.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = "ভিউ",
+                                text = formattedViews,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp
+                                fontSize = 11.5.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
 
-                    // Boost / Promote Post or Video Button
-                    TextButton(
-                        onClick = { showBoostDialog = true },
-                        modifier = Modifier.weight(1.1f)
+                    // 5. Boost Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (post.isBoosted) BangladeshGreen.copy(alpha = 0.14f) else FacebookBlue.copy(alpha = 0.10f),
+                        modifier = Modifier
+                            .weight(1.1f)
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .clickable { showBoostDialog = true }
+                            .testTag("post_boost_button")
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🚀", fontSize = 14.sp)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text("🚀", fontSize = 13.sp)
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = if (post.isBoosted) "বুস্ট চলছে" else if (post.isVideo) "প্রোমোট" else "বুস্ট",
+                                text = if (post.isBoosted) "চলছে" else if (post.isVideo) "প্রোমোট" else "বুস্ট",
                                 color = if (post.isBoosted) BangladeshGreen else FacebookBlue,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
+                                fontSize = 11.5.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -922,269 +1089,29 @@ fun PostCard(
                     }
                 }
             }
-
-            // Expandable Comments Section
-            AnimatedVisibility(visible = showComments) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                ) {
-                    // List existing comments
-                    post.comments.forEach { comment ->
-                        CommentItem(
-                            postId = post.id,
-                            comment = comment,
-                            viewModel = viewModel,
-                            currentLang = currentLang,
-                            onReplyClick = { replyingToCommentId = comment.id }
-                        )
-
-                        // If replying to this comment
-                        if (replyingToCommentId == comment.id) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 32.dp, top = 6.dp, bottom = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = replyText,
-                                    onValueChange = { replyText = it },
-                                    placeholder = { Text("${strings.reply}...", fontSize = 12.sp) },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(18.dp),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = {
-                                        viewModel.replyToComment(post.id, comment.id, replyText)
-                                        replyText = ""
-                                        replyingToCommentId = null
-                                    }
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Send Reply", tint = FacebookBlue)
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Facebook Avatar Stickers Tray matching user screenshot 2
-                    val avatarStickers = listOf(
-                        "🙋‍♂️ Hi!" to "👋",
-                        "💖 Love" to "🥰",
-                        "🌹 Rose" to "🌹",
-                        "✨ WOW!" to "🤩",
-                        "👌 Very Nice" to "💯",
-                        "👏 Bravo" to "👏",
-                        "🎂 HBD" to "🎉"
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        avatarStickers.forEach { (label, emoji) ->
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 1.dp,
-                                modifier = Modifier.clickable {
-                                    newCommentText += " $emoji $label"
-                                }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(text = emoji, fontSize = 16.sp)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(text = label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = FacebookBlue)
-                                }
-                            }
-                        }
-                    }
-
-                    // Quick emoji picker bar for commenting (user requested emojis in comments!)
-                    val quickEmojis = listOf("👍", "❤️", "🔥", "😄", "🥰", "👏", "💯", "😮", "✨", "🇧🇩")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        quickEmojis.forEach { emoji ->
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.clickable {
-                                    newCommentText += emoji
-                                }
-                            ) {
-                                Text(
-                                    text = emoji,
-                                    fontSize = 18.sp,
-                                    modifier = Modifier.padding(6.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // GIF tray if toggled
-                    if (showGifTray) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            shadowElevation = 2.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp)
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                listOf("🎉 Congratulations!", "🔥 Awesome!", "❤️ Love it!", "👏 Well done!", "🌟 Outstanding!").forEach { gifText ->
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = FacebookBlue.copy(alpha = 0.1f),
-                                        modifier = Modifier.clickable {
-                                            viewModel.addComment(post.id, "[GIF] $gifText")
-                                            showGifTray = false
-                                        }
-                                    ) {
-                                        Text(
-                                            text = gifText,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = FacebookBlue,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Comment Input Field with Camera, GIF, @ Mention, Emoji (matching Screenshot 2: "Comment as Niyon Islam Sohag")
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Image attachment icon
-                        IconButton(
-                            onClick = { newCommentText += " 📷 [Photo]" },
-                            modifier = Modifier.size(36.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Image,
-                                contentDescription = "Add Photo",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = newCommentText,
-                            onValueChange = { newCommentText = it },
-                            placeholder = {
-                                Text(
-                                    text = "Comment as ${currentUser.fullName}",
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            },
-                            trailingIcon = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(end = 4.dp)
-                                ) {
-                                    // GIF button
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        modifier = Modifier
-                                            .clickable { showGifTray = !showGifTray }
-                                            .padding(2.dp)
-                                    ) {
-                                        Text(
-                                            text = "GIF",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Black,
-                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                    // Mention button (@)
-                                    IconButton(
-                                        onClick = { newCommentText += " @${currentUser.username}" },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.AlternateEmail,
-                                            contentDescription = "Mention",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                    // Emoji button
-                                    IconButton(
-                                        onClick = { newCommentText += " 😊" },
-                                        modifier = Modifier.size(28.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.SentimentSatisfied,
-                                            contentDescription = "Emoji",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(22.dp),
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
-                        // Send Button
-                        IconButton(
-                            onClick = {
-                                viewModel.addComment(post.id, newCommentText)
-                                newCommentText = ""
-                            },
-                            enabled = newCommentText.isNotBlank(),
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(if (newCommentText.isNotBlank()) FacebookBlue else MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Send,
-                                contentDescription = "Send Comment",
-                                tint = if (newCommentText.isNotBlank()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
         }
+    }
+
+    // Facebook-Style Comment Modal Bottom Sheet (Matching Screenshot 2)
+    if (showComments) {
+        FacebookCommentBottomSheet(
+            post = post,
+            currentUser = currentUser,
+            viewModel = viewModel,
+            currentLang = currentLang,
+            totalReactions = post.totalReactions,
+            newCommentText = newCommentText,
+            onNewCommentTextChange = { newCommentText = it },
+            replyingToCommentId = replyingToCommentId,
+            onReplyingToCommentIdChange = { replyingToCommentId = it },
+            replyText = replyText,
+            onReplyTextChange = { replyText = it },
+            showGifTray = showGifTray,
+            onToggleGifTray = { showGifTray = !showGifTray },
+            onOpenReactors = { showReactorsDialog = true },
+            onOpenShare = { showShareDialog = true },
+            onDismiss = { showComments = false }
+        )
     }
 
     // Post 3-Dots Action Bottom Sheet (Screenshot 2 for Video, Screenshot 3 for Regular)
@@ -1210,7 +1137,7 @@ fun PostCard(
     // Video Player Dialog (Smooth full playback)
     if (showVideoPlayer) {
         VideoPlayerDialog(
-            videoUrl = post.images.firstOrNull() ?: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=1200",
+            videoUrl = post.images.firstOrNull().orEmpty(),
             title = post.videoTitle ?: post.title ?: post.text.take(30),
             authorName = post.author.fullName,
             post = post,
@@ -1223,7 +1150,17 @@ fun PostCard(
     if (showReactorsDialog) {
         ReactionUsersDialog(
             post = post,
-            onDismiss = { showReactorsDialog = false }
+            onDismiss = { showReactorsDialog = false },
+            onOpenUserProfile = { targetUser ->
+                showReactorsDialog = false
+                showComments = false
+                viewModel.openUserProfile(targetUser)
+            },
+            onMessageUser = { targetUser ->
+                showReactorsDialog = false
+                showComments = false
+                viewModel.openChatWithUser(targetUser)
+            }
         )
     }
 
@@ -1405,97 +1342,147 @@ fun TenPhotoGrid(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CommentItem(
     postId: String,
     comment: Comment,
     viewModel: FaceFeedViewModel,
     currentLang: AppLanguage,
-    onReplyClick: () -> Unit
+    onReplyClick: () -> Unit,
+    postAuthor: User? = null,
+    onUserClick: (User) -> Unit = { viewModel.openUserProfile(it) }
 ) {
     val strings = Translations.get(currentLang)
     var showCommentReactionPicker by remember { mutableStateOf(false) }
     var showOffenderLegalDialog by remember { mutableStateOf(false) }
     var legalActionStatus by remember { mutableStateOf<String?>(null) }
 
+    val hasReplies = comment.replies.isNotEmpty()
+    val authorReactionBadge = comment.userReaction ?: if (comment.totalReactions > 0) ReactionType.LOVE else null
+
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.Top
         ) {
-            AsyncImage(
-                model = comment.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                contentDescription = comment.author.fullName,
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
-            )
+            // Left avatar + curved vertical thread line when replies exist (Screenshot 2)
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(38.dp).fillMaxHeight()
+            ) {
+                FotoFilmAvatar(
+                    imageUrl = comment.author.avatarUrl,
+                    name = comment.author.fullName,
+                    contentDescription = comment.author.fullName,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .clickable { onUserClick(comment.author) }
+                )
+                if (hasReplies) {
+                    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+                    Canvas(
+                        modifier = Modifier
+                            .weight(1f)
+                            .width(24.dp)
+                            .padding(top = 4.dp, bottom = 14.dp)
+                    ) {
+                        val startX = size.width / 2f
+                        val path = Path().apply {
+                            moveTo(startX, 0f)
+                            lineTo(startX, (size.height - 14f).coerceAtLeast(0f))
+                            quadraticBezierTo(
+                                startX,
+                                size.height,
+                                startX + 16f,
+                                size.height
+                            )
+                        }
+                        drawPath(
+                            path = path,
+                            color = lineColor,
+                            style = Stroke(width = 3.5f, cap = StrokeCap.Round)
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.width(8.dp))
 
             Column(modifier = Modifier.weight(1f)) {
+                // Facebook Rounded Comment Bubble with "❤️ by Author" pill
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth()
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier
+                        .combinedClickable(
+                            onClick = {},
+                            onLongClick = { showCommentReactionPicker = !showCommentReactionPicker }
+                        )
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             Text(
                                 text = comment.author.fullName,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.clickable { onUserClick(comment.author) }
                             )
                             if (comment.author.isVerified) {
-                                Spacer(modifier = Modifier.width(4.dp))
                                 FidaVerifiedBadge(size = 12.dp)
                             }
+                            if (authorReactionBadge != null) {
+                                Text(
+                                    text = "•",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(authorReactionBadge.colorHex).copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(text = authorReactionBadge.emoji, fontSize = 10.sp)
+                                }
+                                Text(
+                                    text = if (postAuthor != null && comment.author.id == postAuthor.id) "Author" else "by Author",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val isPureEmojiComment = comment.text.trim().length <= 6 && comment.text.any { it.code > 0x2000 }
                         Text(
                             text = comment.text,
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
+                            fontSize = if (isPureEmojiComment) 22.sp else 13.5.sp,
+                            lineHeight = if (isPureEmojiComment) 26.sp else 18.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
 
-                // Comment reaction preview (if any reactions exist)
-                if (comment.totalReactions > 0) {
-                    Row(
-                        modifier = Modifier.padding(start = 8.dp, top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val topRx = if (comment.reactionCounts.isNotEmpty()) {
-                            comment.reactionCounts.keys.take(2)
-                        } else {
-                            listOf(ReactionType.LIKE)
-                        }
-                        topRx.forEach { rx ->
-                            Text(text = rx.emoji, fontSize = 12.sp)
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${comment.totalReactions}",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // 10 Reactions Picker for Comment (Floating when activated: 👍👎👌❤️🥰 😮😄😢😡💯)
+                // 10 Reactions Picker for Comment (Floating when activated)
                 if (showCommentReactionPicker) {
                     Surface(
                         modifier = Modifier
-                            .offset(y = (-4).dp)
+                            .padding(top = 4.dp)
                             .shadow(6.dp, RoundedCornerShape(16.dp)),
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surface,
                         tonalElevation = 6.dp
                     ) {
                         Column(modifier = Modifier.padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            // Row 1 (👍 👎 👌 ❤️ 🥰)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf(ReactionType.LIKE, ReactionType.DISLIKE, ReactionType.OK, ReactionType.LOVE, ReactionType.CARE).forEach { rx ->
                                     Box(
@@ -1513,7 +1500,6 @@ fun CommentItem(
                                     }
                                 }
                             }
-                            // Row 2 (😮 😄 😢 😡 💯)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 listOf(ReactionType.WOW, ReactionType.HAHA, ReactionType.SAD, ReactionType.ANGRY, ReactionType.HUNDRED).forEach { rx ->
                                     Box(
@@ -1535,50 +1521,63 @@ fun CommentItem(
                     }
                 }
 
-                // Action buttons: Timestamp, Reaction (10 types), 🔟 Picker, Reply
+                // Action Row Matching Screenshot 2: "9h   Reply   1 ❤️       👍   👎"
                 Row(
-                    modifier = Modifier.padding(start = 8.dp, top = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 6.dp, top = 4.dp, end = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = comment.timestamp,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false
                     )
 
-                    // Reaction button (shows active reaction or "Like")
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable {
-                            if (comment.userReaction == null) {
-                                viewModel.reactToComment(postId, comment.id, ReactionType.LIKE)
-                                com.example.util.AppSoundManager.playReactionChime()
-                            } else {
-                                viewModel.reactToComment(postId, comment.id, comment.userReaction)
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = strings.reply,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.clickable { onReplyClick() }
+                    )
+
+                    if (comment.totalReactions > 0) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { showCommentReactionPicker = !showCommentReactionPicker }
+                        ) {
+                            Text(
+                                text = "${comment.totalReactions}",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            val rxBadge = comment.userReaction ?: comment.reactionCounts.keys.firstOrNull() ?: ReactionType.LOVE
+                            Box(
+                                modifier = Modifier
+                                    .size(15.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(rxBadge.colorHex).copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = rxBadge.emoji, fontSize = 9.5.sp)
                             }
-                        }
-                    ) {
-                        if (comment.userReaction != null) {
-                            Text(text = comment.userReaction.emoji, fontSize = 12.sp)
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = if (currentLang == AppLanguage.BENGALI) comment.userReaction.bengaliName else comment.userReaction.englishName,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(comment.userReaction.colorHex)
-                            )
-                        } else {
-                            Text(
-                                text = strings.like,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
 
-                    // Button to trigger 10-reaction picker
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Trigger all 10 reactions
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
@@ -1593,13 +1592,42 @@ fun CommentItem(
                         )
                     }
 
-                    Text(
-                        text = strings.reply,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.clickable { onReplyClick() }
-                    )
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    // Quick 👍 Like & 👎 Dislike icons on right (Screenshot 2)
+                    IconButton(
+                        onClick = {
+                            viewModel.reactToComment(postId, comment.id, ReactionType.LIKE)
+                            com.example.util.AppSoundManager.playReactionChime()
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (comment.userReaction == ReactionType.LIKE) Icons.Default.ThumbUp else Icons.Outlined.ThumbUp,
+                            contentDescription = strings.like,
+                            tint = if (comment.userReaction == ReactionType.LIKE) FacebookBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(2.dp))
+
+                    IconButton(
+                        onClick = {
+                            viewModel.reactToComment(postId, comment.id, ReactionType.DISLIKE)
+                            com.example.util.AppSoundManager.playReactionChime()
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (comment.userReaction == ReactionType.DISLIKE) Icons.Default.ThumbDown else Icons.Outlined.ThumbDown,
+                            contentDescription = "Dislike",
+                            tint = if (comment.userReaction == ReactionType.DISLIKE) Color(0xFFE53935) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     // Feature 12: খারাপ মন্তব্যকারী আইনগত প্রোফাইল ও অডিট বাটন
                     Surface(
@@ -1618,15 +1646,17 @@ fun CommentItem(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         ) {
-                            Text("⚖️", fontSize = 10.sp)
-                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("⚖️", fontSize = 9.5.sp)
+                            Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = "আইনি প্রোফাইল",
-                                fontSize = 10.sp,
+                                fontSize = 9.5.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC62828)
+                                color = Color(0xFFC62828),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -1675,11 +1705,11 @@ fun CommentItem(
                                         modifier = Modifier.padding(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        AsyncImage(
-                                            model = comment.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                                        FotoFilmAvatar(
+                                            imageUrl = comment.author.avatarUrl,
+                                            name = comment.author.fullName,
                                             contentDescription = null,
-                                            modifier = Modifier.size(40.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                            modifier = Modifier.size(40.dp).clip(CircleShape)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
@@ -1784,41 +1814,55 @@ fun CommentItem(
                     )
                 }
 
-                // Replies list with 10 reactions support
+                // Replies list matching Screenshot 2 ([mini avatar] Author Name  Commenter ❤️❤️)
                 comment.replies.forEach { reply ->
                     var showReplyReactionPicker by remember { mutableStateOf(false) }
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 12.dp, top = 6.dp)
+                            .padding(top = 8.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            AsyncImage(
-                                model = reply.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FotoFilmAvatar(
+                                imageUrl = reply.author.avatarUrl,
+                                name = reply.author.fullName,
                                 contentDescription = reply.author.fullName,
                                 modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                                    .size(22.dp)
+                                    .clip(CircleShape)
+                                    .clickable { onUserClick(reply.author) }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = reply.author.fullName,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.clickable { onUserClick(reply.author) }
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface
-                            ) {
-                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                                    Text(
-                                        text = reply.author.fullName,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
+                            Text(
+                                text = reply.text,
+                                fontSize = 12.5.sp,
+                                lineHeight = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .combinedClickable(
+                                        onClick = {
+                                            if (reply.userReaction == null) {
+                                                viewModel.reactToCommentReply(postId, comment.id, reply.id, ReactionType.LOVE)
+                                                com.example.util.AppSoundManager.playReactionChime()
+                                            } else {
+                                                viewModel.reactToCommentReply(postId, comment.id, reply.id, reply.userReaction)
+                                            }
+                                        },
+                                        onLongClick = { showReplyReactionPicker = !showReplyReactionPicker }
                                     )
-                                    Text(
-                                        text = reply.text,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                            }
+                            )
                         }
 
                         // Reply reaction preview
@@ -1935,29 +1979,15 @@ fun CommentItem(
 @Composable
 fun ReactionUsersDialog(
     post: Post,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenUserProfile: ((User) -> Unit)? = null,
+    onMessageUser: ((User) -> Unit)? = null
 ) {
     var selectedReactionTab by remember { mutableStateOf<ReactionType?>(null) }
     val totalReactions = post.totalReactions
 
-    val displayReactors = remember(post.reactors, post.reactionCounts) {
-        val list = mutableListOf<ReactionUser>()
-        list.addAll(post.reactors)
-
-        val mockFriends = listOf(
-            SampleData.friendTanvir to ReactionType.LOVE,
-            SampleData.friendNusrat to ReactionType.CARE,
-            SampleData.friendHasan to ReactionType.LIKE,
-            SampleData.friendSamrat to ReactionType.OK,
-            SampleData.friendArifur to ReactionType.HUNDRED,
-            SampleData.friendSadia to ReactionType.WOW
-        )
-        for ((friend, rx) in mockFriends) {
-            if (list.none { it.user.id == friend.id }) {
-                list.add(ReactionUser(friend, rx, "1h ago"))
-            }
-        }
-        list
+    val displayReactors = remember(post.reactors) {
+        post.reactors.toList()
     }
 
     val filteredList = if (selectedReactionTab == null) {
@@ -1970,11 +2000,33 @@ fun ReactionUsersDialog(
         onDismissRequest = onDismiss,
         title = {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "প্রতিক্রিয়া প্রদানকারী (${totalReactions})",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .testTag("reaction_dialog_back_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "প্রতিক্রিয়া প্রদানকারী (${totalReactions})",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier
@@ -2037,15 +2089,28 @@ fun ReactionUsersDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable {
+                                    if (onOpenUserProfile != null) {
+                                        onOpenUserProfile(reactor.user)
+                                    } else {
+                                        onDismiss()
+                                    }
+                                }
+                                .padding(vertical = 2.dp)
+                        ) {
                             Box(contentAlignment = Alignment.BottomEnd) {
-                                AsyncImage(
-                                    model = reactor.user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                                FotoFilmAvatar(
+                                    imageUrl = reactor.user.avatarUrl,
+                                    name = reactor.user.fullName,
                                     contentDescription = reactor.user.fullName,
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                        .clip(CircleShape)
                                 )
                                 Text(
                                     text = reactor.reaction.emoji,
@@ -2054,12 +2119,14 @@ fun ReactionUsersDialog(
                                 )
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = reactor.user.fullName,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     if (reactor.user.isVerified) {
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -2074,16 +2141,26 @@ fun ReactionUsersDialog(
                             }
                         }
 
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            modifier = Modifier.clickable { }
+                            modifier = Modifier.clickable {
+                                if (onMessageUser != null) {
+                                    onMessageUser(reactor.user)
+                                } else {
+                                    onDismiss()
+                                }
+                            }
                         ) {
                             Text(
                                 text = "বার্তা পাঠান",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
@@ -2098,3 +2175,501 @@ fun ReactionUsersDialog(
         }
     )
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun FacebookCommentBottomSheet(
+    post: Post,
+    currentUser: User,
+    viewModel: FaceFeedViewModel,
+    currentLang: AppLanguage,
+    totalReactions: Int,
+    newCommentText: String,
+    onNewCommentTextChange: (String) -> Unit,
+    replyingToCommentId: String?,
+    onReplyingToCommentIdChange: (String?) -> Unit,
+    replyText: String,
+    onReplyTextChange: (String) -> Unit,
+    showGifTray: Boolean,
+    onToggleGifTray: () -> Unit,
+    onOpenReactors: () -> Unit,
+    onOpenShare: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val strings = Translations.get(currentLang)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showQuickSuggestionChips by remember { mutableStateOf(true) }
+    var showEmojiQuickTray by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.88f)
+                .imePadding()
+                .navigationBarsPadding()
+        ) {
+            // Top Header Row (Screenshot 2: Back button + ❤️👍 count on left, 👍 💬 ↗ action icons on right)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .testTag("comment_sheet_back_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onOpenReactors() }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(34.dp)
+                                .height(20.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFFE53935))
+                                    .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "❤️", fontSize = 10.sp)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .offset(x = 13.dp)
+                                    .size(20.dp)
+                                    .clip(CircleShape)
+                                    .background(FacebookBlue)
+                                    .border(1.5.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = post.userReaction?.emoji ?: "👍", fontSize = 10.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "${if (totalReactions > 0) totalReactions else 40}",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (post.userReaction == null) {
+                                viewModel.reactToPost(post.id, ReactionType.LIKE)
+                                com.example.util.AppSoundManager.playReactionChime()
+                            } else {
+                                viewModel.reactToPost(post.id, post.userReaction)
+                            }
+                        },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (post.userReaction != null) Icons.Default.ThumbUp else Icons.Outlined.ThumbUp,
+                            contentDescription = strings.like,
+                            tint = if (post.userReaction != null) Color(post.userReaction.colorHex) else MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { showQuickSuggestionChips = true },
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ChatBubbleOutline,
+                            contentDescription = strings.comment,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onOpenShare,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Reply,
+                            contentDescription = strings.share,
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .size(21.dp)
+                                .graphicsLayer { scaleX = -1f }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+            // Threaded Comments List
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (post.comments.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("💬", fontSize = 36.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "এখনো কোনো কমেন্ট নেই — প্রথম কমেন্ট করুন!",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                items(post.comments, key = { it.id }) { comment ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        CommentItem(
+                            postId = post.id,
+                            comment = comment,
+                            viewModel = viewModel,
+                            currentLang = currentLang,
+                            onReplyClick = {
+                                onReplyingToCommentIdChange(
+                                    if (replyingToCommentId == comment.id) null else comment.id
+                                )
+                            },
+                            postAuthor = post.author,
+                            onUserClick = { targetUser ->
+                                onDismiss()
+                                viewModel.openUserProfile(targetUser)
+                            }
+                        )
+
+                        if (replyingToCommentId == comment.id) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 46.dp, top = 6.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = replyText,
+                                    onValueChange = onReplyTextChange,
+                                    placeholder = { Text("${comment.author.fullName}-কে উত্তর দিন...", fontSize = 12.sp) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(20.dp),
+                                    singleLine = true
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                IconButton(
+                                    onClick = {
+                                        if (replyText.isNotBlank()) {
+                                            viewModel.replyToComment(post.id, comment.id, replyText)
+                                            onReplyTextChange("")
+                                            onReplyingToCommentIdChange(null)
+                                        }
+                                    },
+                                    enabled = replyText.isNotBlank(),
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(if (replyText.isNotBlank()) FacebookBlue else MaterialTheme.colorScheme.surfaceVariant)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Send Reply",
+                                        tint = if (replyText.isNotBlank()) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Quick Suggestion Chips Bar (Screenshot 2: "I love this so much!", "❤️❤️❤️❤️", "So adorable! ❤️", "Great picture!!!")
+            if (showQuickSuggestionChips) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    val quickSuggestions = listOf(
+                        "I love this so much!",
+                        "❤️❤️❤️❤️",
+                        "So adorable! ❤️",
+                        "Great picture!!!"
+                    )
+                    FlowRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 34.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        quickSuggestions.forEach { suggestion ->
+                            Surface(
+                                onClick = {
+                                    onNewCommentTextChange(
+                                        if (newCommentText.isBlank()) suggestion else "$newCommentText $suggestion"
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f))
+                            ) {
+                                Text(
+                                    text = suggestion,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Circular X dismiss button on top-right
+                    Surface(
+                        onClick = { showQuickSuggestionChips = false },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(28.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Dismiss suggestions",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Optional Emoji / GIF Trays
+            if (showEmojiQuickTray) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("👍", "❤️", "🔥", "😄", "🥰", "👏", "💯", "😮", "✨", "🇧🇩").forEach { emoji ->
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                            modifier = Modifier.clickable { onNewCommentTextChange(newCommentText + emoji) }
+                        ) {
+                            Text(text = emoji, fontSize = 18.sp, modifier = Modifier.padding(6.dp))
+                        }
+                    }
+                }
+            }
+
+            if (showGifTray) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("🎉 Congratulations!", "🔥 Awesome!", "❤️ Love it!", "👏 Well done!", "🌟 Outstanding!").forEach { gifText ->
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = FacebookBlue.copy(alpha = 0.1f),
+                            modifier = Modifier.clickable {
+                                viewModel.addComment(post.id, "[GIF] $gifText")
+                                onToggleGifTray()
+                            }
+                        ) {
+                            Text(
+                                text = gifText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FacebookBlue,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+            // Bottom Facebook Comment Input Bar (Screenshot 2: Gallery + "Comment as <Name>" + GIF + @ + 😊 + Send)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { onNewCommentTextChange(newCommentText + " 📷 [Photo]") },
+                    modifier = Modifier.size(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Image,
+                        contentDescription = "Add Photo",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(23.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    TextField(
+                        value = newCommentText,
+                        onValueChange = onNewCommentTextChange,
+                        placeholder = {
+                            Text(
+                                text = "Comment as ${currentUser.fullName}",
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        trailingIcon = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 4.dp)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(5.dp),
+                                    border = BorderStroke(1.2.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)),
+                                    color = Color.Transparent,
+                                    modifier = Modifier
+                                        .clickable { onToggleGifTray() }
+                                        .padding(1.dp)
+                                ) {
+                                    Text(
+                                        text = "GIF",
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { onNewCommentTextChange(newCommentText + " @${currentUser.username}") },
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AlternateEmail,
+                                        contentDescription = "Mention",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showEmojiQuickTray = !showEmojiQuickTray },
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.SentimentSatisfied,
+                                        contentDescription = "Emoji",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("comment_input_field")
+                    )
+                }
+
+                if (newCommentText.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = {
+                            viewModel.addComment(post.id, newCommentText)
+                            onNewCommentTextChange("")
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(FacebookBlue)
+                            .testTag("send_comment_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Send,
+                            contentDescription = "Send Comment",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+

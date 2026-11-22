@@ -66,19 +66,12 @@ fun UniversalSearchDialog(
         } else null
     }
 
-    val samplePeople = remember(appUsers) {
-        (appUsers + listOf(
-            User(id = "p1", fullName = "Niyon Islam Sohag", username = "niyonislamsohag", avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200", bio = "FaceFeed Creator 🇧🇩", isVerified = true),
-            User(id = "p2", fullName = "Tahmid Hasan", username = "tahmid_dev", avatarUrl = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200", bio = "Android & Kotlin Dev"),
-            User(id = "p3", fullName = "Fatima Rahman", username = "fatima_art", avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", bio = "Digital Artist & Blogger"),
-            User(id = "p4", fullName = "Sabbir Ahmed", username = "sabbir_films", avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", bio = "Reels & Video Creator")
-        )).distinctBy { it.id }
-    }
+    val groupsList by viewModel.groups.collectAsState()
 
-    val filteredPeople = remember(cleanQuery, samplePeople, linkedUser) {
+    val filteredPeople = remember(cleanQuery, appUsers, linkedUser) {
         if (cleanQuery.isEmpty()) emptyList()
         else {
-            val matched = samplePeople.filter {
+            val matched = appUsers.filter {
                 it.fullName.lowercase().contains(cleanQuery) ||
                     it.username.lowercase().contains(cleanQuery) ||
                     it.bio.lowercase().contains(cleanQuery)
@@ -87,13 +80,9 @@ fun UniversalSearchDialog(
         }
     }
 
-    val sampleGroups = remember {
-        listOf("Bangladeshi Developers Hub", "FaceFeed Creators Bangladesh", "Photography Lovers BD", "Dhaka Foodies Club")
-    }
-
-    val filteredGroups = remember(cleanQuery, sampleGroups) {
+    val filteredGroups = remember(cleanQuery, groupsList) {
         if (cleanQuery.isEmpty()) emptyList()
-        else sampleGroups.filter { it.lowercase().contains(cleanQuery) }
+        else groupsList.filter { it.name.lowercase().contains(cleanQuery) }.map { it.name }
     }
 
     Dialog(
@@ -283,7 +272,7 @@ fun UniversalSearchDialog(
 
                         val recentTopics = listOf(
                             "Niyon Islam Sohag",
-                            "FaceFeed নতুন ফিচারসমূহ",
+                            "FotoFilm নতুন ফিচারসমূহ",
                             "বাংলাদেশের সেরা দর্শনীয় স্থান",
                             "প্রযুক্তি ও অনলাইন ইনকাম",
                             "Fida AI স্মার্ট অ্যাসিস্ট্যান্ট",

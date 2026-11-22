@@ -34,10 +34,14 @@ import com.example.model.User
 import com.example.ui.components.BlockConfirmationBottomSheet
 import com.example.ui.components.BlockedSuccessBottomSheet
 import com.example.ui.components.FidaVerifiedBadge
+import com.example.ui.components.FotoFilmAvatar
+import com.example.ui.components.FotoFilmCoverBackground
 import com.example.ui.components.FriendAllConnectionsDialog
+import com.example.ui.components.FullScreenPhotoViewerDialog
 import com.example.ui.components.PostCard
 import com.example.ui.components.UnblockConfirmationBottomSheet
 import com.example.ui.components.VideoPlayerDialog
+import com.example.ui.components.resolvePlayableVideoSource
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
@@ -73,6 +77,11 @@ fun FriendProfileScreen(
     var showAllFriendsDialog by remember { mutableStateOf(false) }
     var selectedPostFilter by remember { mutableStateOf("All") }
     var activeVideoUrl by remember { mutableStateOf<String?>(null) }
+    var viewingProfilePhoto by remember { mutableStateOf(false) }
+    var viewingCoverPhoto by remember { mutableStateOf(false) }
+
+    val friendCoverUrl = user.coverUrl
+    val friendAvatarUrl = user.avatarUrl
 
     LaunchedEffect(user.id, viewModel) {
         viewModel?.ensurePostsForUser(user)
@@ -86,56 +95,12 @@ fun FriendProfileScreen(
             it.author.fullName.equals(user.fullName, ignoreCase = true)
     }
 
-    val fallbackDefaultPosts = remember(user) {
-        listOf(
-            Post(
-                id = "post_${user.id}_photo_1",
-                author = user,
-                timestamp = "২ ঘণ্টা আগে • 🌍",
-                text = "আজকের সুন্দর বিকেলটা বন্ধুদের সাথে চমৎকার কাটলো! সবাইকে আন্তরিক ধন্যবাদ ❤️ #FaceFeed #Friendship",
-                images = listOf("https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=800"),
-                isVideo = false,
-                isReel = false,
-                shareCount = 45
-            ),
-            Post(
-                id = "post_${user.id}_video_2",
-                author = user,
-                timestamp = "গতকাল বিকাল ৫:৩০ • 🌍",
-                text = "🎬 প্রকৃতি ও সূর্যাস্তের অপূর্ব দৃশ্য! ভিডিওটি দেখুন এবং শেয়ার করুন 🌿",
-                images = listOf("https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"),
-                isVideo = true,
-                videoTitle = "প্রকৃতি ও সূর্যাস্তের অপূর্ব দৃশ্য",
-                videoDuration = "03:45",
-                reachViews = "45.2K",
-                shareCount = 89
-            ),
-            Post(
-                id = "post_${user.id}_reel_3",
-                author = user,
-                timestamp = "২ দিন আগে • 🌍",
-                text = "🔥 নতুন রিল ভিডিও: নিজের প্রতি বিশ্বাস রাখো, সফলতা আসবেই ইনশাআল্লাহ! 🌟 #Reels #Viral",
-                images = listOf("https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800"),
-                isVideo = true,
-                isReel = true,
-                videoTitle = "সফলতার অনুপ্রেরণা",
-                reachViews = "120K",
-                musicInfo = "🎵 Original Audio - ${user.fullName}",
-                shareCount = 210
-            )
-        )
-    }
-
-    val combinedUserPosts = if (viewModel != null && authorFeedPosts.isNotEmpty()) {
-        authorFeedPosts.distinctBy { it.id }
-    } else {
-        (authorFeedPosts + fallbackDefaultPosts).distinctBy { it.id }
-    }
+    val combinedUserPosts = authorFeedPosts.distinctBy { it.id }
 
     val filteredPosts = when (selectedPostFilter) {
         "Photos" -> combinedUserPosts.filter { it.images.isNotEmpty() && !it.isVideo && !it.isReel }
         "Videos" -> combinedUserPosts.filter { it.isVideo && !it.isReel }
-        "Reels" -> combinedUserPosts.filter { it.isReel }
+        "Short Video" -> combinedUserPosts.filter { it.isReel }
         "Stories" -> combinedUserPosts.filter { it.isFaceClip || it.text.contains("স্টোরি") || it.text.contains("Story") }
         "Live" -> combinedUserPosts.filter { it.text.contains("লাইভ") || it.text.contains("Live") || (it.videoDuration != null && it.videoDuration!!.contains(":")) }
         else -> combinedUserPosts
@@ -277,36 +242,45 @@ fun FriendProfileScreen(
                         .fillMaxWidth()
                         .height(230.dp)
                 ) {
-                    // Cover Photo
-                    AsyncImage(
-                        model = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1000",
-                        contentDescription = "Cover photo",
+                    // Cover Photo (Tap to open Facebook-style Full Screen Viewer)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(170.dp)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(FacebookBlue.copy(alpha = 0.5f), FacebookBlue)
+                            .clickable { if (friendCoverUrl.isNotBlank()) viewingCoverPhoto = true }
+                    ) {
+                        FotoFilmCoverBackground(
+                            imageUrl = friendCoverUrl,
+                            contentDescription = "Cover photo",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.3f))
+                                    )
                                 )
-                            ),
-                        contentScale = ContentScale.Crop
-                    )
+                        )
+                    }
 
-                    // Profile Avatar Overlapping
+                    // Profile Avatar Overlapping (Tap to open Facebook-style Full Screen Viewer)
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(start = 16.dp),
+                            .padding(start = 16.dp)
+                            .clickable { if (friendAvatarUrl.isNotBlank()) viewingProfilePhoto = true },
                         contentAlignment = Alignment.BottomEnd
                     ) {
-                        AsyncImage(
-                            model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500" },
+                        FotoFilmAvatar(
+                            imageUrl = friendAvatarUrl,
+                            name = user.fullName,
                             contentDescription = user.fullName,
                             modifier = Modifier
                                 .size(116.dp)
                                 .clip(CircleShape)
-                                .border(4.dp, MaterialTheme.colorScheme.background, CircleShape),
-                            contentScale = ContentScale.Crop
+                                .border(4.dp, MaterialTheme.colorScheme.background, CircleShape)
                         )
                         if (user.isOnline) {
                             Box(
@@ -385,12 +359,14 @@ fun FriendProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "Live life with positivity, faith & love ❤️ | FaceFeed Family Member | Barisal, Bangladesh",
-                        fontSize = 14.sp,
-                        lineHeight = 19.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    if (user.bio.isNotBlank()) {
+                        Text(
+                            text = user.bio,
+                            fontSize = 14.sp,
+                            lineHeight = 19.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
                 // Primary Action Buttons: Blocked State vs Normal State
@@ -455,7 +431,7 @@ fun FriendProfileScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isFriend) "Friends ✓" else "Add Friend",
+                                text = if (isFriend) "Friend ✓" else "Add Friend",
                                 color = if (isFriend) MaterialTheme.colorScheme.onSurface else Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
@@ -487,48 +463,51 @@ fun FriendProfileScreen(
                     modifier = Modifier.padding(vertical = 12.dp)
                 )
 
-                // Personal Details (9 features matching user requirements)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "Details",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                // Personal Details (real user details only)
+                val hasPersonalDetails = user.workplace.isNotBlank() ||
+                    user.school.isNotBlank() ||
+                    user.college.isNotBlank() ||
+                    user.livesIn.isNotBlank() ||
+                    user.fromCity.isNotBlank() ||
+                    user.relationshipStatus.isNotBlank() ||
+                    user.joinedDate.isNotBlank()
 
-                    ProfileDetailItem(
-                        icon = Icons.Default.Work,
-                        label = "Works at Digital Content & Media Creator"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.School,
-                        label = "Studied at লাউপাডা সাগর সৈকত মাধ্যমিক বিদ্যালয়"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.AccountBalance,
-                        label = "Went to Taltali Degree College .তালতলী ডিগ্রী কলেজ"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.LocationOn,
-                        label = "Lives in Taltali, Barguna"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.Home,
-                        label = "From Barisal, Bangladesh"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.Favorite,
-                        label = "Married"
-                    )
-                    ProfileDetailItem(
-                        icon = Icons.Default.CalendarToday,
-                        label = "Joined May 2020"
-                    )
+                if (hasPersonalDetails) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Details",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        if (user.workplace.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.Work, label = "Works at ${user.workplace}")
+                        }
+                        if (user.school.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.School, label = "Studied at ${user.school}")
+                        }
+                        if (user.college.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.AccountBalance, label = "Went to ${user.college}")
+                        }
+                        if (user.livesIn.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.LocationOn, label = "Lives in ${user.livesIn}")
+                        }
+                        if (user.fromCity.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.Home, label = "From ${user.fromCity}")
+                        }
+                        if (user.relationshipStatus.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.Favorite, label = user.relationshipStatus)
+                        }
+                        if (user.joinedDate.isNotBlank()) {
+                            ProfileDetailItem(icon = Icons.Default.CalendarToday, label = user.joinedDate)
+                        }
+                    }
                 }
 
                 HorizontalDivider(
@@ -548,8 +527,8 @@ fun FriendProfileScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("Friends", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                            Text("6,420 friends • 12 mutual friends", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Friend", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                            Text("${user.friendCount} friend", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         TextButton(onClick = { showAllFriendsDialog = true }) {
                             Text("See all", color = FacebookBlue, fontWeight = FontWeight.Bold)
@@ -558,29 +537,38 @@ fun FriendProfileScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(SampleData.profileFriends.take(6)) { friend ->
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .width(80.dp)
-                                    .clickable { showAllFriendsDialog = true }
-                            ) {
-                                AsyncImage(
-                                    model = friend.avatarUrl,
-                                    contentDescription = friend.name,
+                    val friendPreviewList = SampleData.profileFriends.take(6)
+                    if (friendPreviewList.isEmpty()) {
+                        Text(
+                            text = "এখনো কোনো বন্ধু তালিকা নেই",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            items(friendPreviewList) { friend ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier
-                                        .size(60.dp)
-                                        .clip(RoundedCornerShape(10.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = friend.name,
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                        .width(80.dp)
+                                        .clickable { showAllFriendsDialog = true }
+                                ) {
+                                    FotoFilmAvatar(
+                                        imageUrl = friend.avatarUrl,
+                                        name = friend.name,
+                                        contentDescription = friend.name,
+                                        modifier = Modifier
+                                            .size(60.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = friend.name,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
@@ -621,7 +609,7 @@ fun FriendProfileScreen(
                         "All" to "📝 সকল পোস্ট",
                         "Photos" to "📸 ছবি",
                         "Videos" to "🎥 ভিডিও",
-                        "Reels" to "🎬 রিল ভিডিও",
+                        "Short Video" to "🎬 শর্ট ভিডিও",
                         "Stories" to "⏱️ স্টোরি",
                         "Live" to "🔴 লাইভ ভিডিও"
                     )
@@ -702,13 +690,13 @@ fun FriendProfileScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            AsyncImage(
-                                                model = postItem.author.avatarUrl,
+                                            FotoFilmAvatar(
+                                                imageUrl = postItem.author.avatarUrl,
+                                                name = postItem.author.fullName,
                                                 contentDescription = postItem.author.fullName,
                                                 modifier = Modifier
                                                     .size(40.dp)
-                                                    .clip(CircleShape),
-                                                contentScale = ContentScale.Crop
+                                                    .clip(CircleShape)
                                             )
                                             Spacer(modifier = Modifier.width(10.dp))
                                             Column(modifier = Modifier.weight(1f)) {
@@ -735,7 +723,12 @@ fun FriendProfileScreen(
                                                     .clip(RoundedCornerShape(8.dp))
                                                     .clickable {
                                                         if (postItem.isVideo || postItem.isReel) {
-                                                            activeVideoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                                                            val resolvedUrl = resolvePlayableVideoSource(postItem).videoUrl
+                                                            if (resolvedUrl.isNotBlank()) {
+                                                                activeVideoUrl = resolvedUrl
+                                                            } else {
+                                                                toastMessage = "ভিডিও সোর্স পাওয়া যায়নি"
+                                                            }
                                                         }
                                                     }
                                             ) {
@@ -903,6 +896,34 @@ fun FriendProfileScreen(
                     authorName = user.fullName,
                     viewModel = viewModel,
                     onDismiss = { activeVideoUrl = null }
+                )
+            }
+
+            // Full Screen Viewer: Friend's Profile Picture
+            if (viewingProfilePhoto) {
+                FullScreenPhotoViewerDialog(
+                    title = "প্রোফাইল ছবি",
+                    imageUrl = friendAvatarUrl,
+                    authorName = user.fullName,
+                    authorAvatar = friendAvatarUrl,
+                    frameId = user.avatarFrame,
+                    isCover = false,
+                    isOwnProfile = false,
+                    onDismiss = { viewingProfilePhoto = false }
+                )
+            }
+
+            // Full Screen Viewer: Friend's Cover Photo
+            if (viewingCoverPhoto) {
+                FullScreenPhotoViewerDialog(
+                    title = "কভার ফটো",
+                    imageUrl = friendCoverUrl,
+                    authorName = user.fullName,
+                    authorAvatar = friendAvatarUrl,
+                    frameId = null,
+                    isCover = true,
+                    isOwnProfile = false,
+                    onDismiss = { viewingCoverPhoto = false }
                 )
             }
         }

@@ -52,11 +52,11 @@ fun FaceAdAdminDialog(
     var showFullMusicDialog by remember { mutableStateOf(false) }
     var showUploadAudioDialog by remember { mutableStateOf(false) }
 
-    // AdMob state toggles
-    var isAdMobEnabled by remember { mutableStateOf(true) }
-    var isBannerAdsEnabled by remember { mutableStateOf(true) }
-    var isInterstitialAdsEnabled by remember { mutableStateOf(true) }
-    var isRewardedAdsEnabled by remember { mutableStateOf(true) }
+    // AdMob state toggles (Persisted via NiyonOwnerControlStore)
+    val isAdMobEnabled by viewModel.isAdMobMasterEnabled.collectAsState()
+    val isBannerAdsEnabled by viewModel.isAdMobBannerEnabled.collectAsState()
+    val isInterstitialAdsEnabled by viewModel.isAdMobInterstitialEnabled.collectAsState()
+    val isRewardedAdsEnabled by viewModel.isAdMobRewardedEnabled.collectAsState()
 
     // Ads Manager mock campaigns state
     var showCreateCampaignDialog by remember { mutableStateOf(false) }
@@ -189,13 +189,53 @@ fun FaceAdAdminDialog(
                         )
                         1 -> AdMobSection(
                             isAdMobEnabled = isAdMobEnabled,
-                            onToggleAdMob = { isAdMobEnabled = it },
+                            onToggleAdMob = { enabled ->
+                                if (viewModel.toggleAdMobMaster(enabled)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "✅ Google AdMob চালু করা হয়েছে" else "🔒 Google AdMob বন্ধ করা হয়েছে — আপনি (Niyon Islam Sohag) চালু না করা পর্যন্ত চালু হবে না",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(context, "🔒 শুধুমাত্র Niyon Islam Sohag এটি চালু করতে পারবেন", Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             isBannerEnabled = isBannerAdsEnabled,
-                            onToggleBanner = { isBannerAdsEnabled = it },
+                            onToggleBanner = { enabled ->
+                                if (viewModel.toggleAdMobBanner(enabled)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "✅ ব্যানার অ্যাড চালু হয়েছে" else "🔒 ব্যানার অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত বন্ধ থাকবে",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(context, "🔒 শুধুমাত্র Niyon Islam Sohag এটি চালু করতে পারবেন", Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             isInterstitialEnabled = isInterstitialAdsEnabled,
-                            onToggleInterstitial = { isInterstitialAdsEnabled = it },
+                            onToggleInterstitial = { enabled ->
+                                if (viewModel.toggleAdMobInterstitial(enabled)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "✅ ইন্টারস্টিশিয়াল অ্যাড চালু হয়েছে" else "🔒 ইন্টারস্টিশিয়াল অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত বন্ধ থাকবে",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(context, "🔒 শুধুমাত্র Niyon Islam Sohag এটি চালু করতে পারবেন", Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             isRewardedEnabled = isRewardedAdsEnabled,
-                            onToggleRewarded = { isRewardedAdsEnabled = it }
+                            onToggleRewarded = { enabled ->
+                                if (viewModel.toggleAdMobRewarded(enabled)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (enabled) "✅ রিওয়ার্ডেড অ্যাড চালু হয়েছে" else "🔒 রিওয়ার্ডেড অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত বন্ধ থাকবে",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    Toast.makeText(context, "🔒 শুধুমাত্র Niyon Islam Sohag এটি চালু করতে পারবেন", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         )
                         2 -> AudioMusicSection(
                             viewModel = viewModel,
@@ -314,11 +354,11 @@ fun AdsManagerSection(
 
         item {
             CampaignItemCard(
-                title = "FaceFeed ঈদ ধামাকা ও ফলোয়ার গ্রোথ অ্যাড",
+                title = "FotoFilm ঈদ ধামাকা ও ফলোয়ার গ্রোথ অ্যাড",
                 budget = "৳৩,০০০ / দিন",
                 reach = "৮৫K ভিউ",
                 status = "Active",
-                platform = "Feed & Reels"
+                platform = "Feed & Short Video"
             )
         }
 
@@ -338,7 +378,7 @@ fun AdsManagerSection(
                 budget = "৳২,০০০ / দিন",
                 reach = "১২০K ভিউ",
                 status = "Active",
-                platform = "Audio & Reels"
+                platform = "Audio & Short Video"
             )
         }
     }
@@ -626,7 +666,7 @@ fun AudioMusicSection(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "ফেসবুক অডিও মিউজিক হাব",
+                            text = "FotoFilm অডিও মিউজিক হাব",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color.White
@@ -634,7 +674,7 @@ fun AudioMusicSection(
                     }
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "গানের তালিকা Firebase Firestore থেকে আসছে। সার্চ করুন, শুনুন এবং পোস্ট, স্টোরি ও রিলসে মিউজিক যুক্ত করুন!",
+                        text = "গানের তালিকা Firebase Firestore থেকে আসছে। সার্চ করুন, শুনুন এবং পোস্ট, স্টোরি ও শর্ট ভিডিওতে মিউজিক যুক্ত করুন!",
                         fontSize = 12.sp,
                         color = Color(0xFFB0B3B8)
                     )
@@ -698,14 +738,31 @@ fun AudioMusicSection(
                         .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AsyncImage(
-                        model = track.thumbnailUrl.ifEmpty { "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300" },
-                        contentDescription = null,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (track.thumbnailUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = track.thumbnailUrl,
+                            contentDescription = track.title,
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(FacebookBlue.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = track.title,
+                                tint = FacebookBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

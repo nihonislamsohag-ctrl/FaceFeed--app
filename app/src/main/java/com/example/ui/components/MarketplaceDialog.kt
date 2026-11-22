@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,7 +58,7 @@ data class MarketProduct(
     val imageUrl: String,
     val category: String,
     val sellerName: String,
-    val sellerAvatarUrl: String = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
+    val sellerAvatarUrl: String = "",
     val sellerId: String = "seller_default",
     val isVerified: Boolean = true
 )
@@ -98,109 +99,8 @@ fun MarketplaceDialog(
         }
     }
 
-    // Default and user-added products
-    var productList by remember {
-        mutableStateOf(
-            listOf(
-                MarketProduct(
-                    id = "prod_watch_gold",
-                    title = "Luxury Quartz Gold Watch (রোলেক্স স্টাইল প্রিমিয়াম হাতঘড়ি)",
-                    priceBdt = "৳ ৩,৫০০",
-                    location = "উত্তরা, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=500",
-                    category = "fashion",
-                    sellerName = "Niyon Islam Sohag",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                    sellerId = "user_niyon",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_watch_casio",
-                    title = "Casio Vintage Digital Watch (ওয়াটারপ্রুফ ব্ল্যাক ঘড়ি)",
-                    priceBdt = "৳ ১,৮৫০",
-                    location = "ফার্মগেট, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=500",
-                    category = "fashion",
-                    sellerName = "রহিম হোসেন (Rahim)",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                    sellerId = "user_rahim",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_1",
-                    title = "Samsung Galaxy S24 Ultra (512GB / Official)",
-                    priceBdt = "৳ ১,৩৫,০০০",
-                    location = "গুলশান, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=500",
-                    category = "mobile",
-                    sellerName = "Niyon Islam Sohag",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                    sellerId = "user_niyon",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_2",
-                    title = "প্রিমিয়াম কোয়ালিটি রেশমি কটন পাঞ্জাবি সেট",
-                    priceBdt = "৳ ২,৪৫০",
-                    location = "ধানমন্ডি, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=500",
-                    category = "fashion",
-                    sellerName = "করিম ফ্যাশন হাউজ",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
-                    sellerId = "user_karim",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_3",
-                    title = "Yamaha R15 V4 Racing Blue (ঢাকা মেট্রো ল)",
-                    priceBdt = "৳ ৫,২০,০০০",
-                    location = "মিরপুর ১০, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=500",
-                    category = "vehicles",
-                    sellerName = "তানভীর বাইক গ্যালারি",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500",
-                    sellerId = "user_tanvir",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_4",
-                    title = "Sony Alpha A7 IV Mirrorless Camera + Lens",
-                    priceBdt = "৳ ২,২০,০০০",
-                    location = "আগ্রাবাদ, চট্টগ্রাম",
-                    imageUrl = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=500",
-                    category = "electronics",
-                    sellerName = "ক্যামেরা জোন বিডি",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=500",
-                    sellerId = "user_cam",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_5",
-                    title = "ঐতিহ্যবাহী ঢাকাই মসলিন জামদানি শাড়ি",
-                    priceBdt = "৳ ৮,৫০০",
-                    location = "নারায়ণগঞ্জ, ঢাকা",
-                    imageUrl = "https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500",
-                    category = "fashion",
-                    sellerName = "সোনার বাংলা টেক্সটাইল",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-                    sellerId = "user_textile",
-                    isVerified = true
-                ),
-                MarketProduct(
-                    id = "prod_6",
-                    title = "Apple MacBook Air M3 (16GB RAM / 512GB SSD)",
-                    priceBdt = "৳ ১,৪৮,০০০",
-                    location = "জিন্দাবাজার, সিলেট",
-                    imageUrl = "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500",
-                    category = "electronics",
-                    sellerName = "গ্যাজেট অ্যান্ড গিয়ার",
-                    sellerAvatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500",
-                    sellerId = "user_gadget",
-                    isVerified = true
-                )
-            )
-        )
-    }
+    // User-added products (no demo/mock listings)
+    var productList by remember { mutableStateOf(emptyList<MarketProduct>()) }
 
     val filteredProducts = remember(productList, selectedCategory, searchQuery) {
         productList.filter { prod ->
@@ -318,39 +218,70 @@ fun MarketplaceDialog(
                     )
                 }
 
-                // Product Grid (2 columns)
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(filteredProducts, key = { it.id }) { product ->
-                        Card(
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                // Requirement 3: Seller Profile Icon & Name above product
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AsyncImage(
-                                        model = product.sellerAvatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                                        contentDescription = product.sellerName,
+                if (filteredProducts.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Storefront,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "মার্কেটপ্লেসে এখনো কোনো পণ্য নেই",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "উপরের (+) বাটনে চাপ দিয়ে ফোনের গ্যালারি থেকে পণ্যের ছবি আপলোড করুন।",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    // Product Grid (2 columns)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredProducts, key = { it.id }) { product ->
+                            Card(
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    // Requirement 3: Seller Profile Icon & Name above product
+                                    Row(
                                         modifier = Modifier
-                                            .size(28.dp)
-                                            .clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        FotoFilmAvatar(
+                                            imageUrl = product.sellerAvatarUrl,
+                                            name = product.sellerName,
+                                            contentDescription = product.sellerName,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(CircleShape)
+                                        )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -445,6 +376,7 @@ fun MarketplaceDialog(
                                         Text("মেসেজ দিন", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
+                                }
                             }
                         }
                     }
@@ -457,18 +389,7 @@ fun MarketplaceDialog(
     // 1. Phone Gallery Picker Modal Sheet (Opened on '+' button press)
     // =========================================================================
     if (showGalleryPickerSheet) {
-        val galleryPhotos = remember {
-            listOf(
-                "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=600", // Gold Watch
-                "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600", // Black Watch
-                "https://images.unsplash.com/photo-1510557880182-3d4d3cba35a5?w=600", // iPhone
-                "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=600", // Samsung
-                "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600", // Punjabi
-                "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=600", // Camera
-                "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=600", // Bike
-                "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600"  // Sneakers
-            )
-        }
+        val galleryPhotos = remember { emptyList<String>() }
 
         Dialog(
             onDismissRequest = { showGalleryPickerSheet = false },
@@ -522,29 +443,30 @@ fun MarketplaceDialog(
 
                         Spacer(modifier = Modifier.height(14.dp))
 
-                        // Device Gallery Grid
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(4),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(galleryPhotos) { photoUrl ->
-                                AsyncImage(
-                                    model = photoUrl,
-                                    contentDescription = "Gallery item",
-                                    modifier = Modifier
-                                        .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            selectedNewProductImage = photoUrl
-                                            showGalleryPickerSheet = false
-                                            showCreateProductDialog = true
-                                        },
-                                    contentScale = ContentScale.Crop
-                                )
+                        if (galleryPhotos.isNotEmpty()) {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(4),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                items(galleryPhotos) { photoUrl ->
+                                    AsyncImage(
+                                        model = photoUrl,
+                                        contentDescription = "Gallery item",
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                selectedNewProductImage = photoUrl
+                                                showGalleryPickerSheet = false
+                                                showCreateProductDialog = true
+                                            },
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                         }
 
@@ -632,13 +554,13 @@ fun MarketplaceDialog(
 
                     // Seller display
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(
-                            model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                        FotoFilmAvatar(
+                            imageUrl = currentUser.avatarUrl,
+                            name = currentUser.fullName,
                             contentDescription = "Seller",
                             modifier = Modifier
                                 .size(34.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
@@ -690,21 +612,42 @@ fun MarketplaceDialog(
 
                     Button(
                         onClick = {
+                            val prodId = "prod_user_${System.currentTimeMillis()}"
+                            val rawImg = selectedNewProductImage!!
                             val newProduct = MarketProduct(
-                                id = "prod_user_${System.currentTimeMillis()}",
+                                id = prodId,
                                 title = productTitleInput.ifBlank { "স্মার্টওয়াচ / রোলেক্স গোল্ডেন হাতঘড়ি" },
                                 priceBdt = "৳ " + productPriceInput.replace("৳", "").trim(),
                                 location = productLocationInput.ifBlank { "ঢাকা, বাংলাদেশ" },
-                                imageUrl = selectedNewProductImage!!,
+                                imageUrl = rawImg,
                                 category = productCategoryInput,
                                 sellerName = currentUser.fullName,
-                                sellerAvatarUrl = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                                sellerAvatarUrl = currentUser.avatarUrl,
                                 sellerId = currentUser.id,
                                 isVerified = true
                             )
                             productList = listOf(newProduct) + productList
                             showCreateProductDialog = false
-                            Toast.makeText(context, "আপনার পণ্যটি মার্কেটপ্লেসে সফলভাবে পোস্ট হয়েছে! 🎉", Toast.LENGTH_LONG).show()
+                            if ((rawImg.startsWith("content://") || rawImg.startsWith("file://")) &&
+                                com.example.data.CloudinaryManager.isEnabled() &&
+                                com.example.data.CloudinaryManager.isConfigured()
+                            ) {
+                                com.example.data.CloudinaryManager.uploadMedia(
+                                    uri = Uri.parse(rawImg),
+                                    isVideoOrAudio = false,
+                                    folder = "fotofilm/marketplace",
+                                    contextOverride = context,
+                                    onSuccess = { cloudUrl ->
+                                        productList = productList.map { p ->
+                                            if (p.id == prodId) p.copy(imageUrl = cloudUrl) else p
+                                        }
+                                        Toast.makeText(context, "পণ্য ও ছবি Cloudinary ক্লাউডে সেভ হয়েছে ✓", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onFailure = { }
+                                )
+                            } else {
+                                Toast.makeText(context, "আপনার পণ্যটি মার্কেটপ্লেসে সফলভাবে পোস্ট হয়েছে! 🎉", Toast.LENGTH_LONG).show()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
                         shape = RoundedCornerShape(10.dp),
@@ -842,21 +785,12 @@ fun MarketplaceDialog(
                     // Send Button
                     Button(
                         onClick = {
-                            val targetUser = if (isUserSeller) {
-                                User(
-                                    id = "user_rahim",
-                                    username = "rahim_bd",
-                                    fullName = "রহিম হোসেন (Rahim)",
-                                    avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500"
-                                )
-                            } else {
-                                User(
-                                    id = product.sellerId.ifBlank { "seller_${product.id}" },
-                                    username = "seller",
-                                    fullName = product.sellerName,
-                                    avatarUrl = product.sellerAvatarUrl
-                                )
-                            }
+                            val targetUser = User(
+                                id = product.sellerId.ifBlank { "seller_${product.id}" },
+                                username = "seller",
+                                fullName = product.sellerName,
+                                avatarUrl = product.sellerAvatarUrl
+                            )
 
                             viewModel.sendMarketplaceInquiry(
                                 productTitle = product.title,

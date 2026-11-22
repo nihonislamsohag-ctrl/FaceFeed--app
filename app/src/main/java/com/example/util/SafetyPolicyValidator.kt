@@ -47,7 +47,7 @@ object SafetyPolicyValidator {
                 return ValidationResult(
                     isAllowed = false,
                     violationType = ViolationType.DRUGS,
-                    reasonMessage = "⛔ FaceFeed ও Right Manager Fida নিরাপত্তা নীতি অনুযায়ী নেশা ও মাদকজাতীয় কোনো কনটেন্ট পোস্ট, বুস্ট বা শেয়ার করা সম্পূর্ণ নিষিদ্ধ!"
+                    reasonMessage = "⛔ FotoFilm ও Right Manager Fida নিরাপত্তা নীতি অনুযায়ী নেশা ও মাদকজাতীয় কোনো কনটেন্ট পোস্ট, বুস্ট বা শেয়ার করা সম্পূর্ণ নিষিদ্ধ!"
                 )
             }
         }
@@ -58,7 +58,7 @@ object SafetyPolicyValidator {
                 return ValidationResult(
                     isAllowed = false,
                     violationType = ViolationType.GAMBLING,
-                    reasonMessage = "⛔ FaceFeed ও Right Manager Fida নিরাপত্তা নীতি অনুযায়ী জুয়ার গেমস, বাজি ধরা বা জুয়ার কোনো লিংক পোস্ট, বুস্ট বা শেয়ার করা সম্পূর্ণ নিষিদ্ধ ও দণ্ডনীয়!"
+                    reasonMessage = "⛔ FotoFilm ও Right Manager Fida নিরাপত্তা নীতি অনুযায়ী জুয়ার গেমস, বাজি ধরা বা জুয়ার কোনো লিংক পোস্ট, বুস্ট বা শেয়ার করা সম্পূর্ণ নিষিদ্ধ ও দণ্ডনীয়!"
                 )
             }
         }

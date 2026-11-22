@@ -193,7 +193,7 @@ fun SavedVideosDialog(
     // Video Player Dialog if user clicked Play
     selectedPlayingPost?.let { post ->
         VideoPlayerDialog(
-            videoUrl = post.images.firstOrNull() ?: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=1200",
+            videoUrl = post.images.firstOrNull().orEmpty(),
             title = post.videoTitle ?: post.title ?: post.text.take(30),
             authorName = post.author.fullName,
             post = post,
@@ -285,7 +285,7 @@ private fun SavedPostCard(
                         color = if (post.isReel) Color(0xFFFF4081) else BangladeshGreen
                     ) {
                         Text(
-                            text = if (post.isReel) "🎬 রিলস ভিডিও" else "▶ সংরক্ষিত ভিডিও",
+                            text = if (post.isReel) "🎬 শর্ট ভিডিও" else "▶ সংরক্ষিত ভিডিও",
                             color = Color.White,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -299,13 +299,11 @@ private fun SavedPostCard(
             Column(modifier = Modifier.padding(14.dp)) {
                 // Author row
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = post.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                        contentDescription = post.author.fullName,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = post.author.avatarUrl,
+                        name = post.author.fullName,
+                        modifier = Modifier.size(36.dp),
+                        iconSize = 18.dp
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {

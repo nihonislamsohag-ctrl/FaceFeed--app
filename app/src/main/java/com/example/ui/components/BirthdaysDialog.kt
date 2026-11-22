@@ -53,55 +53,9 @@ fun BirthdaysDialog(
     val context = LocalContext.current
     var wishedIds by remember { mutableStateOf(setOf<String>()) }
 
-    val todayBirthdays = remember {
-        listOf(
-            BirthdayPerson(
-                id = "bday_1",
-                name = "আরিফুল ইসলাম (Arif)",
-                avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500",
-                isToday = true,
-                birthdayLabel = "আজকের জন্মদিন 🎉",
-                ageText = "আজ ২৫তম জন্মদিন পূর্ণ হলো"
-            ),
-            BirthdayPerson(
-                id = "bday_2",
-                name = "সাদিয়া আফরিন (Sadia)",
-                avatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-                isToday = true,
-                birthdayLabel = "আজকের জন্মদিন 🎂",
-                ageText = "আজ জন্মদিন উদযাপন করছেন"
-            )
-        )
-    }
+    val todayBirthdays = remember { emptyList<BirthdayPerson>() }
 
-    val upcomingBirthdays = remember {
-        listOf(
-            BirthdayPerson(
-                id = "bday_3",
-                name = "তানভীর হাসান (Tanvir)",
-                avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                isToday = false,
-                birthdayLabel = "আগামীকাল (৮ নভেম্বর)",
-                ageText = "১ দিন পর জন্মদিন"
-            ),
-            BirthdayPerson(
-                id = "bday_4",
-                name = "রফিকুল ইসলাম (Rafiq)",
-                avatarUrl = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500",
-                isToday = false,
-                birthdayLabel = "১০ নভেম্বর",
-                ageText = "৩ দিন পর জন্মদিন"
-            ),
-            BirthdayPerson(
-                id = "bday_5",
-                name = "নুসরাত জাহান (Nusrat)",
-                avatarUrl = "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=500",
-                isToday = false,
-                birthdayLabel = "১৫ নভেম্বর",
-                ageText = "৮ দিন পর জন্মদিন"
-            )
-        )
-    }
+    val upcomingBirthdays = remember { emptyList<BirthdayPerson>() }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -222,13 +176,13 @@ fun BirthdaysDialog(
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(contentAlignment = Alignment.BottomEnd) {
-                                        AsyncImage(
-                                            model = person.avatarUrl,
+                                        FotoFilmAvatar(
+                                            imageUrl = person.avatarUrl,
+                                            name = person.name,
                                             contentDescription = person.name,
                                             modifier = Modifier
                                                 .size(52.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                                .clip(CircleShape)
                                         )
                                         Surface(
                                             shape = CircleShape,
@@ -352,13 +306,13 @@ fun BirthdaysDialog(
                                 modifier = Modifier.padding(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AsyncImage(
-                                    model = person.avatarUrl,
+                                FotoFilmAvatar(
+                                    imageUrl = person.avatarUrl,
+                                    name = person.name,
                                     contentDescription = person.name,
                                     modifier = Modifier
                                         .size(46.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                        .clip(CircleShape)
                                 )
 
                                 Spacer(modifier = Modifier.width(12.dp))

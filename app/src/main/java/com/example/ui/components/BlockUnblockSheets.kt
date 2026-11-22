@@ -52,14 +52,13 @@ fun BlockConfirmationBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Circular Avatar with green border
-            AsyncImage(
-                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                contentDescription = user.fullName,
+            FotoFilmAvatar(
+                imageUrl = user.avatarUrl,
+                name = user.fullName,
                 modifier = Modifier
                     .size(62.dp)
-                    .clip(CircleShape)
                     .border(2.dp, Color(0xFF2E7D32), CircleShape),
-                contentScale = ContentScale.Crop
+                iconSize = 28.dp
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -289,14 +288,13 @@ fun UnblockConfirmationBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Circular Avatar with green border
-            AsyncImage(
-                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                contentDescription = user.fullName,
+            FotoFilmAvatar(
+                imageUrl = user.avatarUrl,
+                name = user.fullName,
                 modifier = Modifier
                     .size(62.dp)
-                    .clip(CircleShape)
                     .border(2.dp, Color(0xFF2E7D32), CircleShape),
-                contentScale = ContentScale.Crop
+                iconSize = 28.dp
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -312,7 +310,7 @@ fun UnblockConfirmationBottomSheet(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "Unblocking ${user.fullName} won't add them as a Facebook friend. You won't be able to block them again for 48 hours.",
+                text = "Unblocking ${user.fullName} won't add them as a FotoFilm friend. You won't be able to block them again for 48 hours.",
                 fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

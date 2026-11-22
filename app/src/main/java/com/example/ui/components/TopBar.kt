@@ -15,9 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.animation.core.*
@@ -29,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.AppLanguage
@@ -44,7 +48,9 @@ import com.example.viewmodel.SimOperator
 @Composable
 fun FaceFeedTopBar(
     viewModel: FaceFeedViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    topSectionCollapseFraction: Float = 0f,
+    onHomeReselect: () -> Unit = {}
 ) {
     val currentLang by viewModel.currentLanguage.collectAsState()
     val activeTab by viewModel.activeTab.collectAsState()
@@ -87,18 +93,40 @@ fun FaceFeedTopBar(
         if (notificationsBadgeCount <= 0) null else if (notificationsBadgeCount >= 15) "15+" else if (notificationsBadgeCount > 9) "9+" else notificationsBadgeCount.toString()
     }
 
+    val clampedCollapse = topSectionCollapseFraction.coerceIn(0f, 1f)
+
     Surface(
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 2.dp,
         modifier = modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // Free Data / Basic Mode Bar for BD Operators (GP, Robi, Airtel, Banglalink, Teletalk, Skitto)
-            if (isFreeMode) {
-                Surface(
-                    color = Color(currentSimOperator.colorHex),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+        ) {
+            // Collapsible Facebook-style top branding row & free-data bar (slides upward on downward feed scroll)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        val visibleHeight = (placeable.height * (1f - clampedCollapse)).roundToInt().coerceAtLeast(0)
+                        layout(placeable.width, visibleHeight) {
+                            placeable.placeRelative(0, -(placeable.height - visibleHeight))
+                        }
+                    }
+                    .graphicsLayer {
+                        alpha = (1f - clampedCollapse * 1.15f).coerceIn(0f, 1f)
+                    }
+            ) {
+                // Free Data / Basic Mode Bar for BD Operators (GP, Robi, Airtel, Banglalink, Teletalk, Skitto)
+                if (isFreeMode) {
+                    Surface(
+                        color = Color(currentSimOperator.colorHex),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -128,7 +156,7 @@ fun FaceFeedTopBar(
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "ছবি, চ্যাট ও পোস্ট ফ্রি ⚡",
+                                text = "ছবি, পোস্ট, কমেন্ট ও ChatFilm ফ্রি ⚡",
                                 color = Color.White.copy(alpha = 0.95f),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -163,7 +191,9 @@ fun FaceFeedTopBar(
                 // Logo & Brand
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { viewModel.setTab(AppTab.HOME) }
+                    modifier = Modifier.clickable {
+                        if (activeTab == AppTab.HOME) onHomeReselect() else viewModel.setTab(AppTab.HOME)
+                    }
                 ) {
                     // FotoFilm Emblem (Squircle matching user's Bangladesh Flag logo)
                     Image(
@@ -336,7 +366,7 @@ fun FaceFeedTopBar(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "FaceFeed Menu",
+                            contentDescription = "FotoFilm Menu",
                             modifier = Modifier.size(19.dp)
                         )
                     }
@@ -392,7 +422,9 @@ fun FaceFeedTopBar(
                 )
             }
 
-            // Row 2: Iconic 6 Top Navigation Tabs with Notification Badges & Green Underline (matching screenshot)
+            } // End collapsible top branding section
+
+            // Row 2: Iconic 6 Top Navigation Tabs with Notification Badges & Green Underline (stays pinned cleanly below status bar)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -404,7 +436,9 @@ fun FaceFeedTopBar(
                     icon = Icons.Filled.Home,
                     isSelected = activeTab == AppTab.HOME,
                     badgeText = homeBadgeText,
-                    onClick = { viewModel.setTab(AppTab.HOME) },
+                    onClick = {
+                        if (activeTab == AppTab.HOME) onHomeReselect() else viewModel.setTab(AppTab.HOME)
+                    },
                     modifier = Modifier.weight(1f)
                 )
 
@@ -461,13 +495,11 @@ fun FaceFeedTopBar(
                             contentAlignment = Alignment.BottomEnd,
                             modifier = Modifier.padding(bottom = 6.dp)
                         ) {
-                            AsyncImage(
-                                model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                                contentDescription = "Profile",
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                            FotoFilmAvatar(
+                                imageUrl = currentUser.avatarUrl,
+                                name = currentUser.fullName,
+                                modifier = Modifier.size(28.dp),
+                                iconSize = 16.dp
                             )
                             // Mini 3-line hamburger icon overlay
                             Box(
@@ -704,13 +736,11 @@ fun FaceFeedTopBar(
                                     modifier = Modifier.padding(6.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    AsyncImage(
-                                        model = notif.actor.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape),
-                                        contentScale = ContentScale.Crop
+                                    FotoFilmAvatar(
+                                        imageUrl = notif.actor.avatarUrl,
+                                        name = notif.actor.fullName,
+                                        modifier = Modifier.size(36.dp),
+                                        iconSize = 18.dp
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {

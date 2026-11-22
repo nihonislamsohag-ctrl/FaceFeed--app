@@ -329,7 +329,14 @@ fun GroupPolicyDialog(
     // Sub-dialog 5: Help & Support Team Sheet
     if (showHelpSupportDialog) {
         HelpSupportDialog(
-            onDismiss = { showHelpSupportDialog = false }
+            onDismiss = { showHelpSupportDialog = false },
+            onSubmitSupportMessage = { messageText ->
+                viewModel.submitSupportTicket(
+                    message = "[বন্ধুদের সাথে আড্ডা গ্রুপ - হেল্পলাইন সাপোর্ট]\n$messageText",
+                    profileUrl = "https://fotofilm.app/u/${currentUser.username}",
+                    screenshotUrls = emptyList()
+                )
+            }
         )
     }
 
@@ -596,24 +603,11 @@ fun CreateGroupImage2Dialog(
                         onClick = {
                             val finalName = if (groupName.isBlank()) "নতুন আড্ডা গ্রুপ" else groupName.trim()
                             val finalDesc = if (groupDescription.isBlank()) "FotoFilm বন্ধুদের আড্ডা ও লাইভ চ্যাট গ্রুপ" else groupDescription.trim()
-                            val finalCover = selectedImageUri?.toString()
-                                ?: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80"
+                            val finalCover = selectedImageUri?.toString() ?: ""
 
-                            // Create Group with 3 Admins & 2 Moderators preset
-                            val adminList = listOf(
-                                User(
-                                    id = "user_niyon",
-                                    fullName = "Niyon Islam Sohag",
-                                    username = "niyon_sohag",
-                                    avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"
-                                ),
-                                SampleData.friendMdMohiuddin,
-                                SampleData.friendRahim
-                            )
-                            val modList = listOf(
-                                SampleData.friendHasanMiaHowlader,
-                                SampleData.friendTanvir
-                            )
+                            val currentUser = viewModel.currentUser.value
+                            val adminList = listOf(currentUser)
+                            val modList = emptyList<User>()
 
                             viewModel.createGroup(
                                 name = finalName,
@@ -632,9 +626,9 @@ fun CreateGroupImage2Dialog(
                                     "description" to finalDesc,
                                     "coverUrl" to finalCover,
                                     "isPrivate" to isPrivateGroup,
-                                    "creator" to "Niyon Islam Sohag",
-                                    "admins" to listOf("Niyon Islam Sohag", "MD Mohiuddin", "Abdur Rahim"),
-                                    "moderators" to listOf("Hasan Miya", "Tanvir Ahmed"),
+                                    "creator" to currentUser.fullName,
+                                    "admins" to listOf(currentUser.fullName),
+                                    "moderators" to emptyList<String>(),
                                     "timestamp" to System.currentTimeMillis()
                                 )
                             )
@@ -715,31 +709,9 @@ fun ThreeAdminsDialog(
                     rank = 1,
                     name = "Niyon Islam Sohag",
                     role = "প্রতিষ্ঠাতা ও প্রধান এডমিন (Owner)",
-                    badge = "🌟 চিরস্থায়ী এডমিন",
-                    avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
+                    badge = "🌟 প্রধান এডমিন",
+                    avatarUrl = "",
                     isOwner = true
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Admin 2: MD Mohiuddin
-                AdminMemberCard(
-                    rank = 2,
-                    name = "MD Mohiuddin",
-                    role = "সহ-এডমিন (Co-Admin)",
-                    badge = "👑 এডমিন প্যানেল",
-                    avatarUrl = SampleData.friendMdMohiuddin.avatarUrl
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Admin 3: Abdur Rahim
-                AdminMemberCard(
-                    rank = 3,
-                    name = "Abdur Rahim",
-                    role = "সহ-এডমিন (Co-Admin)",
-                    badge = "👑 এডমিন প্যানেল",
-                    avatarUrl = SampleData.friendRahim.avatarUrl
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -825,25 +797,19 @@ fun TwoModeratorsDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Moderator 1: Hasan Miya
-                AdminMemberCard(
-                    rank = 1,
-                    name = "Hasan Miya",
-                    role = "মডারেটর (Moderator)",
-                    badge = "🛡️ নিরাপত্তা ও শৃঙ্খলা",
-                    avatarUrl = SampleData.friendHasanMiaHowlader.avatarUrl
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Moderator 2: Tanvir Ahmed
-                AdminMemberCard(
-                    rank = 2,
-                    name = "Tanvir Ahmed",
-                    role = "মডারেটর (Moderator)",
-                    badge = "🛡️ কনটেন্ট ফিল্টার",
-                    avatarUrl = SampleData.friendTanvir.avatarUrl
-                )
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.06f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "এখনো কোনো মডারেটর যুক্ত করা হয়নি। গ্রুপের এডমিন নতুন সদস্যদের মধ্য থেকে মডারেটর নির্বাচন করতে পারবেন।",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -951,9 +917,13 @@ fun AdminRulesDialog(
  */
 @Composable
 fun HelpSupportDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSubmitSupportMessage: ((String) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    var supportInputText by remember { mutableStateOf("") }
+    var sentSuccessBanner by remember { mutableStateOf(false) }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -964,6 +934,7 @@ fun HelpSupportDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
                 Row(
@@ -992,25 +963,132 @@ fun HelpSupportDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                SupportOptionRow(
-                    icon = "📞",
-                    title = "হটলাইন সাপোর্ট",
-                    subtitle = "+880 1700-000000 (২৪/৭ ফ্রি কল)",
+                // 1. হেল্পলাইন সাপোর্ট -> নিচে Niyon Islam Sohag + নীল ভেরিফাই টিক
+                Surface(
                     onClick = {
-                        Toast.makeText(context, "হটলাইনে কল কানেক্ট করা হচ্ছে...", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "হেল্পলাইন সাপোর্ট: Niyon Islam Sohag ✓", Toast.LENGTH_SHORT).show()
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.06f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("📞", fontSize = 22.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "হেল্পলাইন সাপোর্ট",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Niyon Islam Sohag",
+                                    fontSize = 12.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFFFE082)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                FidaVerifiedBadge(size = 16.dp)
+                            }
+                        }
                     }
-                )
+                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-                SupportOptionRow(
-                    icon = "💬",
-                    title = "WhatsApp লাইভ হেল্পডেস্ক",
-                    subtitle = "সরাসরি সাপোর্ট প্রতিনিধির সাথে চ্যাট",
-                    onClick = {
-                        Toast.makeText(context, "WhatsApp সাপোর্ট চালু হচ্ছে...", Toast.LENGTH_SHORT).show()
+                // 2. লেখার বক্স + নিচে "সেন্ড করুন" বাটন (Right Manager Fida-তে জমা হবে)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.06f),
+                    border = BorderStroke(1.dp, Color(0xFF1877F2).copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = supportInputText,
+                            onValueChange = {
+                                supportInputText = it
+                                sentSuccessBanner = false
+                            },
+                            placeholder = {
+                                Text(
+                                    text = "আপনার সমস্যা বা মেসেজ লিখুন...",
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.55f)
+                                )
+                            },
+                            minLines = 2,
+                            maxLines = 4,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFF1877F2),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+                                cursorColor = Color(0xFFFFE082)
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Button(
+                            onClick = {
+                                val trimmed = supportInputText.trim()
+                                if (trimmed.isEmpty()) {
+                                    Toast.makeText(context, "দয়া করে আপনার সমস্যা বা মেসেজ লিখুন", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onSubmitSupportMessage?.invoke(trimmed)
+                                    supportInputText = ""
+                                    sentSuccessBanner = true
+                                    Toast.makeText(
+                                        context,
+                                        "✅ মেসেজ Right Manager Fida-তে পাঠানো হয়েছে!",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "সেন্ড করুন",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        if (sentSuccessBanner) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "✅ আপনার মেসেজ Right Manager Fida ইনবক্সে জমা হয়েছে!",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF69F0AE)
+                            )
+                        }
                     }
-                )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -1270,8 +1348,9 @@ fun AdminMemberCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Avatar
-            AsyncImage(
-                model = avatarUrl,
+            FotoFilmAvatar(
+                imageUrl = avatarUrl,
+                name = name,
                 contentDescription = name,
                 modifier = Modifier
                     .size(42.dp)

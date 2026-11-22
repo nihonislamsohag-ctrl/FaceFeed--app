@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.model.MusicTrack
 import com.example.model.PostAudioTrack
 import com.example.ui.theme.BangladeshGreen
@@ -68,11 +71,10 @@ fun FacebookMusicAddDialog(
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(0) } // 0: For you, 1: Trending
     var selectedCategoryFilter by remember { mutableStateOf("All") }
-    var showUploadAudioDialog by remember { mutableStateOf(false) }
     var actionSheetTrack by remember { mutableStateOf<MusicTrack?>(null) }
 
     // Categories
-    val categoryFilters = listOf("All", "বাঁশির সুর", "গজল", "ডিজে গান", "রিলস ভাইরাল", "For you", "Trending")
+    val categoryFilters = listOf("All", "বাঁশির সুর", "গজল", "ডিজে গান", "শর্ট ভিডিও ভাইরাল", "For you", "Trending")
 
     // Filtered songs
     val filteredTracks = remember(musicTracks, searchQuery, selectedTab, selectedCategoryFilter) {
@@ -126,15 +128,19 @@ fun FacebookMusicAddDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.Top
+                    ) {
                         IconButton(
                             onClick = {
                                 AppSoundManager.stopAudio()
                                 onDismiss()
-                            }
+                            },
+                            modifier = Modifier.minimumInteractiveComponentSize()
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -143,45 +149,40 @@ fun FacebookMusicAddDialog(
                             )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Column {
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(top = 6.dp)
+                        ) {
                             Text(
                                 text = "Add music",
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Facebook FaceFeed Music Hub",
+                                text = "এখানে ভাইরাল সব ধরনের গান🎶🎻 সব ধরনের গজোল🎙️সব ধরনের মিউজিক🎸 সব ধরনের বাঁশি সুর🎺 সব ধরনের জন্মদিনের গান🎙️ এখানের সব কীছু আপনার ছবি, ভিডিও, শর্ট ভিডিও, স্টোরিতে ফ্রীতে ব্যবহার করতে পারবেন",
                                 fontSize = 11.sp,
+                                lineHeight = 15.sp,
                                 color = Color(0xFFB0B3B8)
                             )
                         }
                     }
 
-                    // Upload Audio Button (ফোন গ্যালারি থেকে অডিও আপলোড)
-                    FilledTonalButton(
-                        onClick = { showUploadAudioDialog = true },
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = FacebookBlue,
-                            contentColor = Color.White
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudUpload,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                            tint = Color.White
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Upload audio",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // FotoFilm App Logo (Upload audio সরিয়ে অ্যাপের লোগো যুক্ত করা হয়েছে)
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_fotofilm_logo),
+                        contentDescription = "FotoFilm App Logo",
+                        modifier = Modifier
+                            .padding(top = 4.dp, end = 4.dp)
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, BangladeshGreen.copy(alpha = 0.65f), RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Crop
+                    )
                 }
 
                 // 1. Search Bar with "Search lyrics" placeholder
@@ -482,7 +483,7 @@ fun FacebookMusicAddDialog(
                 actionSheetTrack = null
                 AppSoundManager.stopAudio()
                 onDismiss()
-                Toast.makeText(context, "গানটি রিলস ও শর্টে যুক্ত করা হয়েছে! 🎬", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "গানটি শর্ট ভিডিওতে যুক্ত করা হয়েছে! 🎬", Toast.LENGTH_SHORT).show()
             },
             onAddToStory = {
                 viewModel.createStoryWithMusic(track.toPostAudioTrack())
@@ -504,14 +505,6 @@ fun FacebookMusicAddDialog(
                 onDismiss()
                 Toast.makeText(context, "ProLevelCut ভিডিও এডিটরে ব্যাকগ্রাউন্ড মিউজিক হিসেবে লোড হয়েছে! ✂️", Toast.LENGTH_LONG).show()
             }
-        )
-    }
-
-    // Dialog for Uploading Custom Audio from Phone Storage
-    if (showUploadAudioDialog) {
-        UploadAudioModalDialog(
-            viewModel = viewModel,
-            onDismiss = { showUploadAudioDialog = false }
         )
     }
 }
@@ -544,12 +537,21 @@ fun FacebookMusicItemRow(
                 .background(Color(0xFF242526)),
             contentAlignment = Alignment.Center
         ) {
-            AsyncImage(
-                model = track.thumbnailUrl.ifEmpty { "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300" },
-                contentDescription = track.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            if (track.thumbnailUrl.isNotBlank()) {
+                AsyncImage(
+                    model = track.thumbnailUrl,
+                    contentDescription = track.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = track.title,
+                    tint = FacebookBlue,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
 
             // Equalizer badge if playing
             if (isPlaying) {
@@ -740,14 +742,31 @@ fun MusicDestinationBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = track.thumbnailUrl.ifEmpty { "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300" },
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                if (track.thumbnailUrl.isNotBlank()) {
+                    AsyncImage(
+                        model = track.thumbnailUrl,
+                        contentDescription = track.title,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF2B2D30)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = track.title,
+                            tint = FacebookBlue,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
@@ -796,8 +815,8 @@ fun MusicDestinationBottomSheet(
 
             MusicDestinationOption(
                 icon = Icons.Default.VideoLibrary,
-                title = "শর্ট ও রিলসে যুক্ত করুন (Add to Reel / Short)",
-                subtitle = "রিলস ভিডিও ব্যাকগ্রাউন্ড সাউন্ডট্র্যাক",
+                title = "শর্ট ভিডিওতে যুক্ত করুন (Add to Short Video)",
+                subtitle = "শর্ট ভিডিও ব্যাকগ্রাউন্ড সাউন্ডট্র্যাক",
                 color = Color(0xFFFF5252),
                 onClick = onAddToReels
             )
@@ -805,7 +824,7 @@ fun MusicDestinationBottomSheet(
             MusicDestinationOption(
                 icon = Icons.Default.AutoStories,
                 title = "স্টোরিতে মিউজিক দিন (Add to Story)",
-                subtitle = "২৪ ঘণ্টার ফেসবুক স্টোরিতে গান যোগ হবে",
+                subtitle = "২৪ ঘণ্টার FotoFilm স্টোরিতে গান যোগ হবে",
                 color = Color(0xFF9C27B0),
                 onClick = onAddToStory
             )
@@ -908,7 +927,7 @@ fun UploadAudioModalDialog(
     var coverPhotoUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
 
-    val categories = listOf("বাঁশির সুর", "গজল", "ডিজে গান", "For you", "Trending", "রিলস ভাইরাল", "ফোক ও লালন")
+    val categories = listOf("বাঁশির সুর", "গজল", "ডিজে গান", "For you", "Trending", "শর্ট ভিডিও ভাইরাল", "ফোক ও লালন")
 
     // Launcher for Audio file picker
     val audioPickerLauncher = rememberLauncherForActivityResult(
@@ -1104,7 +1123,7 @@ fun UploadAudioModalDialog(
                         lyrics = lyricsText.trim().ifEmpty { "বাঁশির সুরে মন ভরে যায়..." },
                         category = selectedCategory,
                         duration = "3:30",
-                        thumbnailUrl = coverPhotoUri?.toString() ?: "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400",
+                        thumbnailUrl = coverPhotoUri?.toString().orEmpty(),
                         audioUrl = audioUri?.toString() ?: "https://actions.google.com/sounds/v1/foley/wind_chimes_breeze.ogg",
                         isTrending = selectedCategory == "Trending" || selectedCategory == "ডিজে গান",
                         addedBy = "Niyon Islam Sohag"

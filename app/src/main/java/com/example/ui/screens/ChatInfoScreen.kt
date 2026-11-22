@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.Conversation
 import com.example.model.User
+import com.example.ui.components.FotoFilmAvatar
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
@@ -226,13 +227,13 @@ fun ChatInfoScreen(
                         contentAlignment = Alignment.BottomEnd,
                         modifier = Modifier.clickable { onOpenProfile() }
                     ) {
-                        AsyncImage(
-                            model = conversation.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500" },
+                        FotoFilmAvatar(
+                            imageUrl = conversation.friend.avatarUrl,
+                            name = conversation.friend.fullName,
                             contentDescription = conversation.friend.fullName,
                             modifier = Modifier
                                 .size(105.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         if (conversation.friend.isOnline) {
                             Box(
@@ -375,10 +376,18 @@ fun ChatInfoScreen(
                 // Section: Chat info (Matching Screenshot 2)
                 SectionTitle("Chat info")
 
-                // Media Mosaic Gallery Preview (Matching Screenshot 2)
-                MediaPreviewMosaic(
-                    onClick = { showMediaFilesDialog = true }
-                )
+                // Media Mosaic Gallery Preview (real chat media only)
+                val sharedMediaList = remember(currentConv.messages) {
+                    currentConv.messages
+                        .filter { !it.mediaUrl.isNullOrBlank() }
+                        .map { it.mediaUrl!! to it.isMediaVideo }
+                }
+                if (sharedMediaList.isNotEmpty()) {
+                    MediaPreviewMosaic(
+                        mediaItems = sharedMediaList,
+                        onClick = { showMediaFilesDialog = true }
+                    )
+                }
 
                 ChatInfoRow(
                     icon = Icons.Default.PhotoLibrary,
@@ -693,15 +702,10 @@ fun ChatInfoScreen(
     // Dialog: Media, Files & Links (with full View + Save & Download to Gallery)
     if (showMediaFilesDialog) {
         val chatMediaItems = remember(currentConv.messages) {
-            val fromChat = currentConv.messages
+            currentConv.messages
                 .filter { !it.mediaUrl.isNullOrBlank() }
                 .map { it.mediaUrl!! to it.isMediaVideo }
-            val fallbackMedia = listOf(
-                "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=400" to false,
-                "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400" to false,
-                "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=400" to false
-            )
-            (fromChat + fallbackMedia).distinctBy { it.first }
+                .distinctBy { it.first }
         }
 
         AlertDialog(
@@ -900,11 +904,12 @@ fun ChatInfoScreen(
                                             .padding(horizontal = 8.dp, vertical = 6.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        AsyncImage(
-                                            model = targetConv.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200" },
+                                        FotoFilmAvatar(
+                                            imageUrl = targetConv.friend.avatarUrl,
+                                            name = targetConv.groupName ?: targetConv.friend.fullName,
                                             contentDescription = null,
-                                            modifier = Modifier.size(28.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                            isGroup = targetConv.isGroup,
+                                            modifier = Modifier.size(28.dp).clip(CircleShape)
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
@@ -973,7 +978,7 @@ fun ChatInfoScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "কারো আইডির লিংক (যেমন: https://fotofilm.app/u/tanvir_ahmed) অথবা ইউজারনেম লিখুন বা পেস্ট করুন:",
+                        text = "কারো আইডির লিংক (যেমন: https://fotofilm.app/u/username) অথবা ইউজারনেম লিখুন বা পেস্ট করুন:",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1028,19 +1033,11 @@ fun ChatInfoScreen(
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text("হাঢান মিয়া হওলাদার", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Text("ভুল স্বীকার করলো বানর", fontSize = 13.sp)
-                            Text("Pinned on Oct 9, 2026", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
+                Text(
+                    text = "এখনো কোনো পিন করা মেসেজ নেই।",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             },
             confirmButton = {
                 TextButton(onClick = { showPinnedMessagesDialog = false }) {
@@ -1116,14 +1113,14 @@ fun ChatInfoScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Mini circular avatar with green border
-                AsyncImage(
-                    model = currentConv.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = currentConv.friend.avatarUrl,
+                    name = currentConv.friend.fullName,
                     contentDescription = null,
                     modifier = Modifier
                         .size(62.dp)
                         .clip(CircleShape)
-                        .border(2.dp, Color(0xFF2E7D32), CircleShape),
-                    contentScale = ContentScale.Crop
+                        .border(2.dp, Color(0xFF2E7D32), CircleShape)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -1139,7 +1136,7 @@ fun ChatInfoScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "If you're Facebook friends, blocking ${currentConv.friend.fullName} will unfriend them. They won't be able to message, call or find your Facebook profile. We won't tell them you blocked or reported them.",
+                    text = "If you're FotoFilm friends, blocking ${currentConv.friend.fullName} will unfriend them. They won't be able to message, call or find your FotoFilm profile. We won't tell them you blocked or reported them.",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -1298,14 +1295,14 @@ fun ChatInfoScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Mini circular avatar with green border
-                AsyncImage(
-                    model = currentConv.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = currentConv.friend.avatarUrl,
+                    name = currentConv.friend.fullName,
                     contentDescription = null,
                     modifier = Modifier
                         .size(62.dp)
                         .clip(CircleShape)
-                        .border(2.dp, Color(0xFF2E7D32), CircleShape),
-                    contentScale = ContentScale.Crop
+                        .border(2.dp, Color(0xFF2E7D32), CircleShape)
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -1321,7 +1318,7 @@ fun ChatInfoScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Unblocking ${currentConv.friend.fullName} won't add them as a Facebook friend. You won't be able to block them again for 48 hours.",
+                    text = "Unblocking ${currentConv.friend.fullName} won't add them as a FotoFilm friend. You won't be able to block them again for 48 hours.",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -1540,70 +1537,48 @@ fun ChatActionCircleButton(
 // Media Preview Mosaic Component (Matching Screenshot 2)
 @Composable
 fun MediaPreviewMosaic(
+    mediaItems: List<Pair<String, Boolean>> = emptyList(),
     onClick: () -> Unit
 ) {
+    if (mediaItems.isEmpty()) return
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(140.dp)
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() },
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // Large Left Image: woman by river
-        AsyncImage(
-            model = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800",
-            contentDescription = "Media preview",
-            modifier = Modifier
-                .weight(1.3f)
-                .fillMaxHeight(),
-            contentScale = ContentScale.Crop
-        )
-
-        // 2x2 Right Grid
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Top row
-            AsyncImage(
-                model = "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=400",
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentScale = ContentScale.Crop
-            )
-
-            // Bottom row: with video play icon
+        mediaItems.take(3).forEach { (url, isVideo) ->
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .weight(1f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
-                    model = "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=400",
-                    contentDescription = null,
+                    model = url,
+                    contentDescription = "Media preview",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .align(Alignment.Center),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .align(Alignment.Center),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

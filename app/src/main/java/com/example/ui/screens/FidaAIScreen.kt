@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -48,8 +49,11 @@ import com.example.ai.FidaAIService
 import com.example.ui.components.FidaAILogo
 import com.example.ui.components.FidaVerifiedBadge
 import com.example.ui.theme.BangladeshGreen
+import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
+import com.example.util.FidaSpeechSession
+import com.example.util.LiveMicHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -77,6 +81,38 @@ fun FidaAIScreen(
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var isThinking by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var isVoiceListening by remember { mutableStateOf(false) }
+
+    val speechSession = remember {
+        FidaSpeechSession(
+            context = context,
+            onPartialOrFinalText = { spoken ->
+                inputText = spoken
+            },
+            onListeningChanged = { listening ->
+                isVoiceListening = listening
+            },
+            onErrorMessage = { msg ->
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted || LiveMicHelper.hasMicPermission(context)) {
+            speechSession.start()
+        } else {
+            Toast.makeText(context, "ফিদা এআই-তে কথা বলার জন্য মাইক্রোফোন অনুমতি দিন", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechSession.stop()
+        }
+    }
 
     // Persistent conversation history (never deleted, loaded from storage)
     val messages = remember {
@@ -112,6 +148,7 @@ fun FidaAIScreen(
     }
 
     BackHandler {
+        speechSession.stop()
         onBack()
     }
 
@@ -399,6 +436,45 @@ fun FidaAIScreen(
                 }
             }
 
+            // Live Voice Listening Banner
+            AnimatedVisibility(visible = isVoiceListening) {
+                Surface(
+                    color = Color(0xFFFFEBEE),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Mic, contentDescription = null, tint = BangladeshRed, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "🎙️ শুনছি... আপনার প্রশ্নটি বলুন",
+                                color = BangladeshRed,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "থামুন",
+                            color = BangladeshRed,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White)
+                                .clickable { speechSession.stop() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // Bottom Input Bar
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -438,13 +514,39 @@ fun FidaAIScreen(
 
                     Spacer(modifier = Modifier.width(4.dp))
 
+                    // Real Microphone Voice Button (Speech-to-Text)
+                    IconButton(
+                        onClick = {
+                            if (isVoiceListening) {
+                                speechSession.stop()
+                            } else if (LiveMicHelper.hasMicPermission(context)) {
+                                speechSession.start()
+                            } else {
+                                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (isVoiceListening) Color(0xFFFFEBEE) else Color(0xFFE8F5E9))
+                    ) {
+                        Icon(
+                            imageVector = if (isVoiceListening) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = "Voice Input",
+                            tint = if (isVoiceListening) BangladeshRed else BangladeshGreen,
+                            modifier = Modifier.size(21.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     // Text Input Field
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
                         placeholder = {
                             Text(
-                                text = if (selectedImageUri != null) "ছবি নিয়ে প্রশ্ন লিখুন..." else "যেকোনো কিছু লিখুন বা প্রশ্ন করুন...",
+                                text = if (selectedImageUri != null) "ছবি নিয়ে প্রশ্ন লিখুন..." else "যেকোনো কিছু লিখুন বা মাইকে বলুন...",
                                 fontSize = 13.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -479,7 +581,10 @@ fun FidaAIScreen(
                                     )
                                 }
                             )
-                            .clickable(enabled = canSend) { sendMessage() },
+                            .clickable(enabled = canSend) {
+                                speechSession.stop()
+                                sendMessage()
+                            },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

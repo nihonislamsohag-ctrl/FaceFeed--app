@@ -49,7 +49,7 @@ object FirebaseManager {
     private val _databaseStatusMessage = MutableStateFlow("Firebase ইনিশিয়ালাইজ হচ্ছে...")
     val databaseStatusMessage: StateFlow<String> = _databaseStatusMessage.asStateFlow()
 
-    private val _hasMorePosts = MutableStateFlow(true)
+    private val _hasMorePosts = MutableStateFlow(false)
     val hasMorePosts: StateFlow<Boolean> = _hasMorePosts.asStateFlow()
 
     private val _isLoadingMorePosts = MutableStateFlow(false)
@@ -64,6 +64,7 @@ object FirebaseManager {
     fun initialize(context: Context) {
         try {
             val appCtx = context.applicationContext
+            ServiceQuotaTracker.initialize(appCtx)
             if (FirebaseApp.getApps(appCtx).isNotEmpty()) {
                 val dbId = appCtx.getString(R.string.firestore_database_id)
                 val db = FirebaseFirestore.getInstance(FirebaseApp.getInstance(), dbId)
@@ -341,12 +342,36 @@ object FirebaseManager {
             "images" to post.images.take(20),
             "isVideo" to post.isVideo,
             "isReel" to post.isReel,
+            "isFaceGram" to post.isFaceGram,
+            "isFaceClip" to post.isFaceClip,
             "videoTitle" to (post.videoTitle ?: "").take(300),
+            "videoDuration" to (post.videoDuration ?: "").take(40),
+            "location" to (post.location ?: "").take(160),
+            "musicInfo" to (post.musicInfo ?: "").take(300),
+            "audioTrackId" to (post.audioTrack?.id ?: "").take(120),
+            "audioTrackTitle" to (post.audioTrack?.title ?: "").take(200),
+            "audioTrackArtist" to (post.audioTrack?.artist ?: "").take(150),
+            "audioTrackCategory" to (post.audioTrack?.category ?: "").take(100),
+            "audioTrackDuration" to (post.audioTrack?.duration ?: "").take(40),
+            "audioTrackUrl" to (post.audioTrack?.audioUrl ?: "").take(1500),
+            "audioTrackCover" to (post.audioTrack?.coverArtUrl ?: "").take(1500),
+            "isBoosted" to post.isBoosted,
+            "boostStatus" to (post.boostStatus ?: "").take(40),
+            "boostTargetReach" to (post.boostTargetReach ?: "").take(80),
             "reachViews" to post.reachViews.take(40),
             "reactionCounts" to rxMap,
             "commentCount" to maxOf(post.comments.size, post.cloudCommentCount),
             "shareCount" to post.shareCount
         ).filterValues { it != null } as Map<String, Any>
+    }
+
+    fun deletePostCloud(postId: String) {
+        val db = firestore ?: return
+        if (activeAuthUid() == null) return
+        val docRef = db.collection("posts").document(postId)
+        docRef.delete().addOnFailureListener { e ->
+            recordFirestoreFailure(e, OperationType.DELETE, docRef.path)
+        }
     }
 
     fun savePost(post: Post) {
@@ -357,6 +382,7 @@ object FirebaseManager {
             val payload = buildPostPayload(post, uid)
             docRef.set(payload)
                 .addOnSuccessListener {
+                    ServiceQuotaTracker.recordFirebaseWrites(1)
                     Log.d(TAG, "Post ${post.id} synced to cloud Firestore!")
                 }
                 .addOnFailureListener { e ->
@@ -369,10 +395,11 @@ object FirebaseManager {
 
     suspend fun savePostAwait(post: Post): Result<String> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
-        val uid = requireUserId()
+        val uid = activeAuthUid() ?: return Result.failure(IllegalStateException("User not signed in"))
         val docRef = db.collection("posts").document(post.id)
         return try {
             docRef.set(buildPostPayload(post, uid)).await()
+            ServiceQuotaTracker.recordFirebaseWrites(1)
             Result.success(post.id)
         } catch (e: Exception) {
             recordFirestoreFailure(e, OperationType.CREATE, docRef.path)
@@ -398,8 +425,7 @@ object FirebaseManager {
         return try {
             val userId = doc.getString("userId") ?: doc.getString("authorId") ?: return null
             val userName = doc.getString("userName") ?: doc.getString("authorFullName") ?: "User"
-            val userAvatar = doc.getString("authorAvatar")
-                ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"
+            val userAvatar = doc.getString("authorAvatar").orEmpty()
             val isVerified = doc.getBoolean("authorIsVerified") ?: false
             val author = User(
                 id = userId,
@@ -433,6 +459,20 @@ object FirebaseManager {
             val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
             val rxCounts = parseReactionCounts(doc.get("reactionCounts"))
 
+            val audioTrackId = doc.getString("audioTrackId")?.takeIf { it.isNotBlank() }
+            val audioTrackTitle = doc.getString("audioTrackTitle")?.takeIf { it.isNotBlank() }
+            val parsedAudioTrack = if (audioTrackId != null || audioTrackTitle != null) {
+                PostAudioTrack(
+                    id = audioTrackId ?: "aud_${doc.id}",
+                    title = audioTrackTitle ?: "Audio Track",
+                    artist = doc.getString("audioTrackArtist")?.takeIf { it.isNotBlank() } ?: userName,
+                    category = doc.getString("audioTrackCategory")?.takeIf { it.isNotBlank() } ?: "Audio",
+                    duration = doc.getString("audioTrackDuration")?.takeIf { it.isNotBlank() } ?: "0:30",
+                    audioUrl = doc.getString("audioTrackUrl")?.takeIf { it.isNotBlank() },
+                    coverArtUrl = doc.getString("audioTrackCover")?.takeIf { it.isNotBlank() }
+                )
+            } else null
+
             Post(
                 id = doc.id,
                 author = author,
@@ -443,7 +483,16 @@ object FirebaseManager {
                 images = images,
                 isVideo = isVideo,
                 isReel = isReel,
+                isFaceGram = doc.getBoolean("isFaceGram") ?: false,
+                isFaceClip = doc.getBoolean("isFaceClip") ?: false,
                 videoTitle = doc.getString("videoTitle")?.takeIf { it.isNotBlank() },
+                videoDuration = doc.getString("videoDuration")?.takeIf { it.isNotBlank() },
+                location = doc.getString("location")?.takeIf { it.isNotBlank() },
+                musicInfo = doc.getString("musicInfo")?.takeIf { it.isNotBlank() },
+                audioTrack = parsedAudioTrack,
+                isBoosted = doc.getBoolean("isBoosted") ?: false,
+                boostStatus = doc.getString("boostStatus")?.takeIf { it.isNotBlank() },
+                boostTargetReach = doc.getString("boostTargetReach")?.takeIf { it.isNotBlank() },
                 reachViews = doc.getString("reachViews") ?: "1.5K",
                 reactionCounts = rxCounts,
                 cloudCommentCount = (doc.getLong("commentCount") ?: 0L).toInt(),
@@ -472,6 +521,12 @@ object FirebaseManager {
                         return@addSnapshotListener
                     }
                     if (snapshots != null) {
+                        val readDocs = snapshots.documentChanges.size.coerceAtLeast(
+                            if (snapshots.metadata.isFromCache) 0 else snapshots.size()
+                        )
+                        if (readDocs > 0) {
+                            ServiceQuotaTracker.recordFirebaseReads(readDocs)
+                        }
                         val cloudPosts = snapshots.documents.mapNotNull { parsePostDocument(it) }
                         if (paginationCursor == null && snapshots.documents.isNotEmpty()) {
                             paginationCursor = snapshots.documents.last()
@@ -479,9 +534,7 @@ object FirebaseManager {
                         } else if (snapshots.isEmpty) {
                             _hasMorePosts.value = false
                         }
-                        if (cloudPosts.isNotEmpty()) {
-                            onPostsUpdated(cloudPosts)
-                        }
+                        onPostsUpdated(cloudPosts)
                     }
                 }
         } catch (e: Exception) {
@@ -511,6 +564,7 @@ object FirebaseManager {
             .get()
             .addOnSuccessListener { snapshot ->
                 _isLoadingMorePosts.value = false
+                ServiceQuotaTracker.recordFirebaseReads(snapshot.size().coerceAtLeast(1))
                 if (snapshot.documents.isNotEmpty()) {
                     paginationCursor = snapshot.documents.last()
                 }
@@ -528,13 +582,16 @@ object FirebaseManager {
 
     suspend fun fetchPostsPageAwait(limitCount: Long = POSTS_PAGE_SIZE): Result<List<Post>> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
-        requireUserId()
+        if (activeAuthUid() == null) {
+            return Result.failure(IllegalStateException("User not signed in"))
+        }
         return try {
             val snap = db.collection("posts")
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .limit(limitCount)
                 .get()
                 .await()
+            ServiceQuotaTracker.recordFirebaseReads(snap.size().coerceAtLeast(1))
             Result.success(snap.documents.mapNotNull { parsePostDocument(it) })
         } catch (e: Exception) {
             recordFirestoreFailure(e, OperationType.LIST, "posts")
@@ -596,7 +653,7 @@ object FirebaseManager {
         updatedCounts: Map<ReactionType, Int>
     ): Result<Unit> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
-        val uid = requireUserId()
+        val uid = activeAuthUid() ?: return Result.failure(IllegalStateException("User not signed in"))
         val postRef = db.collection("posts").document(postId)
         val reactionRef = postRef.collection("reactions").document(uid)
         val serializedCounts = updatedCounts.mapKeys { it.key.name }.mapValues { it.value.toLong() }
@@ -686,7 +743,7 @@ object FirebaseManager {
 
     suspend fun saveCommentAwait(postId: String, comment: Comment): Result<String> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
-        val uid = requireUserId()
+        val uid = activeAuthUid() ?: return Result.failure(IllegalStateException("User not signed in"))
         val commentRef = db.collection("posts").document(postId)
             .collection("comments").document(comment.id)
         return try {
@@ -779,7 +836,7 @@ object FirebaseManager {
 
     suspend fun saveCommentReplyAwait(postId: String, commentId: String, reply: CommentReply): Result<String> {
         val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
-        val uid = requireUserId()
+        val uid = activeAuthUid() ?: return Result.failure(IllegalStateException("User not signed in"))
         val replyRef = db.collection("posts").document(postId)
             .collection("comments").document(commentId)
             .collection("replies").document(reply.id)
@@ -982,6 +1039,82 @@ object FirebaseManager {
         }
     }
 
+    private fun parseStoryDocument(doc: DocumentSnapshot): Story? {
+        return try {
+            val authorId = doc.getString("authorId") ?: return null
+            val mediaUrl = doc.getString("mediaUrl")?.takeIf { it.isNotBlank() } ?: return null
+            val authorName = doc.getString("authorFullName") ?: "FotoFilm User"
+            val authorUsername = doc.getString("authorUsername") ?: authorId
+            val authorAvatar = doc.getString("authorAvatar").orEmpty()
+            Story(
+                id = doc.id,
+                author = User(
+                    id = authorId,
+                    fullName = authorName,
+                    username = authorUsername,
+                    avatarUrl = authorAvatar
+                ),
+                mediaUrl = mediaUrl,
+                timestamp = "Just now",
+                caption = doc.getString("caption").orEmpty(),
+                musicTrack = doc.getString("musicTrack")?.takeIf { it.isNotBlank() },
+                musicArtist = doc.getString("musicArtist")?.takeIf { it.isNotBlank() },
+                audioUrl = doc.getString("audioUrl")?.takeIf { it.isNotBlank() }
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun listenToStories(onStoriesUpdated: (List<Story>) -> Unit): ListenerRegistration? {
+        val db = firestore ?: return null
+        if (activeAuthUid() == null) return null
+        val path = "stories"
+        return try {
+            db.collection(path)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(COLLECTIONS_PAGE_SIZE)
+                .addSnapshotListener { snapshots, error ->
+                    if (error != null) {
+                        recordFirestoreFailure(error, OperationType.LIST, path)
+                        return@addSnapshotListener
+                    }
+                    if (snapshots != null) {
+                        val readDocs = snapshots.documentChanges.size.coerceAtLeast(
+                            if (snapshots.metadata.isFromCache) 0 else snapshots.size()
+                        )
+                        if (readDocs > 0) {
+                            ServiceQuotaTracker.recordFirebaseReads(readDocs)
+                        }
+                        val stories = snapshots.documents.mapNotNull { parseStoryDocument(it) }
+                        onStoriesUpdated(stories)
+                    }
+                }
+        } catch (e: Exception) {
+            recordFirestoreFailure(e, OperationType.LIST, path)
+            null
+        }
+    }
+
+    suspend fun fetchStoriesAwait(limitCount: Long = COLLECTIONS_PAGE_SIZE): Result<List<Story>> {
+        val db = firestore ?: return Result.failure(IllegalStateException("Firestore unavailable"))
+        if (activeAuthUid() == null) {
+            return Result.failure(IllegalStateException("User not signed in"))
+        }
+        return try {
+            val snap = db.collection("stories")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(limitCount)
+                .get()
+                .await()
+            ServiceQuotaTracker.recordFirebaseReads(snap.size().coerceAtLeast(1))
+            Result.success(snap.documents.mapNotNull { parseStoryDocument(it) })
+        } catch (e: Exception) {
+            recordFirestoreFailure(e, OperationType.LIST, "stories")
+            Result.failure(e)
+        }
+    }
+
     // =========================================================================
     // ChatFilm Conversations & Messages (Participant-Isolated, Bounded)
     // =========================================================================
@@ -1009,7 +1142,10 @@ object FirebaseManager {
             "audioDurationSeconds" to message.audioDurationSeconds.coerceIn(0, 3600),
             "timestamp" to message.timestamp.take(100),
             "createdAt" to now,
-            "updatedAt" to FieldValue.serverTimestamp()
+            "updatedAt" to FieldValue.serverTimestamp(),
+            "callLogType" to (message.callLogType?.name ?: ""),
+            "callDurationSeconds" to message.callDurationSeconds.coerceIn(0, 86400),
+            "isMissedCall" to message.isMissedCall
         )
 
         convRef.get().addOnSuccessListener { snap ->
@@ -1071,7 +1207,12 @@ object FirebaseManager {
                                         isAudioVoice = doc.getBoolean("isAudioVoice") ?: false,
                                         audioDurationSeconds = (doc.getLong("audioDurationSeconds") ?: 0L).toInt(),
                                         isFromMe = senderId == uid,
-                                        status = MessageDeliveryStatus.DELIVERED
+                                        status = MessageDeliveryStatus.DELIVERED,
+                                        callLogType = doc.getString("callLogType")?.takeIf { it.isNotBlank() }?.let { typeStr ->
+                                            CallType.entries.firstOrNull { it.name == typeStr }
+                                        },
+                                        callDurationSeconds = (doc.getLong("callDurationSeconds") ?: 0L).toInt(),
+                                        isMissedCall = doc.getBoolean("isMissedCall") ?: false
                                     )
                                 )
                             } catch (e: Exception) {
@@ -1353,7 +1494,7 @@ object FirebaseManager {
                 artist = "Niyon Islam Sohag",
                 views = "12K",
                 lyrics = "বাঁশির সুরে মন ভরে যায়, মন ছুটে যায় দূর গাঁয়ে... মেঠো পথ আর নদীর বাঁকে বাজে মধুর সুর।",
-                thumbnailUrl = "https://images.unsplash.com/photo-1511192336575-5a79af67a629?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/foley/wind_chimes_breeze.ogg",
                 category = "বাঁশির সুর",
                 duration = "3:30",
@@ -1366,7 +1507,7 @@ object FirebaseManager {
                 artist = "Sami Yusuf & Niyon",
                 views = "1.4M",
                 lyrics = "হাসবি রাব্বি জাল্লাল্লাহ, মাফি কালবি গাইরুল্লাহ, নূর মুহাম্মদ সাল্লাল্লাহ...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/ambiences/humming_in_the_hall.ogg",
                 category = "গজল",
                 duration = "4:15",
@@ -1379,12 +1520,12 @@ object FirebaseManager {
                 artist = "DJ Sonik BD",
                 views = "850K",
                 lyrics = "ঝাঁকাস ড্রামস ও বিটে মেতে ওঠো সবাই, পার্টি নাইট কাঁপিয়ে দাও...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/transportation/car_passing_by.ogg",
                 category = "ডিজে গান",
                 duration = "2:55",
                 isTrending = true,
-                addedBy = "FaceFeed Admin"
+                addedBy = "FotoFilm Admin"
             ),
             MusicTrack(
                 id = "track_neel_doriya_4",
@@ -1392,7 +1533,7 @@ object FirebaseManager {
                 artist = "Abdul Alim",
                 views = "2.1M",
                 lyrics = "এই কূল ভাঙ্গে ও কূল গড়ে এই তো নদীর খেলা, সকাল বেলার ধনী রে ভাই বিকাল বেলার ফকির...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/foley/water_lapping.ogg",
                 category = "For you",
                 duration = "4:20",
@@ -1401,16 +1542,16 @@ object FirebaseManager {
             ),
             MusicTrack(
                 id = "track_reels_viral_5",
-                title = "Trending Reels Viral Beat 2026",
-                artist = "FaceFeed Beats",
+                title = "Trending Short Video Beat 2026",
+                artist = "FotoFilm Beats",
                 views = "3.2M",
-                lyrics = "Trending viral audio on Shorts & Reels, dance and vibe...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400",
+                lyrics = "Trending viral audio on Short Videos, dance and vibe...",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/musical_instruments/bass_riff.ogg",
                 category = "Trending",
                 duration = "1:45",
                 isTrending = true,
-                addedBy = "FaceFeed Official"
+                addedBy = "FotoFilm Official"
             ),
             MusicTrack(
                 id = "track_flute_shur_6",
@@ -1418,7 +1559,7 @@ object FirebaseManager {
                 artist = "Niyon Islam Sohag",
                 views = "45K",
                 lyrics = "মন মাঝি তোর বৈঠা নে রে, আমি আর বাইতে পারলাম না...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/foley/wind_chimes_breeze.ogg",
                 category = "বাঁশির সুর",
                 duration = "3:50",
@@ -1431,12 +1572,12 @@ object FirebaseManager {
                 artist = "Farida Parveen",
                 views = "950K",
                 lyrics = "মিলন হবে কত দিনে, আমার মনের মানুষের সনে...",
-                thumbnailUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400",
+                thumbnailUrl = "",
                 audioUrl = "https://actions.google.com/sounds/v1/foley/wind_chimes_breeze.ogg",
                 category = "For you",
                 duration = "5:12",
                 isTrending = false,
-                addedBy = "FaceFeed Music"
+                addedBy = "FotoFilm Music"
             )
         )
     }

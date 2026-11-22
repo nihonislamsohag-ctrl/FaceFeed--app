@@ -62,7 +62,7 @@ fun HighlightStoryViewerDialog(
             Story(
                 id = "${highlight.id}_fallback",
                 author = viewModel.currentUser.value,
-                mediaUrl = highlight.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800" },
+                mediaUrl = highlight.coverUrl,
                 timestamp = highlight.createdAt,
                 caption = highlight.title
             )
@@ -218,14 +218,13 @@ fun HighlightStoryViewerDialog(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // Highlight Cover Icon
-                        AsyncImage(
-                            model = highlight.coverUrl.ifEmpty { currentStory.author.avatarUrl },
-                            contentDescription = highlight.title,
+                        FotoFilmAvatar(
+                            imageUrl = highlight.coverUrl.ifEmpty { currentStory.author.avatarUrl },
+                            name = highlight.title,
                             modifier = Modifier
                                 .size(38.dp)
-                                .clip(CircleShape)
                                 .border(1.5.dp, FacebookBlue, CircleShape),
-                            contentScale = ContentScale.Crop
+                            iconSize = 18.dp
                         )
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -382,19 +381,14 @@ fun CreateHighlightDialog(
     val context = LocalContext.current
     val allAvailableStories by viewModel.stories.collectAsState()
     var highlightTitle by remember { mutableStateOf("") }
-    var selectedCoverUrl by remember { mutableStateOf(user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" }) }
+    var selectedCoverUrl by remember { mutableStateOf(user.avatarUrl) }
     var selectedStoryIds by remember { mutableStateOf(setOf<String>()) }
 
-    // Cover options from user photos & preset aesthetics
-    val coverOptions = remember {
-        listOf(
-            user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500",
-            "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=500",
-            "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=500",
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=500"
-        )
+    // Cover options strictly from user's own photo & active stories
+    val coverOptions = remember(user.avatarUrl, allAvailableStories) {
+        (listOfNotNull(user.avatarUrl.takeIf { it.isNotBlank() }) +
+            allAvailableStories.mapNotNull { it.mediaUrl.takeIf { url -> url.isNotBlank() } })
+            .distinct()
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -444,10 +438,9 @@ fun CreateHighlightDialog(
                         .padding(3.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = selectedCoverUrl,
+                    FotoFilmCoverBackground(
+                        imageUrl = selectedCoverUrl,
                         contentDescription = "Cover Preview",
-                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
@@ -465,29 +458,36 @@ fun CreateHighlightDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Horizontal selection of cover images
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(coverOptions) { url ->
-                        val isSelected = selectedCoverUrl == url
-                        AsyncImage(
-                            model = url,
-                            contentDescription = "Cover option",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .border(
-                                    BorderStroke(
-                                        if (isSelected) 2.5.dp else 1.dp,
-                                        if (isSelected) FacebookBlue else MaterialTheme.colorScheme.outlineVariant
-                                    ),
-                                    CircleShape
-                                )
-                                .clickable { selectedCoverUrl = url }
-                        )
+                if (coverOptions.isEmpty()) {
+                    Text(
+                        text = "আপনার প্রোফাইল ছবি বা স্টোরি যুক্ত হলে এখানে কভার হিসেবে দেখাবে।",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(coverOptions) { url ->
+                            val isSelected = selectedCoverUrl == url
+                            AsyncImage(
+                                model = url,
+                                contentDescription = "Cover option",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clip(CircleShape)
+                                    .border(
+                                        BorderStroke(
+                                            if (isSelected) 2.5.dp else 1.dp,
+                                            if (isSelected) FacebookBlue else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        CircleShape
+                                    )
+                                    .clickable { selectedCoverUrl = url }
+                            )
+                        }
                     }
                 }
 
@@ -572,7 +572,7 @@ fun CreateHighlightDialog(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "💡 এই হাইলাইটে ইস্টুরিগুলো জমা থাকবে এবং যেকোনো সময় পরেও দেখা যাবে!",
+                    text = "💡 এই হাইলাইটে স্টোরিগুলো জমা থাকবে এবং যেকোনো সময় পরেও দেখা যাবে!",
                     fontSize = 11.sp,
                     color = FacebookBlue,
                     lineHeight = 15.sp

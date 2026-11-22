@@ -110,13 +110,11 @@ fun SharePostBottomSheet(
                     modifier = Modifier.padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AsyncImage(
-                        model = post.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" },
-                        contentDescription = post.author.fullName,
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = post.author.avatarUrl,
+                        name = post.author.fullName,
+                        modifier = Modifier.size(36.dp),
+                        iconSize = 18.dp
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -161,13 +159,12 @@ fun SharePostBottomSheet(
                         modifier = Modifier.width(62.dp)
                     ) {
                         Box(contentAlignment = Alignment.BottomEnd) {
-                            AsyncImage(
-                                model = conv.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300" },
-                                contentDescription = conv.friend.fullName,
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                            FotoFilmAvatar(
+                                imageUrl = conv.friend.avatarUrl,
+                                name = conv.friend.fullName,
+                                isGroup = conv.isGroup,
+                                modifier = Modifier.size(46.dp),
+                                iconSize = 22.dp
                             )
                             if (isSent) {
                                 Box(

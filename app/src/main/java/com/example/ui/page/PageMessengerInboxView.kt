@@ -1,8 +1,12 @@
 package com.example.ui.page
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,12 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.model.SocialPage
 import com.example.ui.theme.BangladeshGreen
+import com.example.util.VoiceAudioManager
 
 data class PageChatMessage(
     val id: String,
@@ -38,6 +44,7 @@ data class PageChatMessage(
     val imageUrl: String? = null,
     val videoUrl: String? = null,
     val voiceDuration: String? = null,
+    val audioUrl: String? = null,
     val timestamp: String = "Just now"
 )
 
@@ -64,45 +71,7 @@ fun PageMessengerInboxView(
     onAdminNotification: (String) -> Unit
 ) {
     val conversations = remember(page.id) {
-        mutableStateListOf(
-            PageChatConversation(
-                id = "conv_1",
-                visitorName = "Md. Rahim",
-                visitorAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                lastMessage = "আসসালামু আলাইকুম, পেইজের সার্ভিস সম্পর্কে বিস্তারিত জানতে চাই।",
-                time = "10:15 AM",
-                unreadCount = 1,
-                messages = mutableListOf(
-                    PageChatMessage("m1", "Md. Rahim", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", false, "আসসালামু আলাইকুম ভাইয়া"),
-                    PageChatMessage("m2", page.name, page.avatarUrl, true, "ওয়ালাইকুম আসসালাম! ${page.name} পেইজে স্বাগতম। আপনাকে কীভাবে সাহায্য করতে পারি?"),
-                    PageChatMessage("m3", "Md. Rahim", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", false, "পেইজের সার্ভিস সম্পর্কে বিস্তারিত জানতে চাই।")
-                )
-            ),
-            PageChatConversation(
-                id = "conv_2",
-                visitorName = "Tanvir Ahmed",
-                visitorAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200",
-                lastMessage = "নতুন পোস্টের ভিডিওটা দারুণ হয়েছে!",
-                time = "Yesterday",
-                unreadCount = 0,
-                messages = mutableListOf(
-                    PageChatMessage("m4", "Tanvir Ahmed", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", false, "নতুন পোস্টের ভিডিওটা দারুণ হয়েছে!"),
-                    PageChatMessage("m5", page.name, page.avatarUrl, true, "অনেক ধন্যবাদ আপনার মতামতের জন্য! পাশে থাকুন সবসময় ❤️")
-                )
-            ),
-            PageChatConversation(
-                id = "conv_3",
-                visitorName = "Sadia Islam",
-                visitorAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200",
-                lastMessage = "অর্ডার করার নিয়ম কি?",
-                time = "2 days ago",
-                unreadCount = 0,
-                messages = mutableListOf(
-                    PageChatMessage("m6", "Sadia Islam", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", false, "অর্ডার করার নিয়ম কি?"),
-                    PageChatMessage("m7", page.name, page.avatarUrl, true, "ইনবক্সে আপনার ডেলিভারি এড্রেস ও ফোন নম্বর দিন।")
-                )
-            )
-        )
+        mutableStateListOf<PageChatConversation>()
     }
 
     var activeConversation by remember { mutableStateOf<PageChatConversation?>(null) }
@@ -110,8 +79,36 @@ fun PageMessengerInboxView(
 
     if (activeConversation != null) {
         val conv = activeConversation!!
+        val context = LocalContext.current
         var inputText by remember { mutableStateOf("") }
-        var isRecordingVoice by remember { mutableStateOf(false) }
+        val isRecordingVoice by VoiceAudioManager.isRecording.collectAsState()
+        val recordingSeconds by VoiceAudioManager.recordingSeconds.collectAsState()
+        val activeVoiceId by VoiceAudioManager.playingItemId.collectAsState()
+        val isVoicePlaying by VoiceAudioManager.isPlaying.collectAsState()
+        var pendingPageVoice by remember { mutableStateOf(false) }
+
+        val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission()
+        ) { granted ->
+            if (granted && pendingPageVoice) {
+                pendingPageVoice = false
+                VoiceAudioManager.startRecording(context, "page_${conv.id}")
+            } else {
+                pendingPageVoice = false
+                if (!granted) {
+                    Toast.makeText(context, "ভয়েস রেকর্ড করতে মাইক্রোফোন পারমিশন দিন", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        DisposableEffect(conv.id) {
+            onDispose {
+                VoiceAudioManager.stopPlayback()
+                if (VoiceAudioManager.isRecording.value) {
+                    VoiceAudioManager.cancelRecording()
+                }
+            }
+        }
 
         val imagePicker = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
@@ -172,13 +169,13 @@ fun PageMessengerInboxView(
                         IconButton(onClick = { activeConversation = null }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
-                        AsyncImage(
-                            model = conv.visitorAvatar,
+                        com.example.ui.components.FotoFilmAvatar(
+                            imageUrl = conv.visitorAvatar,
+                            name = conv.visitorName,
                             contentDescription = conv.visitorName,
                             modifier = Modifier
                                 .size(38.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
@@ -214,14 +211,14 @@ fun PageMessengerInboxView(
                         horizontalArrangement = if (msg.isFromPage) Arrangement.End else Arrangement.Start
                     ) {
                         if (!msg.isFromPage) {
-                            AsyncImage(
-                                model = msg.senderAvatar,
+                            com.example.ui.components.FotoFilmAvatar(
+                                imageUrl = msg.senderAvatar,
+                                name = msg.senderName,
                                 contentDescription = msg.senderName,
                                 modifier = Modifier
                                     .size(28.dp)
                                     .clip(CircleShape)
-                                    .align(Alignment.Bottom),
-                                contentScale = ContentScale.Crop
+                                    .align(Alignment.Bottom)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                         }
@@ -256,9 +253,20 @@ fun PageMessengerInboxView(
                                 }
 
                                 if (msg.voiceDuration != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val isThisPlaying = isVoicePlaying && activeVoiceId == msg.id
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.clickable {
+                                            val url = msg.audioUrl?.trim().orEmpty()
+                                            if (url.isNotBlank()) {
+                                                VoiceAudioManager.togglePlay(context, msg.id, url)
+                                            } else {
+                                                Toast.makeText(context, "নতুন ভয়েস রেকর্ড করে পাঠান", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    ) {
                                         Icon(
-                                            Icons.Default.PlayArrow,
+                                            imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                             contentDescription = "Voice message",
                                             tint = if (msg.isFromPage) Color.White else Color.Black
                                         )
@@ -282,14 +290,14 @@ fun PageMessengerInboxView(
 
                         if (msg.isFromPage) {
                             Spacer(modifier = Modifier.width(6.dp))
-                            AsyncImage(
-                                model = page.avatarUrl,
+                            com.example.ui.components.FotoFilmAvatar(
+                                imageUrl = page.avatarUrl,
+                                name = page.name,
                                 contentDescription = page.name,
                                 modifier = Modifier
                                     .size(28.dp)
                                     .clip(CircleShape)
-                                    .align(Alignment.Bottom),
-                                contentScale = ContentScale.Crop
+                                    .align(Alignment.Bottom)
                             )
                         }
                     }
@@ -346,25 +354,48 @@ fun PageMessengerInboxView(
                             Icon(Icons.Default.Videocam, contentDescription = "Video", tint = Color(0xFFD32F2F))
                         }
                         IconButton(onClick = {
-                            isRecordingVoice = !isRecordingVoice
-                            if (!isRecordingVoice) {
-                                conv.messages.add(
-                                    PageChatMessage(
-                                        id = "m_${System.currentTimeMillis()}",
-                                        senderName = page.name,
-                                        senderAvatar = page.avatarUrl,
-                                        isFromPage = true,
-                                        text = "ভয়েস মেসেজ",
-                                        voiceDuration = "0:14"
+                            if (isRecordingVoice) {
+                                val res = VoiceAudioManager.stopRecording()
+                                if (res != null) {
+                                    val durText = String.format("%d:%02d", res.durationSeconds / 60, res.durationSeconds % 60)
+                                    conv.messages.add(
+                                        PageChatMessage(
+                                            id = "m_${System.currentTimeMillis()}",
+                                            senderName = page.name,
+                                            senderAvatar = page.avatarUrl,
+                                            isFromPage = true,
+                                            text = "🎙️ ভয়েস মেসেজ ($durText)",
+                                            voiceDuration = durText,
+                                            audioUrl = res.fileUri
+                                        )
                                     )
-                                )
+                                } else {
+                                    Toast.makeText(context, "কমপক্ষে ১ সেকেন্ড কথা বলে ভয়েস দিন", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                val hasPerm = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPerm) {
+                                    VoiceAudioManager.startRecording(context, "page_${conv.id}")
+                                } else {
+                                    pendingPageVoice = true
+                                    recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
                             }
                         }) {
-                            Icon(
-                                Icons.Default.Mic,
-                                contentDescription = "Voice",
-                                tint = if (isRecordingVoice) Color.Red else Color(0xFF7B1FA2)
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (isRecordingVoice) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = "Voice",
+                                    tint = if (isRecordingVoice) Color.Red else Color(0xFF7B1FA2)
+                                )
+                                if (isRecordingVoice) {
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text("${recordingSeconds}s", fontSize = 10.sp, color = Color.Red, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
 
                         OutlinedTextField(
@@ -463,13 +494,13 @@ fun PageMessengerInboxView(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = page.avatarUrl,
+                    com.example.ui.components.FotoFilmAvatar(
+                        imageUrl = page.avatarUrl,
+                        name = page.name,
                         contentDescription = page.name,
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                            .clip(CircleShape)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
@@ -499,33 +530,63 @@ fun PageMessengerInboxView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(conversations) { conv ->
-                Surface(
-                    onClick = { activeConversation = conv },
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color.White,
-                    shadowElevation = 1.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+        if (conversations.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Mail,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "এখনো কোনো ভিজিটর মেসেজ আসেনি",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.DarkGray
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "ভিজিটররা পেইজে মেসেজ দিলে এখানে দেখতে পাবেন।",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(conversations) { conv ->
+                    Surface(
+                        onClick = { activeConversation = conv },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White,
+                        shadowElevation = 1.dp
                     ) {
-                        AsyncImage(
-                            model = conv.visitorAvatar,
-                            contentDescription = conv.visitorName,
+                        Row(
                             modifier = Modifier
-                                .size(46.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            com.example.ui.components.FotoFilmAvatar(
+                                imageUrl = conv.visitorAvatar,
+                                name = conv.visitorName,
+                                contentDescription = conv.visitorName,
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(CircleShape)
+                            )
 
                         Spacer(modifier = Modifier.width(12.dp))
 
@@ -565,6 +626,7 @@ fun PageMessengerInboxView(
                         }
                     }
                 }
+            }
             }
         }
     }

@@ -282,14 +282,13 @@ fun ProfileScreen(
                             .fillMaxWidth()
                             .height(200.dp)
                             .clickable {
-                                showCoverPhotoModal = true
+                                showViewCoverPhotoDialog = true
                             }
                     ) {
-                        AsyncImage(
-                            model = user.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200" },
+                        FotoFilmCoverBackground(
+                            imageUrl = user.coverUrl,
                             contentDescription = strings.coverPhoto,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+                            modifier = Modifier.fillMaxSize()
                         )
 
                         // Subtle dark gradient
@@ -393,7 +392,7 @@ fun ProfileScreen(
                                             )
                                             .padding(if (activeFrame != null) 4.dp else 0.dp)
                                             .clickable {
-                                                showProfileAvatarModal = true
+                                                showViewProfilePictureDialog = true
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -404,11 +403,12 @@ fun ProfileScreen(
                                                 .background(MaterialTheme.colorScheme.surface)
                                                 .border(if (activeFrame == null) 4.dp else 2.dp, MaterialTheme.colorScheme.surface, CircleShape)
                                         ) {
-                                            AsyncImage(
-                                                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800" },
+                                            FotoFilmAvatar(
+                                                imageUrl = user.avatarUrl,
+                                                name = user.fullName,
                                                 contentDescription = strings.profilePhoto,
                                                 modifier = Modifier.fillMaxSize(),
-                                                contentScale = ContentScale.Crop
+                                                iconSize = 46.dp
                                             )
                                         }
                                     }
@@ -567,7 +567,7 @@ fun ProfileScreen(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = "5,000 Friends (সর্বোচ্চ লিমিট পূর্ণ • অটো ফলোয়ার সক্রিয়)",
+                                    text = "5,000 Friend (সর্বোচ্চ লিমিট পূর্ণ • অটো ফলোয়ার সক্রিয়)",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = FacebookBlue
@@ -776,7 +776,7 @@ fun ProfileScreen(
                             )
 
                             ProfileTabItem(
-                                title = "Reels",
+                                title = "Short Video",
                                 isSelected = activeSubTab == ProfileSubTab.REELS,
                                 onClick = { activeSubTab = ProfileSubTab.REELS }
                             )
@@ -873,13 +873,13 @@ fun ProfileScreen(
                         ) {
                             Column {
                                 Text(
-                                    text = "Friends",
+                                    text = "Friend",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 18.sp,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "5,000 friends (65 mutual)",
+                                    text = "${user.friendCount} friend",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -972,7 +972,7 @@ fun ProfileScreen(
                         // স্টোরিগুলো স্থায়ীভাবে জমা থাকবে এবং যেকোনো সময় পরেও দেখা যাবে
                         // ============================================================
                         val userHighlightsMap by viewModel.userHighlights.collectAsState()
-                        val highlights = userHighlightsMap[user.id] ?: (SampleData.initialHighlightsMap["user_me"] ?: emptyList())
+                        val highlights = userHighlightsMap[user.id] ?: emptyList()
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -1153,7 +1153,7 @@ fun ProfileScreen(
                                             .clickable { viewModel.setShowCreatePostDialog(true) }
                                     ) {
                                         Text(
-                                            text = "What's on your mind?",
+                                            text = "Share your moment?",
                                             fontSize = 14.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
@@ -1198,9 +1198,9 @@ fun ProfileScreen(
                                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.Movie, contentDescription = "Reels", tint = Color(0xFFE4405F), modifier = Modifier.size(18.dp))
+                                            Icon(Icons.Default.Movie, contentDescription = "Short Video", tint = Color(0xFFE4405F), modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Reels", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                            Text("Short Video", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                         }
                                     }
 
@@ -1328,60 +1328,72 @@ fun ProfileScreen(
                 item {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "Reels by ${user.fullName}",
+                            text = "Short Videos by ${user.fullName}",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Reels 3-item grid
-                        val reelsList = listOf(
-                            Triple("মাটির টানে গ্রামের পথে 🌿", "245K views", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=600"),
-                            Triple("সন্ধ্যায় সাগরের গর্জন 🌊", "180K views", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600"),
-                            Triple("বন্ধুদের সাথে সুন্দর মুহূর্ত ✨", "310K views", "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=600")
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            reelsList.forEach { (caption, views, img) ->
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(170.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.DarkGray)
-                                ) {
-                                    AsyncImage(
-                                        model = img,
-                                        contentDescription = caption,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
+                        val reelsPosts = userPosts.filter { it.isReel }
+                        if (reelsPosts.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "এখনো কোনো শর্ট ভিডিও আপলোড করা হয়নি",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                reelsPosts.take(3).forEach { reelPost ->
+                                    val thumb = reelPost.images.firstOrNull().orEmpty()
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(
-                                                Brush.verticalGradient(
-                                                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
-                                                )
-                                            )
-                                    )
-                                    Row(
-                                        modifier = Modifier
-                                            .align(Alignment.BottomStart)
-                                            .padding(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .weight(1f)
+                                            .height(170.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color.DarkGray)
                                     ) {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(16.dp)
+                                        if (thumb.isNotBlank()) {
+                                            AsyncImage(
+                                                model = thumb,
+                                                contentDescription = reelPost.text,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                                                    )
+                                                )
                                         )
-                                        Spacer(modifier = Modifier.width(2.dp))
-                                        Text(views, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Row(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .padding(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.PlayArrow,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(reelPost.reachViews, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
@@ -1401,41 +1413,49 @@ fun ProfileScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        val photoUrls = listOf(
-                            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400",
-                            "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=400",
-                            "https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=400",
-                            "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=400",
-                            "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=400",
-                            "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=400"
-                        )
+                        val photoUrls = userPosts.filter { !it.isVideo && !it.isReel }.flatMap { it.images }.filter { it.isNotBlank() }
 
-                        for (i in photoUrls.indices step 3) {
-                            Row(
+                        if (photoUrls.isEmpty()) {
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 3.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    .padding(vertical = 24.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                for (j in 0 until 3) {
-                                    val idx = i + j
-                                    if (idx < photoUrls.size) {
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .aspectRatio(1f)
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(Color.LightGray)
-                                        ) {
-                                            AsyncImage(
-                                                model = photoUrls[idx],
-                                                contentDescription = null,
-                                                contentScale = ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize()
-                                            )
+                                Text(
+                                    text = "এখনো কোনো ছবি আপলোড করা হয়নি",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            for (i in photoUrls.indices step 3) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 3.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    for (j in 0 until 3) {
+                                        val idx = i + j
+                                        if (idx < photoUrls.size) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .aspectRatio(1f)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                                    .background(Color.LightGray)
+                                            ) {
+                                                AsyncImage(
+                                                    model = photoUrls[idx],
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            }
+                                        } else {
+                                            Spacer(modifier = Modifier.weight(1f))
                                         }
-                                    } else {
-                                        Spacer(modifier = Modifier.weight(1f))
                                     }
                                 }
                             }
@@ -1638,8 +1658,8 @@ fun ProfileScreen(
             onPublish = { title, category, date, desc ->
                 viewModel.createPost(
                     text = "🚩 $title\n$desc\n\n📅 $date",
-                    hashtags = listOf("#LifeEvent", "#FaceFeed", "#Milestone", "#Alhamdulillah"),
-                    images = listOf("https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800"),
+                    hashtags = listOf("#LifeEvent", "#FotoFilm", "#Milestone", "#Alhamdulillah"),
+                    images = emptyList(),
                     isVideo = false,
                     videoTitle = null,
                     isReel = false
@@ -1740,7 +1760,7 @@ fun ProfileScreen(
     // ============================================================
     if (showSelectPhotoOnFaceFeedDialog) {
         SelectPhotoOnFaceFeedDialog(
-            title = if (isSelectingForCover) "FaceFeed-এ কভার ছবি নির্বাচন করুন" else "FaceFeed-এ প্রোফাইল ছবি নির্বাচন করুন",
+            title = if (isSelectingForCover) "FotoFilm-এ কভার ছবি নির্বাচন করুন" else "FotoFilm-এ প্রোফাইল ছবি নির্বাচন করুন",
             isForCover = isSelectingForCover,
             onPhotoSelected = { url ->
                 if (isSelectingForCover) {
@@ -1757,13 +1777,21 @@ fun ProfileScreen(
     // 5. FULL SCREEN VIEWER: SEE PROFILE PICTURE
     // ============================================================
     if (showViewProfilePictureDialog) {
+        val avatarModel = user.avatarUrl
         FullScreenPhotoViewerDialog(
             title = "প্রোফাইল ছবি",
-            imageUrl = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800" },
+            imageUrl = avatarModel,
             authorName = user.fullName,
             authorAvatar = user.avatarUrl,
             frameId = user.avatarFrame,
             isCover = false,
+            isOwnProfile = true,
+            onMakeProfilePicture = { viewModel.updateProfileAvatar(avatarModel) },
+            onMakeCoverPhoto = { viewModel.updateCoverPhoto(avatarModel) },
+            onEditPhotoOptions = {
+                showViewProfilePictureDialog = false
+                showProfileAvatarModal = true
+            },
             onDismiss = { showViewProfilePictureDialog = false }
         )
     }
@@ -1772,13 +1800,21 @@ fun ProfileScreen(
     // 6. FULL SCREEN VIEWER: SEE COVER PHOTO
     // ============================================================
     if (showViewCoverPhotoDialog) {
+        val coverModel = user.coverUrl
         FullScreenPhotoViewerDialog(
             title = "কভার ফটো",
-            imageUrl = user.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200" },
+            imageUrl = coverModel,
             authorName = user.fullName,
             authorAvatar = user.avatarUrl,
             frameId = null,
             isCover = true,
+            isOwnProfile = true,
+            onMakeProfilePicture = { viewModel.updateProfileAvatar(coverModel) },
+            onMakeCoverPhoto = { viewModel.updateCoverPhoto(coverModel) },
+            onEditPhotoOptions = {
+                showViewCoverPhotoDialog = false
+                showCoverPhotoModal = true
+            },
             onDismiss = { showViewCoverPhotoDialog = false }
         )
     }
@@ -1863,7 +1899,7 @@ fun ProfileScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("🎬 ভিডিও অ্যালবাম ও ক্লিপস কালেকশন", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                Text("তাত্ক্ষণিক এইচডি ভিডিও ও রিলস অ্যালবাম থেকে বাছাই", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                                Text("তাত্ক্ষণিক এইচডি ভিডিও ও শর্ট ভিডিও অ্যালবাম থেকে বাছাই", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                             }
                         }
                     }
@@ -2087,7 +2123,7 @@ fun FollowersDialog(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "@${follower.username} • ${follower.mutualFriendsCount} mutual friends",
+                                text = "@${follower.username} • ${follower.mutualFriendsCount} mutual friend",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -2352,7 +2388,7 @@ fun ProfessionalDashboardDialog(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            ToolRow(icon = Icons.Default.MonetizationOn, title = "Monetization & Stars", subtitle = "Eligible to earn from posts and reels")
+            ToolRow(icon = Icons.Default.MonetizationOn, title = "Monetization & Stars", subtitle = "Eligible to earn from posts and short videos")
             ToolRow(icon = Icons.Default.Stars, title = "Profile recommendation", subtitle = "Your profile is recommended to new people")
             ToolRow(icon = Icons.Default.Insights, title = "Audience insights", subtitle = "Dhaka, Chittagong, Barisal & international fans")
 
@@ -2648,7 +2684,7 @@ fun AllFriendsDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Friends (${friends.size})",
+                        text = "Friend (${friends.size})",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
                     )
@@ -2662,7 +2698,7 @@ fun AllFriendsDialog(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search friends...", fontSize = 13.sp) },
+                    placeholder = { Text("Search friend...", fontSize = 13.sp) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
                     singleLine = true,
                     shape = RoundedCornerShape(20.dp),
@@ -2931,7 +2967,7 @@ fun FriendDetailDialog(
                 ) {
                     Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Friends ✓")
+                    Text("Friend ✓")
                 }
             }
         },

@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,9 +12,11 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.VolumeMute
@@ -23,11 +28,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import com.example.ui.components.FidaAILogo
 import com.example.ui.components.FidaVerifiedBadge
+import com.example.ui.components.FotoFilmAvatar
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +64,7 @@ import com.example.ui.components.FriendsHangoutPartyRoomDialog
 import com.example.ui.components.GroupPolicyDialog
 import com.example.ui.components.LivePartyRoomHubDialog
 import com.example.ui.components.LudoKingGroupDialog
+import com.example.ui.components.AdBanner
 import com.example.ui.components.LudoGroupPolicyDialog
 import com.example.ui.components.GameMode
 
@@ -173,7 +182,7 @@ fun MessagesScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -184,24 +193,24 @@ fun MessagesScreen(
                     // Back to Facebook/Home Button
                     IconButton(
                         onClick = { viewModel.setTab(com.example.viewmodel.AppTab.HOME) },
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back to Home",
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
                     // Drawer Hamburger Menu Button
                     IconButton(
                         onClick = { showMessengerDrawer = true },
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "ChatFilm Menu",
-                            modifier = Modifier.size(21.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
@@ -212,12 +221,12 @@ fun MessagesScreen(
                         painter = painterResource(id = R.drawable.ic_fotofilm_logo),
                         contentDescription = "ChatFilm App Logo",
                         modifier = Modifier
-                            .size(30.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                            .size(26.dp)
+                            .clip(RoundedCornerShape(7.dp)),
                         contentScale = ContentScale.Crop
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
 
                     Text(
                         text = buildAnnotatedString {
@@ -228,11 +237,14 @@ fun MessagesScreen(
                                 append("Film")
                             }
                         },
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         letterSpacing = (-0.3).sp,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    FidaVerifiedBadge(size = 16.dp)
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -240,14 +252,14 @@ fun MessagesScreen(
                     IconButton(
                         onClick = { showCameraDialog = true },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.Default.CameraAlt,
                             contentDescription = "Camera",
-                            modifier = Modifier.size(19.dp)
+                            modifier = Modifier.size(17.dp)
                         )
                     }
 
@@ -255,14 +267,14 @@ fun MessagesScreen(
                     IconButton(
                         onClick = { showNewMessageDialog = true },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "New Message",
-                            modifier = Modifier.size(19.dp),
+                            modifier = Modifier.size(17.dp),
                             tint = FacebookBlue
                         )
                     }
@@ -278,20 +290,20 @@ fun MessagesScreen(
                                 )
                             } else {
                                 viewModel.startGroupCall(
-                                    groupName = "FaceFeed Family Call 📞",
-                                    members = listOf(SampleData.friendHasan, SampleData.friendTanvir, SampleData.friendNusrat, SampleData.friendSamrat)
+                                    groupName = "FotoFilm Group Call 📞",
+                                    members = listOf(currentUser)
                                 )
                             }
                         },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.Default.VideoCall,
                             contentDescription = strings.groupCall,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = FacebookBlue
                         )
                     }
@@ -301,14 +313,14 @@ fun MessagesScreen(
                         IconButton(
                             onClick = { showTopRightMenu = true },
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(32.dp)
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "Messenger Options Menu",
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(18.dp),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -466,14 +478,14 @@ fun MessagesScreen(
                     IconButton(
                         onClick = { viewModel.setTab(com.example.viewmodel.AppTab.HOME) },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(32.dp)
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back (ব্যাকে যান / বের হোন)",
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(17.dp),
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
@@ -483,21 +495,21 @@ fun MessagesScreen(
             // All-Time Free & Always Active Banner in ChatFilm
             Surface(
                 color = Color(0xFFE8F5E9),
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(0.8.dp, BangladeshGreen.copy(alpha = 0.35f)),
+                shape = RoundedCornerShape(7.dp),
+                border = BorderStroke(0.6.dp, BangladeshGreen.copy(alpha = 0.35f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                    .padding(horizontal = 14.dp, vertical = 1.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("⚡", fontSize = 12.sp)
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("⚡", fontSize = 10.sp)
+                    Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "ChatFilm অল-টাইম ফ্রি • চ্যাট, ছবি, ভিডিও, ভয়েস ও অডিও/ভিডিও/গ্রুপ কল সবসময় চালু ✓",
-                        fontSize = 11.sp,
+                        text = "ChatFilm অল-টাইম ফ্রি • চ্যাট, ভয়েস ও অডিও/ভিডিও/গ্রুপ কল চালু ✓",
+                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color(0xFF1B5E20),
                         maxLines = 1,
@@ -506,32 +518,182 @@ fun MessagesScreen(
                 }
             }
 
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search in ChatFilm...", fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(16.dp))
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(24.dp),
-                singleLine = true
-            )
-
-            // Messenger Filter Tabs on Left + Fida AI (ফিদা এআই) on Right
-            // "ছার্চ বারের নিচে ঐ ৪ টা ফিচার অপসোনের ডান পাসে ঐ ফুলের ছবি নিচে  ফিদা এআই"
+            // ২ টা পাশাপাশি ছোট্ট ও উপরের দিকে অপশন: ১. বন্ধুদের সাথে আড্ডা, ২. লুডু কিং গ্রুপ
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp),
+                    .padding(horizontal = 14.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // ১. বন্ধুদের সাথে আড্ডা (🧑🤝🧑) - Compact & Raised
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, Color(0xFFBA68C8).copy(alpha = 0.55f)),
+                    shadowElevation = 1.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { showGroupPolicyDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFF3E5F5),
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("🧑🤝🧑", fontSize = 13.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "বন্ধুদের সাথে আড্ডা",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                FidaVerifiedBadge(size = 10.dp)
+                            }
+                            Text(
+                                text = "লাইভ পার্টি রুম 🌿",
+                                fontSize = 8.5.sp,
+                                color = Color(0xFF7B1FA2),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                // ২. লুডু কিং গ্রুপ (🎲) - Compact & Raised
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, Color(0xFFFFB300).copy(alpha = 0.65f)),
+                    shadowElevation = 1.dp,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { showLudoPolicyDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFFFF8E1),
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("🎲", fontSize = 13.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "লুডু কিং গ্রুপ",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                FidaVerifiedBadge(size = 10.dp)
+                            }
+                            Text(
+                                text = "২-৪ জন লুডু ম্যাচ 🎲",
+                                fontSize = 8.5.sp,
+                                color = Color(0xFFE65100),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Ultra-Compact Sleek Search Bar (অনেক ছোট্ট ও পরিচ্ছন্ন সার্চ বার)
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 2.dp)
+                    .height(32.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = TextStyle(
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            cursorBrush = SolidColor(FacebookBlue),
+                            modifier = Modifier.fillMaxWidth(),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Search in ChatFilm...",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(
+                            onClick = { searchQuery = "" },
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Messenger Filter Tabs on Left + Fida AI (ফিদা এআই) on Right
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 4 Filter Tabs: [ All ] [ Unread ] [ Groups ] [ Archived ]
@@ -576,7 +738,7 @@ fun MessagesScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Fida AI Button on Right: ঐ ফুলের ছবি নিচে  ফিদা এআই
+                // Fida AI Button on Right: ঐ ফুলের ছবি নিচে ফিদা এআই
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -596,121 +758,17 @@ fun MessagesScreen(
                         )
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                 ) {
-                    FidaAILogo(size = 28.dp, animated = true)
+                    FidaAILogo(size = 26.dp, animated = true)
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "ফিদা এআই",
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF6A1B9A)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
-                        FidaVerifiedBadge(size = 12.dp)
-                    }
-                }
-            }
-
-            // ২ টা পাশাপাশি অপশন: ১. বন্ধুদের সাথে আড্ডা (🧑🤝🧑), ২. লুডু কিং গ্রুপ (🎲)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // ১. বন্ধুদের সাথে আড্ডা (🧑🤝🧑) - লাইভ পার্টি চ্যাট রুম (Screenshot 2)
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.5.dp, Color(0xFFBA68C8).copy(alpha = 0.5f)),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { showGroupPolicyDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFF3E5F5),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("🧑🤝🧑", fontSize = 20.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "বন্ধুদের সাথে আড্ডা",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                FidaVerifiedBadge(size = 13.dp)
-                            }
-                            Text(
-                                text = "লাইভ পার্টি রুম 🌿",
-                                fontSize = 10.sp,
-                                color = Color(0xFF7B1FA2),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-
-                // ২. লুডু কিং গ্রুপ (🎲) - ৪ জন ভিডিও কলে লাইভ লুডু ম্যাচ
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.5.dp, Color(0xFFFFB300).copy(alpha = 0.6f)),
-                    shadowElevation = 2.dp,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { showLudoPolicyDialog = true }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFFFF8E1),
-                            modifier = Modifier.size(38.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text("🎲", fontSize = 20.sp)
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "লুডু কিং গ্রুপ",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
-                                )
-                                Spacer(modifier = Modifier.width(3.dp))
-                                FidaVerifiedBadge(size = 13.dp)
-                            }
-                            Text(
-                                text = "২-৪ জন, জোড়া জোড়ায় খেলো 🎲",
-                                fontSize = 10.sp,
-                                color = Color(0xFFE65100),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
+                        FidaVerifiedBadge(size = 11.dp)
                     }
                 }
             }
@@ -723,17 +781,17 @@ fun MessagesScreen(
                     onFriendNoteClick = { friend, note ->
                         selectedFriendForNoteReply = friend to note
                     },
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier.padding(vertical = 1.dp)
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
             }
 
-            // Conversations List
+            // Conversations List + Google AdMob AdBanner enabled in ChatFilm
             if (filteredConversations.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(32.dp),
+                        .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -741,7 +799,7 @@ fun MessagesScreen(
                             imageVector = Icons.Default.ChatBubbleOutline,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                            modifier = Modifier.size(60.dp)
+                            modifier = Modifier.size(54.dp)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
@@ -750,17 +808,25 @@ fun MessagesScreen(
                             fontSize = 16.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        AdBanner(creativeIndex = 0)
                     }
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(filteredConversations, key = { it.id }) { conv ->
+                    itemsIndexed(filteredConversations, key = { _, conv -> conv.id }) { index, conv ->
                         ConversationRow(
                             conversation = conv,
                             viewModel = viewModel,
                             onClick = { viewModel.openChat(conv) },
                             onMoreOptions = { selectedConversationForOptions = conv }
                         )
+                        if ((index + 1) % 4 == 0 || (filteredConversations.size < 4 && index == filteredConversations.lastIndex)) {
+                            AdBanner(
+                                creativeIndex = index / 4,
+                                modifier = Modifier.padding(horizontal = 14.dp)
+                            )
+                        }
                     }
                     item {
                         Spacer(modifier = Modifier.height(80.dp))
@@ -1249,12 +1315,12 @@ fun MessengerTabChip(
         border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, FacebookBlue) else null
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = label,
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                 color = if (isSelected) FacebookBlue else MaterialTheme.colorScheme.onSurface
             )
@@ -1313,13 +1379,13 @@ fun ConversationRow(
                     Icon(Icons.Default.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
             } else {
-                AsyncImage(
-                    model = conversation.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = conversation.friend.avatarUrl,
+                    name = conversation.friend.fullName,
                     contentDescription = conversation.friend.fullName,
                     modifier = Modifier
                         .size(54.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
                 )
                 if (conversation.friend.isOnline) {
                     Box(
@@ -1413,13 +1479,41 @@ fun ConversationRow(
                     modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (conversation.lastMessage.contains("missed a call", ignoreCase = true)) {
+                    val lastChatMsg = conversation.messages.lastOrNull()
+                    if (lastChatMsg?.isMissedCall == true ||
+                        conversation.lastMessage.contains("missed a call", ignoreCase = true) ||
+                        conversation.lastMessage.contains("মিসড") ||
+                        conversation.lastMessage.contains("উত্তর নেই")
+                    ) {
                         Icon(
                             imageVector = Icons.Default.PhoneMissed,
                             contentDescription = "Missed Call",
                             tint = Color.Red,
                             modifier = Modifier
-                                .size(14.dp)
+                                .size(15.dp)
+                                .padding(end = 3.dp)
+                        )
+                    } else if (lastChatMsg?.callLogType == com.example.model.CallType.VIDEO ||
+                        lastChatMsg?.callLogType == com.example.model.CallType.GROUP ||
+                        conversation.lastMessage.contains("ভিডিও কল")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Videocam,
+                            contentDescription = "Video Call",
+                            tint = FacebookBlue,
+                            modifier = Modifier
+                                .size(15.dp)
+                                .padding(end = 3.dp)
+                        )
+                    } else if (lastChatMsg?.callLogType == com.example.model.CallType.AUDIO ||
+                        conversation.lastMessage.contains("অডিও কল")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Call,
+                            contentDescription = "Audio Call",
+                            tint = BangladeshGreen,
+                            modifier = Modifier
+                                .size(15.dp)
                                 .padding(end = 3.dp)
                         )
                     } else if (conversation.lastMessage.contains("attachment", ignoreCase = true)) {
@@ -1456,6 +1550,7 @@ fun ConversationRow(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    val lastMsg = conversation.messages.lastOrNull()
                     if (conversation.unreadCount > 0) {
                         Box(
                             modifier = Modifier
@@ -1470,6 +1565,54 @@ fun ConversationRow(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                        }
+                    } else if (lastMsg != null && lastMsg.isFromMe) {
+                        when (lastMsg.status) {
+                            com.example.model.MessageDeliveryStatus.SENT -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clip(CircleShape)
+                                        .border(1.2.dp, FacebookBlue, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("✓", fontSize = 8.sp, color = FacebookBlue, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            com.example.model.MessageDeliveryStatus.DELIVERED -> {
+                                Box(
+                                    modifier = Modifier
+                                        .size(15.dp)
+                                        .clip(CircleShape)
+                                        .background(FacebookBlue),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("✓✓", fontSize = 7.sp, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
+                            com.example.model.MessageDeliveryStatus.SEEN -> {
+                                if (conversation.friend.avatarUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = conversation.friend.avatarUrl,
+                                        contentDescription = "Seen",
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .clip(CircleShape)
+                                            .border(0.8.dp, FacebookBlue, CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(15.dp)
+                                            .clip(CircleShape)
+                                            .background(FacebookBlue),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("✓✓", fontSize = 7.sp, color = Color.White, fontWeight = FontWeight.ExtraBold)
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -1517,13 +1660,13 @@ fun MessengerDrawerDialog(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Box(contentAlignment = Alignment.BottomEnd) {
-                        AsyncImage(
-                            model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400" },
+                        FotoFilmAvatar(
+                            imageUrl = currentUser.avatarUrl,
+                            name = currentUser.fullName,
                             contentDescription = currentUser.fullName,
                             modifier = Modifier
                                 .size(44.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         Box(
                             modifier = Modifier
@@ -1655,13 +1798,14 @@ fun ConversationOptionsDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                AsyncImage(
-                    model = conversation.friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = conversation.friend.avatarUrl,
+                    name = if (conversation.isGroup) conversation.groupName ?: "Group" else conversation.friend.fullName,
                     contentDescription = null,
+                    isGroup = conversation.isGroup,
                     modifier = Modifier
                         .size(36.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
@@ -2089,40 +2233,7 @@ fun MarketplaceChatsDialog(
     onDismiss: () -> Unit,
     onStartProductChat: (User, String) -> Unit
 ) {
-    val marketItems = remember {
-        listOf(
-            Triple(
-                User(
-                    id = "mkt_seller_1",
-                    fullName = "Gadget Zone BD",
-                    username = "gadget_zone_bd",
-                    avatarUrl = "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=300"
-                ),
-                "iPhone 15 Pro Max (256GB)",
-                "৳ ১,৩৫,০০০ • ঢাকা"
-            ),
-            Triple(
-                User(
-                    id = "mkt_seller_2",
-                    fullName = "Camera House",
-                    username = "camera_house",
-                    avatarUrl = "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=300"
-                ),
-                "Canon EOS R50 Mirrorless Camera",
-                "৳ ৭২,৫০০ • চট্টগ্রাম"
-            ),
-            Triple(
-                User(
-                    id = "mkt_seller_3",
-                    fullName = "Tech Furniture",
-                    username = "tech_furniture",
-                    avatarUrl = "https://images.unsplash.com/photo-1598550476439-6847785fcea6?w=300"
-                ),
-                "Ergonomic Gaming & Studio Chair",
-                "৳ ১৮,৯০০ • সিলেট"
-            )
-        )
-    }
+    val marketItems = remember { emptyList<Triple<User, String, String>>() }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2137,38 +2248,46 @@ fun MarketplaceChatsDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "সরাসরি সেলারদের সাথে ChatFilm-এ কথা বলুন:",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                marketItems.forEach { (seller, product, price) ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onStartProductChat(seller, product) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                if (marketItems.isEmpty()) {
+                    Text(
+                        text = "এখনো কোনো মার্কেটপ্লেস ইনবক্স চ্যাট নেই। আসল সেলার বা বায়ারদের সাথে মেসেজ করলে এখানে দেখা যাবে।",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "সরাসরি সেলারদের সাথে ChatFilm-এ কথা বলুন:",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    marketItems.forEach { (seller, product, price) ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onStartProductChat(seller, product) }
                         ) {
-                            AsyncImage(
-                                model = seller.avatarUrl,
-                                contentDescription = product,
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(product, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(price, fontSize = 11.sp, color = BangladeshGreen, fontWeight = FontWeight.SemiBold)
-                                Text(seller.fullName, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                FotoFilmAvatar(
+                                    imageUrl = seller.avatarUrl,
+                                    name = seller.fullName,
+                                    contentDescription = product,
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(product, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(price, fontSize = 11.sp, color = BangladeshGreen, fontWeight = FontWeight.SemiBold)
+                                    Text(seller.fullName, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Icon(Icons.Default.Chat, contentDescription = "Message", tint = FacebookBlue, modifier = Modifier.size(20.dp))
                             }
-                            Icon(Icons.Default.Chat, contentDescription = "Message", tint = FacebookBlue, modifier = Modifier.size(20.dp))
                         }
                     }
                 }
@@ -2219,13 +2338,13 @@ fun NoteUserItem(
 
         // Avatar with Online Green Dot or '+' for me
         Box(contentAlignment = Alignment.BottomEnd) {
-            AsyncImage(
-                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+            FotoFilmAvatar(
+                imageUrl = user.avatarUrl,
+                name = user.fullName,
                 contentDescription = user.fullName,
                 modifier = Modifier
                     .size(54.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                    .clip(CircleShape)
             )
 
             if (isMe) {
@@ -2285,14 +2404,15 @@ fun MessengerCameraDialog(
 ) {
     var flashOn by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(false) }
+    var selectedSnapUri by remember { mutableStateOf<String?>(null) }
 
-    val sampleSnaps = listOf(
-        "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800",
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800",
-        "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800",
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800"
-    )
-    var selectedSnapIndex by remember { mutableIntStateOf(0) }
+    val galleryPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            selectedSnapUri = uri.toString()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2334,17 +2454,34 @@ fun MessengerCameraDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
+                        .height(240.dp)
                         .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black),
+                        .background(Color(0xFF101820)),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = sampleSnaps[selectedSnapIndex],
-                        contentDescription = "Camera Viewfinder",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    if (selectedSnapUri != null) {
+                        AsyncImage(
+                            model = selectedSnapUri,
+                            contentDescription = "Selected Snap",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.PhotoCamera,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "ফোন গ্যালারি থেকে ছবি বাছুন",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
 
                     Surface(
                         color = Color.Black.copy(alpha = 0.5f),
@@ -2364,39 +2501,29 @@ fun MessengerCameraDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                OutlinedButton(
+                    onClick = {
+                        galleryPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    sampleSnaps.forEachIndexed { index, snapUrl ->
-                        Surface(
-                            onClick = { selectedSnapIndex = index },
-                            shape = RoundedCornerShape(8.dp),
-                            border = if (selectedSnapIndex == index) androidx.compose.foundation.BorderStroke(2.dp, FacebookBlue) else null,
-                            modifier = Modifier.size(44.dp)
-                        ) {
-                            AsyncImage(
-                                model = snapUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ফোন গ্যালারি খুলুন")
                 }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onCapture(sampleSnaps[selectedSnapIndex]) },
+                onClick = { selectedSnapUri?.let { onCapture(it) } },
+                enabled = selectedSnapUri != null,
                 colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue),
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Snap & Send")
+                Text("পাঠান")
             }
         },
         dismissButton = {
@@ -2427,13 +2554,13 @@ fun NoteReplyDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(
-                        model = friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                    FotoFilmAvatar(
+                        imageUrl = friend.avatarUrl,
+                        name = friend.fullName,
                         contentDescription = friend.fullName,
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                            .clip(CircleShape)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(friend.fullName, fontWeight = FontWeight.Bold, fontSize = 16.sp)

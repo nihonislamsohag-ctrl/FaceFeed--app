@@ -133,88 +133,41 @@ fun MemoriesDialog(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Text(
-                        text = "১ বছর আগে আজকের এই দিনে (৭ নভেম্বর ২০২৫)",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Memory Card
+                    // Empty State when no memories exist yet
                     Card(
                         shape = RoundedCornerShape(14.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                AsyncImage(
-                                    model = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                                    contentDescription = "Avatar",
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Column {
-                                    Text("Niyon Islam Sohag", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                    Text("৭ নভেম্বর ২০২৫ • ১ বছর আগে", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = Color(0xFF00838F),
+                                modifier = Modifier.size(44.dp)
+                            )
                             Spacer(modifier = Modifier.height(10.dp))
-
                             Text(
-                                text = "গ্রামের মনোরম সবুজ মাঠে কাটালেন একটি সুন্দর বিকেল। আল্লাহ তায়ালার অপূর্ব সৃষ্টি প্রকৃতি 🌿🌾❤️",
-                                fontSize = 13.sp,
+                                text = "আজকের দিনে কোনো পুরনো স্মৃতি নেই",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            AsyncImage(
-                                model = "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=800",
-                                contentDescription = "Memory Photo",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .clip(RoundedCornerShape(10.dp)),
-                                contentScale = ContentScale.Crop
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "আপনি FotoFilm-এ ছবি বা পোস্ট শেয়ার করলে সময়ের সাথে সাথে এখানে আপনার পুরনো স্মৃতিগুলো দেখা যাবে।",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "❤️ 👍 ১২৮ জন পছন্দ করেছেন • ৩৪টি মন্তব্য",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-
-                                Button(
-                                    onClick = {
-                                        Toast.makeText(context, "স্মৃতিটি আপনার টাইমলাইনে সফলভাবে শেয়ার হয়েছে! 🚀", Toast.LENGTH_SHORT).show()
-                                        onDismiss()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(34.dp)
-                                ) {
-                                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("ফিডে শেয়ার", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
                         }
                     }
                 }

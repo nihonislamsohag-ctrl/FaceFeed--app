@@ -192,7 +192,7 @@ fun AdminDaily43MbQuotaCompressionView(
                                 fontSize = 13.sp
                             )
                             Text(
-                                text = "১০০ MB ভিডিও → ৩০ MB, রিল → ৮ MB, স্টোরি → ৩ MB ও ছবি → ৩০০ KB করবে",
+                                text = "১০০ MB ভিডিও → ৩০ MB, শর্ট ভিডিও → ৮ MB, স্টোরি → ৩ MB ও ছবি → ৩০০ KB করবে",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -252,7 +252,7 @@ fun AdminDaily43MbQuotaCompressionView(
                         color = Color(0xFF4E342E)
                     )
                     QuotaRuleRow("১. ১ টি লং ভিডিও (৩ মিনিট)", "৩০.০ MB", "১০০ MB দিলেও ৩০ MB")
-                    QuotaRuleRow("২. ১ টি রিল ভিডিও (৩০ সেকেন্ড)", "৮.০ MB", "অটো ছোট করে আপলোড")
+                    QuotaRuleRow("২. ১ টি শর্ট ভিডিও (৩০ সেকেন্ড)", "৮.০ MB", "অটো ছোট করে আপলোড")
                     QuotaRuleRow("৩. ৪ টি ছবি (৪ × ৩০০ KB)", "১.২ MB", "প্রতিটি সর্বোচ্চ ৩০০ KB")
                     QuotaRuleRow("৪. স্টোরি মোট ৪ টি (৩ ছবি ০.৯ + ১ ভিডিও ১৫সে. ৩.০)", "৩.৯ MB", "মোট স্টোরি ৩.৯ MB")
                     HorizontalDivider(color = Color(0xFFFFCC80))
@@ -424,13 +424,11 @@ private fun UserDailyUsageTrackerCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = usage.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200" },
-                    contentDescription = usage.userName,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                FotoFilmAvatar(
+                    imageUrl = usage.avatarUrl,
+                    name = usage.userName,
+                    modifier = Modifier.size(38.dp),
+                    iconSize = 18.dp
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -484,7 +482,7 @@ private fun UserDailyUsageTrackerCard(
                     modifier = Modifier.weight(1f)
                 )
                 UsagePill(
-                    label = String.format(Locale.US, "📱 রিল: %d/1 (%.1fMB)", usage.reelCount, usage.reelMb),
+                    label = String.format(Locale.US, "📱 শর্ট ভিডিও: %d/1 (%.1fMB)", usage.reelCount, usage.reelMb),
                     modifier = Modifier.weight(1f)
                 )
             }

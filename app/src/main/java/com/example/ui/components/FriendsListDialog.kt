@@ -93,7 +93,7 @@ fun FriendsListDialog(
                         }
 
                         Text(
-                            text = "আপনার বন্ধুতালিকা (Friends)",
+                            text = "আপনার বন্ধুতালিকা (Friend)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -179,13 +179,11 @@ private fun FriendItemCard(
         ) {
             // Profile Icon / Avatar with Online dot
             Box(contentAlignment = Alignment.BottomEnd) {
-                AsyncImage(
-                    model = friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                    contentDescription = friend.fullName,
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                FotoFilmAvatar(
+                    imageUrl = friend.avatarUrl,
+                    name = friend.fullName,
+                    modifier = Modifier.size(54.dp),
+                    iconSize = 26.dp
                 )
 
                 if (friend.isOnline) {

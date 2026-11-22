@@ -54,34 +54,7 @@ fun EventsDialog(
     var goingEvents by remember { mutableStateOf(setOf<String>()) }
     var interestedEvents by remember { mutableStateOf(setOf<String>()) }
 
-    val events = remember {
-        listOf(
-            LocalEvent(
-                id = "ev_1",
-                title = "অমর একুশে বইমেলা ও সাহিত্য উৎসব ২০২৬",
-                dateText = "১ ফেব্রুয়ারি - ২৮ ফেব্রুয়ারি • প্রতিদিন দুপুর ৩:০০",
-                location = "বাংলা একাডেমি ও সোহরাওয়ার্দী উদ্যান, ঢাকা",
-                imageUrl = "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=500",
-                attendeesCount = "৪৫.২K মানুষ আগ্রহী • ১২.৫K যাবেন"
-            ),
-            LocalEvent(
-                id = "ev_2",
-                title = "বাংলাদেশ টেক সামিট ও সফটওয়্যার কার্নিভাল",
-                dateText = "১৫ নভেম্বর • সকাল ১০:০০ - রাত ৮:০০",
-                location = "বঙ্গবন্ধু আন্তর্জাতিক সম্মেলন কেন্দ্র (BICC), ঢাকা",
-                imageUrl = "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=500",
-                attendeesCount = "১৮.৪K মানুষ আগ্রহী • ৬.১K যাবেন"
-            ),
-            LocalEvent(
-                id = "ev_3",
-                title = "ঐতিহ্যবাহী লোকসংগীত ও সুফিয়ানা বাউল মেলা",
-                dateText = "২০ নভেম্বর - ২২ নভেম্বর",
-                location = "ছেঁউড়িয়া, লালন শাহ মাজার, কুষ্টিয়া",
-                imageUrl = "https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=500",
-                attendeesCount = "৩২K মানুষ যাবেন • ৮৯K আগ্রহী"
-            )
-        )
-    }
+    val events = remember { emptyList<LocalEvent>() }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -127,14 +100,45 @@ fun EventsDialog(
                     }
                 }
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    items(events, key = { it.id }) { event ->
+                if (events.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Event,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "এখনো কোনো ইভেন্ট নেই",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "নতুন ইভেন্ট তৈরি বা যুক্ত হলে এখানে দেখতে পাবেন।",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        items(events, key = { it.id }) { event ->
                         val isGoing = goingEvents.contains(event.id)
                         val isInterested = interestedEvents.contains(event.id)
 
@@ -264,6 +268,7 @@ fun EventsDialog(
                                 }
                             }
                         }
+                    }
                     }
                 }
             }

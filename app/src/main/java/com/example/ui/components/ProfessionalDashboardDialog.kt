@@ -183,7 +183,7 @@ fun ProfessionalDashboardDialog(
                     CreatorToolRow(
                         icon = Icons.Default.AttachMoney,
                         title = "Monetization & Stars",
-                        subtitle = "Eligible to earn from posts and reels"
+                        subtitle = "Eligible to earn from posts and short videos"
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))

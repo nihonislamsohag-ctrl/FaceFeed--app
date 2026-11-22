@@ -57,6 +57,15 @@ data class IntrusionLog(
     val defenseLog: String = "আইপি এবং ডিভাইস পার্মানেন্ট ব্ল্যাকলিস্ট করা হয়েছে।"
 )
 
+data class PostUploadProgress(
+    val postId: String,
+    val postPreview: String,
+    val mediaTypeLabel: String,
+    val progressPercent: Int = 0,
+    val statusLog: String = "আপলোড প্রস্তুত হচ্ছে...",
+    val isCompleted: Boolean = false
+)
+
 enum class UniversalSearchCategory(val labelBn: String, val labelEn: String) {
     ALL("সব", "All"),
     PEOPLE("মানুষ", "People"),
@@ -98,14 +107,346 @@ class FaceFeedViewModel : ViewModel() {
     private val _pendingPostAudio = MutableStateFlow<PostAudioTrack?>(null)
     val pendingPostAudio: StateFlow<PostAudioTrack?> = _pendingPostAudio.asStateFlow()
 
+    // Real-time Wi-Fi & Mobile Data Connectivity State (Facebook-style Internet Gating)
+    val isInternetConnected: StateFlow<Boolean> = com.example.data.NetworkConnectivityManager.isConnected
+    val networkTransportType: StateFlow<com.example.data.NetworkTransportType> = com.example.data.NetworkConnectivityManager.transportType
+
     private var activeChatListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var postsListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var storiesListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var musicListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var pagesListener: com.google.firebase.firestore.ListenerRegistration? = null
     private var groupsListener: com.google.firebase.firestore.ListenerRegistration? = null
     private val commentListeners = mutableMapOf<String, com.google.firebase.firestore.ListenerRegistration>()
     private var listenersStartedForUid: String? = null
     private var isCurrentOwnerAuthenticated: Boolean = false
+    private val _isOwnerSession = MutableStateFlow(false)
+    val isOwnerSession: StateFlow<Boolean> = _isOwnerSession.asStateFlow()
+
+    private fun setOwnerAuthenticated(authenticated: Boolean) {
+        isCurrentOwnerAuthenticated = authenticated
+        _isOwnerSession.value = authenticated
+    }
+
+    private fun createGuestUser(): User = User(
+        id = "guest_pending",
+        fullName = "",
+        username = "",
+        email = "",
+        avatarUrl = "",
+        coverUrl = "",
+        bio = "",
+        isVerified = false,
+        isOnline = false
+    )
+
+    private fun syncUserAccountsForCurrentUser(user: User) {
+        if (user.id == "guest_pending" || (user.fullName.isBlank() && user.email.isBlank())) {
+            _userAccounts.value = emptyList()
+            return
+        }
+        val cleanHandle = user.username.ifBlank {
+            user.email.substringBefore("@").ifBlank { "user" }
+        }.let { if (it.startsWith("@")) it else "@$it" }
+        val entry = UserAccount(
+            id = user.id,
+            name = user.fullName.ifBlank { "FotoFilm User" },
+            handle = cleanHandle,
+            avatarUrl = user.avatarUrl,
+            isActive = true,
+            notificationCount = 0
+        )
+        val mergedOthers = (_userAccounts.value + _savedEmailAccounts.value.map { saved ->
+            val h = saved.username.ifBlank { saved.email.substringBefore("@") }
+                .let { if (it.startsWith("@")) it else "@$it" }
+            UserAccount(
+                id = saved.id,
+                name = saved.fullName,
+                handle = h,
+                avatarUrl = saved.avatarUrl,
+                isActive = false,
+                notificationCount = 0
+            )
+        })
+            .distinctBy { it.handle.lowercase() }
+            .filterNot { it.id == entry.id || it.handle.equals(entry.handle, ignoreCase = true) }
+            .map { it.copy(isActive = false) }
+        _userAccounts.value = (listOf(entry) + mergedOthers).take(com.example.util.FakeIdDetector.MAX_ACCOUNTS_PER_PERSON)
+    }
+
+    private fun countDistinctAccountsOnDevice(
+        context: android.content.Context? = appContextRef,
+        excludingEmail: String? = null
+    ): Int {
+        val excl = excludingEmail?.trim()?.lowercase().orEmpty()
+        val stored = context?.let { com.example.data.SavedAccountsStore.loadAccounts(it) }
+            ?: _savedEmailAccounts.value
+        val distinctKeys = mutableSetOf<String>()
+        stored.forEach { acc ->
+            val key = acc.email.trim().lowercase().ifBlank { acc.username.trim().lowercase() }
+            if (key.isNotBlank() && key != excl) {
+                distinctKeys.add(key)
+            }
+        }
+        _userAccounts.value.forEach { ua ->
+            val h = ua.handle.removePrefix("@").trim().lowercase()
+            val expectedEmail = "$h@fotofilm.app"
+            if (h.isNotBlank() && expectedEmail != excl && !distinctKeys.any { it.startsWith("$h@") || it == h }) {
+                distinctKeys.add(h)
+            }
+        }
+        return distinctKeys.size
+    }
+
+    private fun recordFakeIdViolationReport(
+        context: android.content.Context?,
+        attemptedName: String,
+        attemptedUsername: String,
+        attemptedEmail: String,
+        selectedGender: String,
+        detectedSignal: String,
+        violationType: String,
+        violationDetails: String,
+        attemptedAvatarUrl: String = "",
+        matchedExistingUser: String = ""
+    ) {
+        val report = com.example.util.FakeIdDetector.createReport(
+            attemptedName = attemptedName,
+            attemptedUsername = attemptedUsername,
+            attemptedEmail = attemptedEmail,
+            selectedGender = selectedGender,
+            detectedSignal = detectedSignal,
+            violationType = violationType,
+            violationDetails = violationDetails,
+            attemptedAvatarUrl = attemptedAvatarUrl,
+            matchedExistingUser = matchedExistingUser
+        )
+        val updated = com.example.util.FakeIdDetector.recordReport(context ?: appContextRef, report)
+        _fakeIdReports.value = updated
+    }
+
+    companion object {
+        private val DEMO_POST_IDS = setOf(
+            "post_sponsored_demo",
+            "post_sahid",
+            "post_pinned",
+            "post_1",
+            "post_user_2",
+            "post_2",
+            "post_3",
+            "post_4"
+        )
+        private val DEMO_STORY_IDS = setOf(
+            "story_me",
+            "story_1",
+            "story_2",
+            "story_3"
+        )
+    }
+
+    private fun isAuthenticPost(post: Post): Boolean {
+        if (post.id in DEMO_POST_IDS) return false
+        val isHidden = synchronized(hiddenPostIdsCache) { post.id in hiddenPostIdsCache }
+        if (isHidden) return false
+        if (post.images.isNotEmpty()) {
+            val allUnsplashStock = post.images.all {
+                it.contains("images.unsplash.com", ignoreCase = true)
+            }
+            if (allUnsplashStock) return false
+        }
+        return true
+    }
+
+    private fun isAuthenticStory(story: Story): Boolean {
+        if (story.id in DEMO_STORY_IDS) return false
+        if (story.mediaUrl.isBlank()) return false
+        if (story.mediaUrl.contains("images.unsplash.com", ignoreCase = true)) return false
+        return true
+    }
+
+    fun hasActiveInternetConnection(context: android.content.Context? = appContextRef): Boolean {
+        val ctx = context ?: appContextRef
+        return if (ctx != null) {
+            com.example.data.NetworkConnectivityManager.refreshNow(ctx)
+        } else {
+            com.example.data.NetworkConnectivityManager.isConnected.value
+        }
+    }
+
+    private fun requireInternetConnection(): Boolean {
+        val connected = hasActiveInternetConnection()
+        if (!connected) {
+            _compressionToastMessage.value = "ইন্টারনেট সংযোগ নেই - ডাটা বা ওয়াই-ফাই চালু করুন"
+        }
+        return connected
+    }
+
+    fun handleNetworkLost() {
+        _posts.value = emptyList()
+        _stories.value = emptyList()
+        _savedPosts.value = emptyList()
+        _viewingStory.value = null
+        _showLiveStudio.value = false
+        _showCreatePostDialog.value = false
+        _activeMediaPickerTarget.value = MediaPickerTarget.NONE
+        _homeBadgeCount.value = 0
+        _watchBadgeCount.value = 0
+        _isHomeRefreshing.value = false
+    }
+
+    fun onNetworkConnectivityRestored(context: android.content.Context) {
+        val ctx = context.applicationContext
+        appContextRef = ctx
+        com.example.data.NetworkConnectivityManager.initialize(ctx)
+        if (!com.example.data.NetworkConnectivityManager.isConnected.value) return
+
+        val repo = localRepo ?: com.example.data.local.LocalPersistenceRepository(ctx).also { localRepo = it }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val snapshot = repo.loadPostsSnapshot()
+                synchronized(hiddenPostIdsCache) {
+                    hiddenPostIdsCache.addAll(snapshot.hiddenPostIds)
+                }
+                val authenticVisible = snapshot.visiblePosts
+                    .filter { isAuthenticPost(it) }
+                    .sortedByDescending { it.createdAt }
+                    .map { p ->
+                        if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(p.id)) {
+                            p.copy(isBoostActive = false, isBoosted = false)
+                        } else p
+                    }
+                if (authenticVisible.isNotEmpty() && _posts.value.isEmpty()) {
+                    _posts.value = authenticVisible
+                    _savedPosts.value = authenticVisible.filter { it.isSaved }
+                }
+            } catch (_: Exception) {
+            }
+        }
+
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.let { user ->
+                startCloudSyncForUser(user, ctx)
+            }
+        } catch (_: Exception) {
+        }
+        refreshHomeFeed()
+    }
+
+    fun retryInternetConnection(context: android.content.Context): Boolean {
+        val connected = hasActiveInternetConnection(context)
+        if (connected) {
+            onNetworkConnectivityRestored(context)
+        } else {
+            handleNetworkLost()
+        }
+        return connected
+    }
+
+    private var appContextRef: android.content.Context? = null
+    private var localRepo: com.example.data.local.LocalPersistenceRepository? = null
+    private var isLocalStorageLoaded: Boolean = false
+    private val hiddenPostIdsCache = mutableSetOf<String>()
+
+    fun initializeLocalStorage(context: android.content.Context) {
+        val ctx = context.applicationContext
+        appContextRef = ctx
+        com.example.data.NetworkConnectivityManager.initialize(ctx)
+        com.example.data.NiyonOwnerControlStore.initialize(ctx)
+        com.example.util.AppSoundManager.init(ctx)
+        _fakeIdReports.value = com.example.util.FakeIdDetector.loadReports(ctx)
+        if (_savedEmailAccounts.value.isEmpty()) {
+            _savedEmailAccounts.value = com.example.data.SavedAccountsStore.loadAccounts(ctx)
+        }
+        if (localRepo == null) {
+            localRepo = com.example.data.local.LocalPersistenceRepository(ctx)
+        }
+        applyNiyonOwnerLocksToState()
+        if (isLocalStorageLoaded) return
+        isLocalStorageLoaded = true
+
+        val repo = localRepo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val postsSnapshot = repo.loadPostsSnapshot()
+            val chatsSnapshot = repo.loadChatsSnapshot()
+
+            synchronized(hiddenPostIdsCache) {
+                hiddenPostIdsCache.addAll(postsSnapshot.hiddenPostIds)
+            }
+
+            if (com.example.data.NetworkConnectivityManager.isConnected.value && postsSnapshot.visiblePosts.isNotEmpty()) {
+                val authenticRoomPosts = postsSnapshot.visiblePosts
+                    .filter { isAuthenticPost(it) }
+                val roomById = authenticRoomPosts.associateBy { it.id }
+                val hiddenIds = postsSnapshot.hiddenPostIds
+                val currentMerged = _posts.value
+                    .filter { it.id !in hiddenIds && isAuthenticPost(it) }
+                    .map { existing -> roomById[existing.id] ?: existing }
+                val existingIds = currentMerged.map { it.id }.toSet()
+                val extraFromRoom = authenticRoomPosts.filter { it.id !in existingIds && it.id !in hiddenIds }
+                val mergedPosts = (extraFromRoom + currentMerged)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.createdAt }
+                    .map { p ->
+                        if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(p.id)) {
+                            p.copy(isBoostActive = false, isBoosted = false)
+                        } else p
+                    }
+                _posts.value = mergedPosts
+                _savedPosts.value = mergedPosts.filter { it.isSaved }
+            } else if (!com.example.data.NetworkConnectivityManager.isConnected.value) {
+                _posts.value = emptyList()
+                _savedPosts.value = emptyList()
+                _stories.value = emptyList()
+            }
+
+            if (chatsSnapshot.messagesByConversation.isNotEmpty() || chatsSnapshot.deletedMessageIds.isNotEmpty()) {
+                val deletedMsgIds = chatsSnapshot.deletedMessageIds
+                val byConv = chatsSnapshot.messagesByConversation
+                val updatedConvs = _conversations.value.map { conv ->
+                    val roomMsgs = byConv[conv.id].orEmpty()
+                    val existingMsgs = conv.messages.filter { it.id !in deletedMsgIds }
+                    val existingIds = existingMsgs.map { it.id }.toSet()
+                    val combinedMsgs = existingMsgs + roomMsgs.filter { it.id !in existingIds && it.id !in deletedMsgIds }
+                    val lastMsg = combinedMsgs.lastOrNull()
+                    if (lastMsg != null && roomMsgs.isNotEmpty()) {
+                        conv.copy(
+                            messages = combinedMsgs,
+                            lastMessage = lastMsg.text.ifBlank { if (lastMsg.isAudioVoice) "🎤 অডিও ভয়েস" else "📷 মিডিয়া" },
+                            lastTime = lastMsg.timestamp
+                        )
+                    } else if (existingMsgs.size != conv.messages.size) {
+                        conv.copy(messages = combinedMsgs)
+                    } else {
+                        conv
+                    }
+                }
+                _conversations.value = updatedConvs
+                _activeChat.value?.let { active ->
+                    updatedConvs.firstOrNull { it.id == active.id }?.let { refreshed ->
+                        _activeChat.value = refreshed
+                    }
+                }
+            }
+        }
+    }
+
+    private fun persistPostToRoom(post: Post, isPinned: Boolean = false) {
+        val repo = localRepo ?: appContextRef?.let {
+            com.example.data.local.LocalPersistenceRepository(it).also { r -> localRepo = r }
+        } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            repo.upsertPost(post, isPinned = isPinned)
+        }
+    }
+
+    private fun persistChatMessageToRoom(conversationId: String, message: ChatMessage) {
+        val repo = localRepo ?: appContextRef?.let {
+            com.example.data.local.LocalPersistenceRepository(it).also { r -> localRepo = r }
+        } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            repo.upsertChatMessage(conversationId, message)
+        }
+    }
 
     val hasMorePosts: StateFlow<Boolean> = com.example.data.FirebaseManager.hasMorePosts
     val isLoadingMorePosts: StateFlow<Boolean> = com.example.data.FirebaseManager.isLoadingMorePosts
@@ -119,6 +460,7 @@ class FaceFeedViewModel : ViewModel() {
     val savedEmailAccounts: StateFlow<List<com.example.data.SavedEmailAccount>> = _savedEmailAccounts.asStateFlow()
 
     fun loadSavedEmailAccounts(context: android.content.Context) {
+        appContextRef = context.applicationContext
         val loaded = com.example.data.SavedAccountsStore.loadAccounts(context)
         val merged = linkedMapOf<String, com.example.data.SavedEmailAccount>()
         loaded.forEach { acc -> merged[acc.email.trim().lowercase()] = acc }
@@ -129,14 +471,13 @@ class FaceFeedViewModel : ViewModel() {
                 val fbEmail = fbUser.email?.trim().orEmpty()
                 if (fbEmail.isNotBlank()) {
                     val key = fbEmail.lowercase()
-                    val isOwner = key == "smd224292@gmail.com" || key == "nihonislamsohag@gmail.com"
+                    val isOwner = com.example.data.AuthSessionStore.isReservedOwnerEmail(key)
                     merged[key] = com.example.data.SavedEmailAccount(
                         id = fbUser.uid,
                         fullName = fbUser.displayName?.takeIf { it.isNotBlank() } ?: fbEmail.substringBefore("@"),
                         username = fbEmail.substringBefore("@"),
                         email = fbEmail,
-                        avatarUrl = fbUser.photoUrl?.toString()?.takeIf { it.isNotBlank() }
-                            ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200",
+                        avatarUrl = fbUser.photoUrl?.toString()?.takeIf { it.isNotBlank() } ?: "",
                         isFirebaseLinked = true,
                         isOwner = isOwner
                     )
@@ -148,11 +489,15 @@ class FaceFeedViewModel : ViewModel() {
         _savedEmailAccounts.value = merged.values.sortedByDescending { it.lastUsedAt }
 
         try {
+            com.example.data.NiyonOwnerControlStore.initialize(context)
             val billingPrefs = context.applicationContext.getSharedPreferences(
                 "fotofilm_billing_prefs",
                 android.content.Context.MODE_PRIVATE
             )
-            _isBlazeCardModeEnabled.value = billingPrefs.getBoolean("blaze_card_mode_enabled", false)
+            val legacyBlaze = billingPrefs.getBoolean("blaze_card_mode_enabled", false)
+            _isBlazeCardModeEnabled.value =
+                com.example.data.NiyonOwnerControlStore.isBlazeCardEnabled.value && legacyBlaze ||
+                com.example.data.NiyonOwnerControlStore.isBlazeCardEnabled.value
         } catch (_: Exception) {
         }
 
@@ -167,6 +512,8 @@ class FaceFeedViewModel : ViewModel() {
             )
         } catch (_: Exception) {
         }
+
+        applyNiyonOwnerLocksToState()
     }
 
     private fun recordSavedAccount(
@@ -194,16 +541,62 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
+    fun restoreAuthSession(context: android.content.Context) {
+        val ctx = context.applicationContext
+        appContextRef = ctx
+        try {
+            val fbUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (fbUser != null) {
+                startCloudSyncForUser(fbUser, ctx)
+                return
+            }
+        } catch (_: Exception) {
+        }
+
+        val savedSession = com.example.data.AuthSessionStore.loadActiveSession(ctx)
+        if (savedSession != null) {
+            val isReservedEmail = com.example.data.AuthSessionStore.isReservedOwnerEmail(savedSession.user.email)
+            val isOwner = isReservedEmail
+            setOwnerAuthenticated(isOwner)
+            _currentUser.value = if (isOwner) {
+                SampleData.currentUser.copy(
+                    id = savedSession.user.id,
+                    fullName = savedSession.user.fullName.ifBlank { SampleData.currentUser.fullName },
+                    email = savedSession.user.email.ifBlank { SampleData.currentUser.email },
+                    avatarUrl = savedSession.user.avatarUrl.ifBlank { SampleData.currentUser.avatarUrl },
+                    isVerified = true,
+                    isOnline = true
+                )
+            } else {
+                savedSession.user.copy(isOnline = true, isVerified = savedSession.user.isVerified)
+            }
+            _isFidaVerified.value = isOwner || _currentUser.value.isVerified
+            if (!isOwner) {
+                closeRightManagerFida()
+            }
+            syncUserAccountsForCurrentUser(_currentUser.value)
+            _authErrorMessage.value = null
+            _isLoggedIn.value = true
+            _showAuthDialog.value = false
+        } else {
+            setOwnerAuthenticated(false)
+            closeRightManagerFida()
+            _isFidaVerified.value = false
+            _currentUser.value = createGuestUser()
+            _userAccounts.value = emptyList()
+            _isLoggedIn.value = false
+        }
+    }
+
     fun startCloudSyncForUser(
         firebaseUser: com.google.firebase.auth.FirebaseUser,
         context: android.content.Context? = null
     ) {
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
         val emailLower = firebaseUser.email?.trim()?.lowercase().orEmpty()
-        val nameLower = firebaseUser.displayName?.trim()?.lowercase().orEmpty()
-        val isOwner = emailLower == "smd224292@gmail.com" ||
-            emailLower == "nihonislamsohag@gmail.com" ||
-            (nameLower.contains("niyon") && nameLower.contains("sohag"))
-        isCurrentOwnerAuthenticated = isOwner
+        val isOwner = com.example.data.AuthSessionStore.isReservedOwnerEmail(emailLower)
+        setOwnerAuthenticated(isOwner)
 
         if (isOwner) {
             _currentUser.value = SampleData.currentUser.copy(
@@ -211,30 +604,44 @@ class FaceFeedViewModel : ViewModel() {
                 fullName = firebaseUser.displayName?.takeIf { it.isNotBlank() } ?: SampleData.currentUser.fullName,
                 email = firebaseUser.email?.takeIf { it.isNotBlank() } ?: SampleData.currentUser.email,
                 avatarUrl = firebaseUser.photoUrl?.toString()?.takeIf { it.isNotBlank() } ?: SampleData.currentUser.avatarUrl,
-                isVerified = true
+                isVerified = true,
+                isOnline = true
             )
+            _isFidaVerified.value = true
         } else {
             val resolvedName = firebaseUser.displayName?.takeIf { it.isNotBlank() }
                 ?: emailLower.substringBefore("@").ifBlank { "FotoFilm User" }
             val resolvedHandle = resolvedName.lowercase().replace(Regex("[^a-z0-9_]"), "_").trim('_').ifBlank { "user" }
-            _currentUser.value = _currentUser.value.copy(
+            _currentUser.value = User(
                 id = firebaseUser.uid,
                 fullName = resolvedName,
                 username = resolvedHandle,
                 email = firebaseUser.email ?: "",
-                avatarUrl = firebaseUser.photoUrl?.toString()?.takeIf { it.isNotBlank() }
-                    ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500"
+                avatarUrl = firebaseUser.photoUrl?.toString()?.takeIf { it.isNotBlank() } ?: "",
+                bio = "FotoFilm সদস্য ✨",
+                isVerified = false,
+                isOnline = true
             )
+            _isFidaVerified.value = false
             closeRightManagerFida()
         }
 
         recordSavedAccount(
-            context = context,
+            context = ctx,
             user = _currentUser.value,
             isFirebaseLinked = true,
             isOwner = isOwner
         )
-
+        if (ctx != null) {
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = _currentUser.value,
+                isOwnerVerified = isOwner,
+                authMethod = "google"
+            )
+        }
+        syncUserAccountsForCurrentUser(_currentUser.value)
+        _authErrorMessage.value = null
         _isLoggedIn.value = true
         _showAuthDialog.value = false
 
@@ -246,20 +653,71 @@ class FaceFeedViewModel : ViewModel() {
         com.example.data.FirebaseManager.syncSignedInUserProfile(_currentUser.value)
 
         postsListener = com.example.data.FirebaseManager.listenToPosts { cloudPosts ->
+            if (!isInternetConnected.value) return@listenToPosts
+            val hiddenIds = synchronized(hiddenPostIdsCache) { hiddenPostIdsCache.toSet() }
             val existingById = _posts.value.associateBy { it.id }
-            val mergedCloud = cloudPosts.map { cp ->
-                val old = existingById[cp.id]
-                if (old != null) {
-                    cp.copy(
-                        comments = old.comments.ifEmpty { cp.comments },
-                        userReaction = old.userReaction ?: cp.userReaction,
-                        reactors = old.reactors.ifEmpty { cp.reactors }
-                    )
-                } else cp
+            val mergedCloud = cloudPosts
+                .filter { it.id !in hiddenIds && isAuthenticPost(it) }
+                .map { cp ->
+                    val old = existingById[cp.id]
+                    if (old != null) {
+                        val preservedImages = if (old.images.any { it.startsWith("file://") } && cp.images.all { !it.startsWith("http") }) {
+                            old.images
+                        } else if (cp.images.isEmpty()) {
+                            old.images
+                        } else {
+                            cp.images
+                        }
+                        val preservedAudio = when {
+                            cp.audioTrack?.audioUrl?.startsWith("http") == true -> cp.audioTrack
+                            old.audioTrack != null -> old.audioTrack
+                            else -> cp.audioTrack
+                        }
+                        val basePost = cp.copy(
+                            images = preservedImages,
+                            audioTrack = preservedAudio,
+                            comments = old.comments.ifEmpty { cp.comments },
+                            userReaction = old.userReaction ?: cp.userReaction,
+                            reactors = old.reactors.ifEmpty { cp.reactors },
+                            isSaved = old.isSaved || cp.isSaved
+                        )
+                        if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(cp.id)) {
+                            basePost.copy(isBoostActive = false, isBoosted = false)
+                        } else basePost
+                    } else if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(cp.id)) {
+                        cp.copy(isBoostActive = false, isBoosted = false)
+                    } else cp
+                }
+            val cloudIds = mergedCloud.map { it.id }.toSet()
+            val localOnly = _posts.value.filter { it.id !in cloudIds && it.id !in hiddenIds && isAuthenticPost(it) }
+            val finalMerged = (mergedCloud + localOnly)
+                .map { p ->
+                    if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(p.id)) {
+                        p.copy(isBoostActive = false, isBoosted = false)
+                    } else p
+                }
+                .sortedByDescending { it.createdAt }
+            _posts.value = finalMerged
+            _watchBadgeCount.value = finalMerged.count { it.isVideo || it.isReel }
+            val repo = localRepo
+            if (repo != null && mergedCloud.isNotEmpty()) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    repo.upsertPosts(mergedCloud)
+                }
             }
-            val cloudIds = cloudPosts.map { it.id }.toSet()
-            val localOnly = _posts.value.filter { it.id !in cloudIds }
-            _posts.value = (mergedCloud + localOnly).sortedByDescending { it.createdAt }
+        }
+
+        storiesListener = com.example.data.FirebaseManager.listenToStories { cloudStories ->
+            if (!isInternetConnected.value) return@listenToStories
+            val authenticCloud = cloudStories.filter { isAuthenticStory(it) }
+            val cloudIds = authenticCloud.map { it.id }.toSet()
+            val existingById = _stories.value.associateBy { it.id }
+            val mergedCloud = authenticCloud.map { cs ->
+                val old = existingById[cs.id]
+                if (old != null) cs.copy(isViewed = old.isViewed) else cs
+            }
+            val localOnly = _stories.value.filter { it.id !in cloudIds && isAuthenticStory(it) }
+            _stories.value = mergedCloud + localOnly
         }
 
         musicListener = com.example.data.FirebaseManager.listenToMusicTracks { cloudTracks ->
@@ -269,15 +727,33 @@ class FaceFeedViewModel : ViewModel() {
         }
 
         pagesListener = com.example.data.FirebaseManager.listenToPages { cloudPages ->
-            val existingIds = cloudPages.map { it.id }.toSet()
-            val localPages = _pages.value.filter { it.id !in existingIds }
-            _pages.value = cloudPages + localPages
+            val enforcedCloud = cloudPages.map { page ->
+                if (com.example.data.NiyonOwnerControlStore.isPageLockedOff(page.id)) {
+                    page.copy(isActive = false)
+                } else page
+            }
+            val existingIds = enforcedCloud.map { it.id }.toSet()
+            val localPages = _pages.value.filter { it.id !in existingIds }.map { page ->
+                if (com.example.data.NiyonOwnerControlStore.isPageLockedOff(page.id)) {
+                    page.copy(isActive = false)
+                } else page
+            }
+            _pages.value = enforcedCloud + localPages
         }
 
         groupsListener = com.example.data.FirebaseManager.listenToGroups { cloudGroups ->
-            val existingIds = cloudGroups.map { it.id }.toSet()
-            val localGroups = _groups.value.filter { it.id !in existingIds }
-            _groups.value = cloudGroups + localGroups
+            val enforcedCloud = cloudGroups.map { group ->
+                if (com.example.data.NiyonOwnerControlStore.isGroupLockedOff(group.id)) {
+                    group.copy(isActive = false)
+                } else group
+            }
+            val existingIds = enforcedCloud.map { it.id }.toSet()
+            val localGroups = _groups.value.filter { it.id !in existingIds }.map { group ->
+                if (com.example.data.NiyonOwnerControlStore.isGroupLockedOff(group.id)) {
+                    group.copy(isActive = false)
+                } else group
+            }
+            _groups.value = enforcedCloud + localGroups
         }
 
         incomingCallListener = com.example.data.FirebaseManager.listenToIncomingCalls { signal ->
@@ -315,6 +791,8 @@ class FaceFeedViewModel : ViewModel() {
     fun stopCloudSync(keepLoggedIn: Boolean = false) {
         postsListener?.remove()
         postsListener = null
+        storiesListener?.remove()
+        storiesListener = null
         musicListener?.remove()
         musicListener = null
         pagesListener?.remove()
@@ -332,7 +810,7 @@ class FaceFeedViewModel : ViewModel() {
         listenersStartedForUid = null
         _incomingCallSignal.value = null
         if (!keepLoggedIn) {
-            isCurrentOwnerAuthenticated = false
+            setOwnerAuthenticated(false)
             closeRightManagerFida()
             _isLoggedIn.value = false
         }
@@ -383,12 +861,40 @@ class FaceFeedViewModel : ViewModel() {
         _compressionToastMessage.value = null
     }
 
-    fun toggleAutoCompression(enabled: Boolean) {
-        com.example.data.DailyQuotaCompressionStore.setAutoCompressionEnabled(enabled)
+    val isAdMobMasterEnabled: StateFlow<Boolean> = com.example.data.NiyonOwnerControlStore.isAdMobMasterEnabled
+    val isAdMobBannerEnabled: StateFlow<Boolean> = com.example.data.NiyonOwnerControlStore.isAdMobBannerEnabled
+    val isAdMobInterstitialEnabled: StateFlow<Boolean> = com.example.data.NiyonOwnerControlStore.isAdMobInterstitialEnabled
+    val isAdMobRewardedEnabled: StateFlow<Boolean> = com.example.data.NiyonOwnerControlStore.isAdMobRewardedEnabled
+    val niyonLockedOffCount: StateFlow<Int> = com.example.data.NiyonOwnerControlStore.lockedOffCount
+
+    fun toggleAdMobMaster(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.NiyonOwnerControlStore.setAdMobMasterEnabled(enabled, isOwner = true)
     }
 
-    fun toggleDaily43MbLimit(enabled: Boolean) {
-        com.example.data.DailyQuotaCompressionStore.setDaily43MbLimitEnabled(enabled)
+    fun toggleAdMobBanner(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.NiyonOwnerControlStore.setAdMobBannerEnabled(enabled, isOwner = true)
+    }
+
+    fun toggleAdMobInterstitial(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.NiyonOwnerControlStore.setAdMobInterstitialEnabled(enabled, isOwner = true)
+    }
+
+    fun toggleAdMobRewarded(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.NiyonOwnerControlStore.setAdMobRewardedEnabled(enabled, isOwner = true)
+    }
+
+    fun toggleAutoCompression(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.DailyQuotaCompressionStore.setAutoCompressionEnabled(enabled, isOwner = true)
+    }
+
+    fun toggleDaily43MbLimit(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.DailyQuotaCompressionStore.setDaily43MbLimitEnabled(enabled, isOwner = true)
     }
 
     fun resetUserDailyQuota(userId: String) {
@@ -399,7 +905,9 @@ class FaceFeedViewModel : ViewModel() {
         com.example.data.DailyQuotaCompressionStore.resetAllDailyUsage(_currentUser.value.id)
     }
 
-    fun toggleBlazeCardMode(enabled: Boolean, context: android.content.Context) {
+    fun toggleBlazeCardMode(enabled: Boolean, context: android.content.Context): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        com.example.data.NiyonOwnerControlStore.setBlazeCardEnabled(enabled, isOwner = true)
         _isBlazeCardModeEnabled.value = enabled
         try {
             context.applicationContext
@@ -409,10 +917,12 @@ class FaceFeedViewModel : ViewModel() {
                 .apply()
         } catch (_: Exception) {
         }
+        return true
     }
 
-    fun toggleCloudinaryEnabled(enabled: Boolean) {
-        com.example.data.CloudinaryManager.setEnabled(enabled)
+    fun toggleCloudinaryEnabled(enabled: Boolean): Boolean {
+        if (!isCurrentUserNiyonIslamSohag()) return false
+        return com.example.data.CloudinaryManager.setEnabled(enabled, isOwner = true)
     }
 
     fun checkFirebaseCloudConnection() {
@@ -455,16 +965,23 @@ class FaceFeedViewModel : ViewModel() {
     )
     val languageStatus: StateFlow<Map<AppLanguage, Boolean>> = _languageStatus.asStateFlow()
 
-    // Current logged-in user
-    private val _currentUser = MutableStateFlow(SampleData.currentUser)
+    // Current logged-in user (empty guest until Sign Up / Log In succeeds)
+    private val _currentUser = MutableStateFlow(createGuestUser())
     val currentUser: StateFlow<User> = _currentUser.asStateFlow()
 
-    // Auth status
-    private val _isLoggedIn = MutableStateFlow(true)
+    // Auth status (strictly requires Sign Up or Log In on fresh install)
+    private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     private val _showAuthDialog = MutableStateFlow(false)
     val showAuthDialog: StateFlow<Boolean> = _showAuthDialog.asStateFlow()
+
+    private val _authErrorMessage = MutableStateFlow<String?>(null)
+    val authErrorMessage: StateFlow<String?> = _authErrorMessage.asStateFlow()
+
+    fun clearAuthError() {
+        _authErrorMessage.value = null
+    }
 
     // Navigation state
     private val _activeTab = MutableStateFlow(AppTab.HOME)
@@ -491,156 +1008,27 @@ class FaceFeedViewModel : ViewModel() {
     private val _viewingProfileUser = MutableStateFlow<User?>(null)
     val viewingProfileUser: StateFlow<User?> = _viewingProfileUser.asStateFlow()
 
-    // Blocked Users State Flow & Profiles
-    private val _blockedProfiles = MutableStateFlow<List<User>>(
-        listOf(
-            User(id = "blk_shakil", fullName = "শাকিল আহমেদ", username = "shakil_ahmed", avatarUrl = "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500", bio = "Blocked Profile", isVerified = false),
-            User(id = "blk_sumaiya", fullName = "সুমাইয়া জান্নাত", username = "sumaiya_jannat", avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500", bio = "Blocked Profile", isVerified = false),
-            User(id = "blk_kamrul", fullName = "কামরুল ইসলাম", username = "kamrul_isl", avatarUrl = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=500", bio = "Blocked Profile", isVerified = false)
-        )
-    )
+    // Blocked Users State Flow & Profiles (real runtime blocks only)
+    private val _blockedProfiles = MutableStateFlow<List<User>>(emptyList())
     val blockedProfiles: StateFlow<List<User>> = _blockedProfiles.asStateFlow()
 
-    private val _blockedUserIds = MutableStateFlow<Set<String>>(setOf("blk_shakil", "blk_sumaiya", "blk_kamrul"))
+    private val _blockedUserIds = MutableStateFlow<Set<String>>(emptySet())
     val blockedUserIds: StateFlow<Set<String>> = _blockedUserIds.asStateFlow()
 
-    // Restricted Profiles State Flow
-    private val _restrictedProfiles = MutableStateFlow<List<User>>(
-        listOf(
-            User(id = "res_rokibul", fullName = "রকিবুল ইসলাম", username = "rokibul_isl", avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500", bio = "Digital Creator", isVerified = false, friendCount = 1240),
-            User(id = "res_mehedi", fullName = "মেহেদী হাসান", username = "mehedi_hasan", avatarUrl = "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=500", bio = "Freelancer", isVerified = true, friendCount = 890),
-            User(id = "res_anika", fullName = "আনিকা তাবাসসুম", username = "anika_tabassum", avatarUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500", bio = "Student", isVerified = false, friendCount = 640)
-        )
-    )
+    // Restricted Profiles State Flow (real runtime restrictions only)
+    private val _restrictedProfiles = MutableStateFlow<List<User>>(emptyList())
     val restrictedProfiles: StateFlow<List<User>> = _restrictedProfiles.asStateFlow()
 
-    // Permanent Message Delivery Vault (কখনোই মেসেজ, ছবি, ভিডিও, ভয়েস ডিলেট হবে না)
-    private val _permanentDeliveryVault = MutableStateFlow<List<DeliveredVaultMessage>>(
-        listOf(
-            DeliveredVaultMessage(
-                id = "vault_msg_1",
-                conversationId = "chat_md_mohiuddin",
-                contactId = "user_md_mohiuddin",
-                contactName = "মোঃ মহিউদ্দিন",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                senderId = "user_md_mohiuddin",
-                senderName = "মোঃ মহিউদ্দিন",
-                isFromMe = false,
-                text = "তুমি ঢাকা কী চাকরি করো,,",
-                timestamp = "6:26 PM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_2",
-                conversationId = "chat_md_mohiuddin",
-                contactId = "user_md_mohiuddin",
-                contactName = "মোঃ মহিউদ্দিন",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                senderId = "user_me",
-                senderName = "Niyon Islam Sohag",
-                isFromMe = true,
-                text = "আমি ডিজিটাল ক্রিয়েটর ও সফটওয়্যার ইঞ্জিনিয়ার হিসেবে কাজ করছি ভাইয়া।",
-                timestamp = "6:28 PM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_3",
-                conversationId = "chat_rahim_rahima",
-                contactId = "user_rahim",
-                contactName = "আব্দুর রহিম (Rahim)",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500",
-                senderId = "user_rahim",
-                senderName = "আব্দুর রহিম",
-                isFromMe = false,
-                text = "আসসালামু আলাইকুম রহিমা, কেমন আছো? কালকের প্রোগ্রামের ছবিগুলো কি রেডি?",
-                timestamp = "10:14 AM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_4",
-                conversationId = "chat_rahim_rahima",
-                contactId = "user_rahim",
-                contactName = "রহিমা খাতুন",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-                senderId = "user_rahima",
-                senderName = "রহিমা খাতুন",
-                isFromMe = false,
-                text = "📷 এই যে অনুষ্ঠানের প্রধান ব্যানার ও স্টেজ ফটো।",
-                mediaUrl = "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800",
-                isMediaVideo = false,
-                timestamp = "10:18 AM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_5",
-                conversationId = "chat_rahim_rahima",
-                contactId = "user_rahim",
-                contactName = "রহিমা খাতুন",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-                senderId = "user_rahima",
-                senderName = "রহিমা খাতুন",
-                isFromMe = false,
-                text = "📹 হ্যাঁ, ১৫ সেকেন্ডের একটা সুন্দর হাইলাইটস রিলস ভিডিও বানিয়েছি। এই যে ভিডিও ক্লিপটা:",
-                mediaUrl = "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800",
-                isMediaVideo = true,
-                timestamp = "10:22 AM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_6",
-                conversationId = "chat_hasan_mia",
-                contactId = "user_hasan_mia_howlader",
-                contactName = "হাঢান মিয়া হওলাদার",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=500",
-                senderId = "user_hasan_mia_howlader",
-                senderName = "হাঢান মিয়া হওলাদার",
-                isFromMe = false,
-                text = "🎤 অডিও ভয়েস (18s)",
-                isAudioVoice = true,
-                audioDurationSeconds = 18,
-                timestamp = "12:12 PM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_7",
-                conversationId = "chat_hasan_mia",
-                contactId = "user_hasan_mia_howlader",
-                contactName = "হাঢান মিয়া হওলাদার",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=500",
-                senderId = "user_hasan_mia_howlader",
-                senderName = "হাঢান মিয়া হওলাদার",
-                isFromMe = false,
-                text = "ভুল স্বীকার করলো বানর",
-                mediaUrl = "https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=800",
-                isMediaVideo = false,
-                timestamp = "10:43 AM",
-                formattedDate = "আজ"
-            ),
-            DeliveredVaultMessage(
-                id = "vault_msg_8",
-                conversationId = "chat_tanvir",
-                contactId = "user_tanvir",
-                contactName = "Tanvir Ahmed",
-                contactAvatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                senderId = "user_tanvir",
-                senderName = "Tanvir Ahmed",
-                isFromMe = false,
-                text = "🎤 অডিও ভয়েস (25s)",
-                isAudioVoice = true,
-                audioDurationSeconds = 25,
-                timestamp = "4:15 PM",
-                formattedDate = "গতকাল"
-            )
-        )
-    )
+    // Permanent Message Delivery Vault (real delivered messages only)
+    private val _permanentDeliveryVault = MutableStateFlow<List<DeliveredVaultMessage>>(emptyList())
     val permanentDeliveryVault: StateFlow<List<DeliveredVaultMessage>> = _permanentDeliveryVault.asStateFlow()
 
     // Search
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // Posts
-    private val _posts = MutableStateFlow(SampleData.initialPosts)
+    // Posts (strictly real users & Cloudinary media from Firestore/Room — never fake demo posts)
+    private val _posts = MutableStateFlow<List<Post>>(emptyList())
     val posts: StateFlow<List<Post>> = _posts.asStateFlow()
 
     // Admin Payment Receiving Numbers for Boost & Promotions (strictly 01842450605 for bKash & Nagad)
@@ -653,127 +1041,40 @@ class FaceFeedViewModel : ViewModel() {
     private val _adminRocketNumber = MutableStateFlow("01842450605")
     val adminRocketNumber: StateFlow<String> = _adminRocketNumber.asStateFlow()
 
-    // Saved Videos & Posts (Per user request: "Saved জারা যে কোনো ভিডিও ছেইভ করবে সেই ভিডিও এখানে এসে জমা হবে আর দেখা জাবে")
-    private val _savedPosts = MutableStateFlow<List<Post>>(
-        SampleData.initialPosts.filter { it.isVideo || it.isReel }
-    )
+    // Saved Videos & Posts (strictly real user saved items)
+    private val _savedPosts = MutableStateFlow<List<Post>>(emptyList())
     val savedPosts: StateFlow<List<Post>> = _savedPosts.asStateFlow()
 
     fun savePost(post: Post) {
+        val savedCopy = post.copy(isSaved = true)
+        _posts.value = _posts.value.map { if (it.id == post.id) it.copy(isSaved = true) else it }
         if (_savedPosts.value.none { it.id == post.id }) {
-            _savedPosts.value = listOf(post) + _savedPosts.value
+            _savedPosts.value = listOf(savedCopy) + _savedPosts.value
+        } else {
+            _savedPosts.value = _savedPosts.value.map { if (it.id == post.id) savedCopy else it }
         }
+        persistPostToRoom(savedCopy)
     }
 
     fun unsavePost(postId: String) {
         _savedPosts.value = _savedPosts.value.filter { it.id != postId }
+        var updatedRef: Post? = null
+        _posts.value = _posts.value.map {
+            if (it.id == postId) {
+                val u = it.copy(isSaved = false)
+                updatedRef = u
+                u
+            } else it
+        }
+        updatedRef?.let { persistPostToRoom(it) }
     }
 
     fun isPostSaved(postId: String): Boolean {
         return _savedPosts.value.any { it.id == postId }
     }
 
-    // Boost & Ads Transactions
-    private val _boostTransactions = MutableStateFlow<List<com.example.model.BoostTransaction>>(
-        listOf(
-            com.example.model.BoostTransaction(
-                id = "boost_demo_1",
-                postId = "post_1",
-                postTitleOrText = "Face Feed Official 🇧🇩 অফিসিয়াল প্ল্যাটফর্ম পেজে স্বাগতম",
-                isVideo = false,
-                authorName = "Face Feed Official",
-                paymentMethod = "bKash",
-                senderNumber = "01789123456",
-                trxId = "BKH9281745",
-                amountBdt = 300,
-                durationDays = 3,
-                estimatedReach = "১৫,০০০ - ২০,০০০ মানুষের ফিডে বিজ্ঞাপন",
-                goal = "বেসিক বুস্ট 🚀",
-                status = "ACTIVE",
-                createdAt = "০২ অক্টোবর ২০২৬, ১১:২০ AM"
-            ),
-            com.example.model.BoostTransaction(
-                id = "boost_demo_2",
-                postId = "post_2",
-                postTitleOrText = "আমাদের নতুন ড্রোন ভিডিও ফুটেজ ও পর্যটন ব্লগ 🎬",
-                isVideo = true,
-                authorName = "Tanvir Ahmed",
-                paymentMethod = "Nagad",
-                senderNumber = "01855234981",
-                trxId = "NGD8841209",
-                amountBdt = 200,
-                durationDays = 2,
-                estimatedReach = "১০,০০০ ভিডিও ভিউ ও রিচ",
-                goal = "১০,০০০ ভিউ স্পেশাল 👁️",
-                status = "PENDING",
-                createdAt = "০২ অক্টোবর ২০২৬, ০৯:৪৫ AM"
-            ),
-            com.example.model.BoostTransaction(
-                id = "boost_demo_3",
-                postId = "post_3",
-                postTitleOrText = "ডিজিটাল ক্রিয়েটর ও কোডিং কমিউনিটি মেগা অফার 💻",
-                isVideo = false,
-                authorName = "Arifur Rahman",
-                paymentMethod = "Rocket",
-                senderNumber = "01912445566",
-                trxId = "RCK3319022",
-                amountBdt = 500,
-                durationDays = 7,
-                estimatedReach = "৫০,০০০ - ৮০,০০০ মানুষ",
-                goal = "স্ট্যান্ডার্ড বুস্ট 🔥",
-                status = "ACTIVE",
-                createdAt = "০১ অক্টোবর ২০২৬, ০৪:১৫ PM"
-            ),
-            com.example.model.BoostTransaction(
-                id = "boost_demo_4",
-                postId = "post_4",
-                postTitleOrText = "ঢাকা স্ট্রিট ফটোগ্রাফি এক্সিবিশন ২০২৬ 📸",
-                isVideo = false,
-                authorName = "Nusrat Jahan",
-                paymentMethod = "bKash",
-                senderNumber = "01711223344",
-                trxId = "BKH5501928",
-                amountBdt = 1000,
-                durationDays = 15,
-                estimatedReach = "১,২০,০০০+ মানুষ",
-                goal = "প্রিমিয়াম ভিআইপি 👑",
-                status = "PENDING",
-                createdAt = "৩০ সেপ্টেম্বর ২০২৬, ০৮:১০ PM"
-            ),
-            com.example.model.BoostTransaction(
-                id = "boost_demo_5",
-                postId = "post_5",
-                postTitleOrText = "মেগা গ্র্যান্ড লঞ্চিং ইভেন্ট ও সেলিব্রেশন 💎",
-                isVideo = true,
-                authorName = "Sadia Islam",
-                paymentMethod = "Nagad",
-                senderNumber = "01699887766",
-                trxId = "NGD1199345",
-                amountBdt = 2000,
-                durationDays = 30,
-                estimatedReach = "৩,০০,০০০+ মানুষ",
-                goal = "মেগা প্রোমোশন 💎",
-                status = "COMPLETED",
-                createdAt = "১৫ সেপ্টেম্বর ২০২৬, ১২:০০ PM"
-            ),
-            com.example.model.BoostTransaction(
-                id = "boost_demo_rahim",
-                postId = "post_sahid",
-                postTitleOrText = "রহিম (Rahim) - ৩ দিনের বেসিক পোস্ট বুস্ট ও রিচ 🚀",
-                isVideo = false,
-                authorName = "আব্দুর রহিম (Rahim)",
-                paymentMethod = "bKash",
-                senderNumber = "01812345678",
-                trxId = "BK11012026",
-                amountBdt = 300,
-                durationDays = 3,
-                estimatedReach = "১৫,০০০ - ২০,০০০ মানুষ",
-                goal = "বেসিক বুস্ট 🚀",
-                status = "ACTIVE",
-                createdAt = "০১/০১/২০২৬ (1/1/2026)"
-            )
-        )
-    )
+    // Boost & Ads Transactions (real user boost transactions only)
+    private val _boostTransactions = MutableStateFlow<List<com.example.model.BoostTransaction>>(emptyList())
     val boostTransactions: StateFlow<List<com.example.model.BoostTransaction>> = _boostTransactions.asStateFlow()
 
     fun updateAdminPaymentNumbers(bkash: String, nagad: String, rocket: String) {
@@ -848,7 +1149,10 @@ class FaceFeedViewModel : ViewModel() {
         )
         _boostTransactions.value = listOf(newTx) + _boostTransactions.value
 
-        boostedPost?.let { com.example.data.FirebaseManager.savePost(it) }
+        boostedPost?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
+        }
     }
 
     // =========================================================================
@@ -897,7 +1201,7 @@ class FaceFeedViewModel : ViewModel() {
             isVideo = target?.isVideo ?: false,
             authorName = "${_currentUser.value.fullName} (প্রধান মালিক)",
             paymentMethod = "👑 ওনার স্পেশাল ফ্রী (৳০)",
-            senderNumber = "01812345678 (Owner VIP)",
+            senderNumber = "Owner VIP",
             trxId = "VIP-MILLION-VIRAL-FREE",
             amountBdt = 0,
             durationDays = 365,
@@ -907,7 +1211,10 @@ class FaceFeedViewModel : ViewModel() {
             createdAt = "০১/০১/২০২৬ (1/1/2026)"
         )
         _boostTransactions.value = listOf(newTx) + _boostTransactions.value
-        boostedPost?.let { com.example.data.FirebaseManager.savePost(it) }
+        boostedPost?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
+        }
     }
 
     // =========================================================================
@@ -1022,6 +1329,8 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun updateBoostStatus(transactionId: String, newStatus: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setBoostTxStatus(transactionId, newStatus, isOwner = true)
         _boostTransactions.value = _boostTransactions.value.map { tx ->
             if (tx.id == transactionId) {
                 if (newStatus == "ACTIVE" && tx.status != "ACTIVE") {
@@ -1050,15 +1359,15 @@ class FaceFeedViewModel : ViewModel() {
         _boostTransactions.value = _boostTransactions.value.filter { it.id != transactionId }
     }
 
-    // Stories
-    private val _stories = MutableStateFlow(SampleData.initialStories)
+    // Stories (strictly real users' uploaded Cloudinary/Firestore stories)
+    private val _stories = MutableStateFlow<List<Story>>(emptyList())
     val stories: StateFlow<List<Story>> = _stories.asStateFlow()
 
     private val _viewingStory = MutableStateFlow<Story?>(null)
     val viewingStory: StateFlow<Story?> = _viewingStory.asStateFlow()
 
-    // Highlights (Friends এর নিচে হাইলাইটস)
-    private val _userHighlights = MutableStateFlow<Map<String, List<StoryHighlight>>>(SampleData.initialHighlightsMap)
+    // Highlights (Friends এর নিচে হাইলাইটস — user-created stories only)
+    private val _userHighlights = MutableStateFlow<Map<String, List<StoryHighlight>>>(emptyMap())
     val userHighlights: StateFlow<Map<String, List<StoryHighlight>>> = _userHighlights.asStateFlow()
 
     fun addStoryToHighlights(userId: String, story: Story, highlightTitle: String = "My Stories 🌟") {
@@ -1107,6 +1416,9 @@ class FaceFeedViewModel : ViewModel() {
     private val _activeChat = MutableStateFlow<Conversation?>(null)
     val activeChat: StateFlow<Conversation?> = _activeChat.asStateFlow()
 
+    private val _typingConversationId = MutableStateFlow<String?>(null)
+    val typingConversationId: StateFlow<String?> = _typingConversationId.asStateFlow()
+
     // Calling state
     private val _activeCall = MutableStateFlow<ActiveCallState?>(null)
     val activeCall: StateFlow<ActiveCallState?> = _activeCall.asStateFlow()
@@ -1135,38 +1447,73 @@ class FaceFeedViewModel : ViewModel() {
     val pages: StateFlow<List<SocialPage>> = _pages.asStateFlow()
 
     fun togglePageStatus(pageId: String, isActive: Boolean) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setPageActive(pageId, isActive, isOwner = true)
+        var updatedPage: SocialPage? = null
         _pages.value = _pages.value.map { page ->
-            if (page.id == pageId) page.copy(isActive = isActive) else page
+            if (page.id == pageId) {
+                val updated = page.copy(isActive = isActive)
+                updatedPage = updated
+                updated
+            } else page
         }
+        updatedPage?.let { com.example.data.FirebaseManager.saveSocialPage(it) }
     }
 
     fun toggleGroupStatus(groupId: String, isActive: Boolean) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setGroupActive(groupId, isActive, isOwner = true)
+        var updatedGroup: SocialGroup? = null
         _groups.value = _groups.value.map { group ->
-            if (group.id == groupId) group.copy(isActive = isActive) else group
+            if (group.id == groupId) {
+                val updated = group.copy(isActive = isActive)
+                updatedGroup = updated
+                updated
+            } else group
+        }
+        updatedGroup?.let { com.example.data.FirebaseManager.saveSocialGroup(it) }
+    }
+
+    private val _hangoutPresetRooms = MutableStateFlow<List<HangoutRoomControlEntry>>(emptyList())
+    val hangoutPresetRooms: StateFlow<List<HangoutRoomControlEntry>> = _hangoutPresetRooms.asStateFlow()
+
+    fun toggleHangoutPresetRoomStatus(roomKey: String, isActive: Boolean) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setHangoutRoomActive(roomKey, isActive, isOwner = true)
+        _hangoutPresetRooms.value = _hangoutPresetRooms.value.map { room ->
+            if (room.roomKey == roomKey) room.copy(isActive = isActive) else room
         }
     }
 
+    fun isHangoutRoomActive(roomKey: String): Boolean {
+        if (roomKey.startsWith("group_")) {
+            val gId = roomKey.removePrefix("group_")
+            return _groups.value.find { it.id == gId }?.isActive ?: true
+        }
+        return _hangoutPresetRooms.value.find { it.roomKey == roomKey }?.isActive ?: true
+    }
+
     // Notifications
-    private val _notifications = MutableStateFlow(SampleData.initialNotifications)
+    private val _notifications = MutableStateFlow<List<AppNotification>>(emptyList())
     val notifications: StateFlow<List<AppNotification>> = _notifications.asStateFlow()
 
-    // Fully Functional Dynamic Header Notification Badges (Facebook-like)
-    private val _homeBadgeCount = MutableStateFlow(16) // Initial: 15+ new posts
+    // Dynamic Header Notification Badges (zero on fresh clean launch until real activity arrives)
+    private val _homeBadgeCount = MutableStateFlow(0)
     val homeBadgeCount: StateFlow<Int> = _homeBadgeCount.asStateFlow()
 
-    private val _friendsBadgeCount = MutableStateFlow(SampleData.pendingRequestUsers.size) // Initial: 7 pending friend requests
+    private val _friendsBadgeCount = MutableStateFlow(0)
     val friendsBadgeCount: StateFlow<Int> = _friendsBadgeCount.asStateFlow()
 
-    private val _messagesBadgeCount = MutableStateFlow(SampleData.initialConversations.sumOf { it.unreadCount }) // Initial: 3 unread messages
+    private val _messagesBadgeCount = MutableStateFlow(0)
     val messagesBadgeCount: StateFlow<Int> = _messagesBadgeCount.asStateFlow()
 
-    private val _hasNewMessageDot = MutableStateFlow(true)
+    private val _hasNewMessageDot = MutableStateFlow(false)
     val hasNewMessageDot: StateFlow<Boolean> = _hasNewMessageDot.asStateFlow()
 
-    private val _watchBadgeCount = MutableStateFlow(16) // Initial: 15+ unwatched videos
+    private val _watchBadgeCount = MutableStateFlow(0)
     val watchBadgeCount: StateFlow<Int> = _watchBadgeCount.asStateFlow()
 
-    private val _notificationsBadgeCount = MutableStateFlow(SampleData.initialNotifications.count { !it.isRead }) // Initial: 2 unread notifications
+    private val _notificationsBadgeCount = MutableStateFlow(0)
     val notificationsBadgeCount: StateFlow<Int> = _notificationsBadgeCount.asStateFlow()
 
     // Notification Settings: Sound & Vibration
@@ -1179,12 +1526,113 @@ class FaceFeedViewModel : ViewModel() {
     private val _showNotificationDropdown = MutableStateFlow(false)
     val showNotificationDropdown: StateFlow<Boolean> = _showNotificationDropdown.asStateFlow()
 
+    private val _isHomeRefreshing = MutableStateFlow(false)
+    val isHomeRefreshing: StateFlow<Boolean> = _isHomeRefreshing.asStateFlow()
+
+    private val _postUploadProgress = MutableStateFlow<PostUploadProgress?>(null)
+    val postUploadProgress: StateFlow<PostUploadProgress?> = _postUploadProgress.asStateFlow()
+
+    fun dismissPostUploadProgress() {
+        _postUploadProgress.value = null
+    }
+
     fun clearHomeBadge() {
         _homeBadgeCount.value = 0
     }
 
     fun refreshHomeFeed() {
+        if (!requireInternetConnection()) {
+            handleNetworkLost()
+            return
+        }
+        if (_isHomeRefreshing.value) return
+        _isHomeRefreshing.value = true
         _homeBadgeCount.value = 0
+
+        viewModelScope.launch {
+            try {
+                val startedAt = System.currentTimeMillis()
+                val hiddenIds = synchronized(hiddenPostIdsCache) { hiddenPostIdsCache.toSet() }
+                val existingById = _posts.value.associateBy { it.id }
+
+                val cloudResult = com.example.data.FirebaseManager.fetchPostsPageAwait()
+                if (cloudResult.isSuccess) {
+                    val cloudPosts = cloudResult.getOrNull()
+                        ?.filter { it.id !in hiddenIds && isAuthenticPost(it) }
+                        .orEmpty()
+                    val mergedCloud = cloudPosts.map { cp ->
+                        val old = existingById[cp.id]
+                        if (old != null) {
+                            val preservedImages = if (old.images.any { it.startsWith("file://") } && cp.images.all { !it.startsWith("http") }) {
+                                old.images
+                            } else if (cp.images.isEmpty()) {
+                                old.images
+                            } else {
+                                cp.images
+                            }
+                            val preservedAudio = when {
+                                cp.audioTrack?.audioUrl?.startsWith("http") == true -> cp.audioTrack
+                                old.audioTrack != null -> old.audioTrack
+                                else -> cp.audioTrack
+                            }
+                            val basePost = cp.copy(
+                                images = preservedImages,
+                                audioTrack = preservedAudio,
+                                comments = old.comments.ifEmpty { cp.comments },
+                                userReaction = old.userReaction ?: cp.userReaction,
+                                reactors = old.reactors.ifEmpty { cp.reactors },
+                                isSaved = old.isSaved || cp.isSaved
+                            )
+                            if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(cp.id)) {
+                                basePost.copy(isBoostActive = false, isBoosted = false)
+                            } else basePost
+                        } else if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(cp.id)) {
+                            cp.copy(isBoostActive = false, isBoosted = false)
+                        } else cp
+                    }
+                    val cloudIds = mergedCloud.map { it.id }.toSet()
+                    val localOnly = _posts.value.filter { it.id !in cloudIds && it.id !in hiddenIds && isAuthenticPost(it) }
+                    val finalMerged = (mergedCloud + localOnly)
+                        .map { p ->
+                            if (com.example.data.NiyonOwnerControlStore.isPostBoostLockedOff(p.id)) {
+                                p.copy(isBoostActive = false, isBoosted = false)
+                            } else p
+                        }
+                        .sortedByDescending { it.createdAt }
+                    _posts.value = finalMerged
+                    _watchBadgeCount.value = finalMerged.count { it.isVideo || it.isReel }
+                    if (mergedCloud.isNotEmpty()) {
+                        localRepo?.let { repo ->
+                            launch(Dispatchers.IO) { repo.upsertPosts(mergedCloud) }
+                        }
+                    }
+                } else {
+                    _posts.value = _posts.value.filter { isAuthenticPost(it) }
+                }
+
+                val storiesResult = com.example.data.FirebaseManager.fetchStoriesAwait()
+                if (storiesResult.isSuccess) {
+                    val cloudStories = storiesResult.getOrNull()?.filter { isAuthenticStory(it) }.orEmpty()
+                    val cloudStoryIds = cloudStories.map { it.id }.toSet()
+                    val existingStoryById = _stories.value.associateBy { it.id }
+                    val mergedCloudStories = cloudStories.map { cs ->
+                        val old = existingStoryById[cs.id]
+                        if (old != null) cs.copy(isViewed = old.isViewed) else cs
+                    }
+                    val localStories = _stories.value.filter { it.id !in cloudStoryIds && isAuthenticStory(it) }
+                    _stories.value = mergedCloudStories + localStories
+                }
+
+                val elapsed = System.currentTimeMillis() - startedAt
+                if (elapsed < 650L) {
+                    delay(650L - elapsed)
+                }
+            } catch (_: Exception) {
+                // Keep UI stable if Firestore/network call fails before Google Sign-In
+            } finally {
+                _isHomeRefreshing.value = false
+            }
+        }
     }
 
     fun incrementHomeBadge() {
@@ -1292,20 +1740,21 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun reportCyberHarassment(userId: String, userName: String, comment: String, postTitle: String) {
+        val targetAvatar = _allAppUsers.value.find { it.id == userId }?.avatarUrl.orEmpty()
         val newReport = CyberOffenderReport(
             id = "offender_${UUID.randomUUID().toString().take(6)}",
             userId = userId,
             userName = userName,
             userUsername = userName.lowercase().replace(" ", "_"),
-            userAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+            userAvatar = targetAvatar,
             reportedComment = comment,
             targetPostTitle = postTitle,
-            timestamp = "০১/০১/২০২৬ (1/1/2026)",
-            nationalId = "১৯${(10000000000000L..99999999999999L).random()}",
-            phoneNumber = "+৮৮০ ১৭১${(1000000..9999999).random()}",
-            ipAddress = "103.${(10..250).random()}.${(10..250).random()}.${(10..250).random()}",
-            deviceModel = "Android Device (আইপি ও আইএমইআই চিহ্নিত)",
-            location = "বাংলাদেশ (সাইবার ক্রাইম ট্র্যাকিং সক্রিয়)",
+            timestamp = "এইমাত্র",
+            nationalId = "",
+            phoneNumber = "",
+            ipAddress = "",
+            deviceModel = "Android Device",
+            location = "বাংলাদেশ",
             legalViolation = "সাইবার নিরাপত্তা আইন ২০২৩ ধারা ২৫ ও ২৯ (অনলাইন অবমাননা ও কুরুচিপূর্ণ উক্তি)",
             status = "UNDER_REVIEW"
         )
@@ -1317,12 +1766,12 @@ class FaceFeedViewModel : ViewModel() {
         val update = AppUpdateBroadcast(
             id = "update_${UUID.randomUUID().toString().take(6)}",
             version = version.ifBlank { "v3.0.0" },
-            title = title.ifBlank { "FaceFeed নতুন আপডেট প্রকাশিত হয়েছে!" },
+            title = title.ifBlank { "FotoFilm নতুন আপডেট প্রকাশিত হয়েছে!" },
             description = description.ifBlank { "সকল ফিচারের চমৎকার পারফরম্যান্স ও নতুন সুবিধা যুক্ত করা হয়েছে।" },
-            appLogoUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300",
-            ownerAvatar = owner.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" },
+            appLogoUrl = "",
+            ownerAvatar = owner.avatarUrl,
             ownerName = owner.fullName,
-            releaseDate = "০১/০১/২০২৬ (1/1/2026)",
+            releaseDate = "এইমাত্র",
             isActive = true
         )
         _appUpdateBroadcasts.value = listOf(update) + _appUpdateBroadcasts.value
@@ -1393,17 +1842,17 @@ class FaceFeedViewModel : ViewModel() {
 
     // Toggle 4-Language ON/OFF (Right Manager Fida exclusive - Only Niyon Islam Sohag can toggle)
     fun toggleLanguageStatus(language: AppLanguage, isEnabled: Boolean): Boolean {
-        val user = _currentUser.value
-        val isNiyon = user.id == "user_niyon" || user.fullName.contains("Niyon", ignoreCase = true)
-        if (!isNiyon) {
+        if (!isCurrentUserNiyonIslamSohag()) {
             return false // Unauthorized: Only Niyon Islam Sohag can toggle languages
         }
+        com.example.data.NiyonOwnerControlStore.setLanguageEnabled(language.name, isEnabled, isOwner = true)
         val updated = _languageStatus.value.toMutableMap()
         updated[language] = isEnabled
         _languageStatus.value = updated
-        // If disabled language is currently selected, fall back to Bengali immediately
+        // If disabled language is currently selected, fall back to an active language (preferring Bengali)
         if (!isEnabled && _currentLanguage.value == language) {
-            _currentLanguage.value = AppLanguage.BENGALI
+            val fallback = updated.entries.firstOrNull { it.value }?.key ?: AppLanguage.BENGALI
+            _currentLanguage.value = fallback
         }
         return true
     }
@@ -1437,6 +1886,7 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun openLiveStudio() {
+        if (!requireInternetConnection()) return
         _showLiveStudio.value = true
     }
 
@@ -1447,7 +1897,7 @@ class FaceFeedViewModel : ViewModel() {
     fun publishLongVideo(title: String, videoUrl: String, description: String) {
         createPost(
             text = if (description.isNotBlank()) "$title\n\n$description" else title,
-            hashtags = listOf("#LongVideo", "#FaceFeedWatch", "#ViralVideo", "#Bangladesh"),
+            hashtags = listOf("#LongVideo", "#FotoFilmWatch", "#ViralVideo", "#Bangladesh"),
             images = listOf(videoUrl),
             isVideo = true,
             videoTitle = title,
@@ -1459,8 +1909,8 @@ class FaceFeedViewModel : ViewModel() {
 
     fun publishReel(videoUrl: String, caption: String) {
         createPost(
-            text = if (caption.isNotBlank()) caption else "New Reel on FaceFeed 🎬✨",
-            hashtags = listOf("#Reels", "#ShortVideo", "#FaceFeedReels", "#Trending"),
+            text = if (caption.isNotBlank()) caption else "New Short Video on FotoFilm 🎬✨",
+            hashtags = listOf("#ShortVideo", "#FotoFilmShortVideo", "#Trending"),
             images = listOf(videoUrl),
             isVideo = true,
             videoTitle = caption.take(25),
@@ -1474,7 +1924,7 @@ class FaceFeedViewModel : ViewModel() {
         if (text.isBlank()) return
         createPost(
             text = text,
-            hashtags = listOf("#FaceFeed", "#Status", "#Thoughts"),
+            hashtags = listOf("#FotoFilm", "#Status", "#Thoughts"),
             images = emptyList(),
             isVideo = false,
             videoTitle = null,
@@ -1485,6 +1935,9 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun setShowAuthDialog(show: Boolean) {
+        if (!show && !_isLoggedIn.value) {
+            return
+        }
         _showAuthDialog.value = show
     }
 
@@ -1493,56 +1946,134 @@ class FaceFeedViewModel : ViewModel() {
         pass: String,
         context: android.content.Context? = null
     ): Boolean {
-        val input = emailOrUser.trim()
-        if (input.isBlank()) return false
-        val lower = input.lowercase()
-        val isOwner = lower == "smd224292@gmail.com" ||
-            lower == "nihonislamsohag@gmail.com" ||
-            lower == "niyon_sohag" ||
-            lower == "niyonislamsohag" ||
-            (lower.contains("niyon") && lower.contains("sohag"))
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
+        _authErrorMessage.value = null
 
-        val matchedSaved = _savedEmailAccounts.value.firstOrNull {
-            it.email.trim().equals(input, ignoreCase = true) ||
-                it.username.trim().equals(input, ignoreCase = true)
+        val input = emailOrUser.trim()
+        if (input.isBlank()) {
+            _authErrorMessage.value = "অনুগ্রহ করে ইমেইল অ্যাড্রেস অথবা ইউজারনেম লিখুন।"
+            return false
+        }
+        if (pass.length < 6) {
+            _authErrorMessage.value = "অনুগ্রহ করে কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড লিখুন।"
+            return false
         }
 
-        if (isOwner) {
+        val lower = input.lowercase()
+        val isOwnerIdentifier = com.example.data.AuthSessionStore.isReservedOwnerEmail(lower) ||
+            lower == "niyon_sohag" ||
+            lower == "niyonislamsohag" ||
+            lower == "niyon islam sohag"
+
+        if (isOwnerIdentifier) {
+            val activeFbEmail = try {
+                com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase()
+            } catch (_: Exception) {
+                null
+            }
+            val firebaseOwnerSignedIn = activeFbEmail != null &&
+                com.example.data.AuthSessionStore.isReservedOwnerEmail(activeFbEmail) &&
+                (!input.contains("@") || activeFbEmail == lower)
+            val ownerSecretMatched = com.example.data.AuthSessionStore.verifyOwnerSecret(pass, _rightManagerPin.value)
+
+            if (!firebaseOwnerSignedIn && !ownerSecretMatched) {
+                setOwnerAuthenticated(false)
+                closeRightManagerFida()
+                _authErrorMessage.value = "ভুল পাসওয়ার্ড! এই অ্যাকাউন্টটি শুধুমাত্র প্রতিষ্ঠাতা Niyon Islam Sohag-এর জন্য সংরক্ষিত। সঠিক পাসওয়ার্ড অথবা Google / Gmail দিয়ে লগইন করুন।"
+                return false
+            }
+
+            val resolvedOwnerEmail = if (com.example.data.AuthSessionStore.isReservedOwnerEmail(lower)) {
+                input
+            } else {
+                activeFbEmail ?: SampleData.currentUser.email
+            }
             _currentUser.value = SampleData.currentUser.copy(
-                email = if (input.contains("@")) input else SampleData.currentUser.email,
-                isVerified = true
+                email = resolvedOwnerEmail,
+                isVerified = true,
+                isOnline = true
             )
-            isCurrentOwnerAuthenticated = true
-        } else if (matchedSaved != null) {
-            _currentUser.value = _currentUser.value.copy(
+            setOwnerAuthenticated(true)
+            _isFidaVerified.value = true
+            recordSavedAccount(
+                context = ctx,
+                user = _currentUser.value,
+                isFirebaseLinked = com.example.data.FirebaseManager.activeAuthUid() != null,
+                isOwner = true
+            )
+            if (ctx != null) {
+                com.example.data.AuthSessionStore.saveActiveSession(
+                    context = ctx,
+                    user = _currentUser.value,
+                    isOwnerVerified = true,
+                    authMethod = "owner_pin"
+                )
+            }
+            syncUserAccountsForCurrentUser(_currentUser.value)
+            com.example.data.FirebaseManager.syncSignedInUserProfile(_currentUser.value)
+            _isLoggedIn.value = true
+            _showAuthDialog.value = false
+            return true
+        }
+
+        // Non-owner user login: verify local password if account was registered on this device
+        if (ctx != null && com.example.data.AuthSessionStore.hasLocalCredential(ctx, input)) {
+            if (!com.example.data.AuthSessionStore.verifyLocalCredential(ctx, input, pass)) {
+                _authErrorMessage.value = "পাসওয়ার্ড সঠিক নয়! অনুগ্রহ করে সঠিক পাসওয়ার্ড দিয়ে আবার চেষ্টা করুন।"
+                return false
+            }
+        }
+
+        val matchedSaved = _savedEmailAccounts.value.firstOrNull {
+            !it.isOwner && (it.email.trim().equals(input, ignoreCase = true) ||
+                it.username.trim().equals(input, ignoreCase = true))
+        }
+
+        setOwnerAuthenticated(false)
+        closeRightManagerFida()
+        _isFidaVerified.value = false
+
+        if (matchedSaved != null) {
+            _currentUser.value = User(
                 id = matchedSaved.id,
                 fullName = matchedSaved.fullName,
                 username = matchedSaved.username,
                 email = matchedSaved.email,
                 avatarUrl = matchedSaved.avatarUrl,
-                isVerified = false
+                bio = "FotoFilm সদস্য ✨",
+                isVerified = false,
+                isOnline = true
             )
-            isCurrentOwnerAuthenticated = false
-            closeRightManagerFida()
         } else {
             val resolvedName = input.substringBefore("@").ifBlank { "FotoFilm User" }
             val resolvedHandle = resolvedName.lowercase().replace(Regex("[^a-z0-9_]"), "_").trim('_').ifBlank { "user" }
-            _currentUser.value = _currentUser.value.copy(
+            _currentUser.value = User(
                 id = "user_${resolvedHandle}_${UUID.randomUUID().toString().take(6)}",
                 fullName = resolvedName,
                 username = resolvedHandle,
                 email = if (input.contains("@")) input else "$resolvedHandle@fotofilm.app",
-                isVerified = false
+                bio = "FotoFilm সদস্য ✨",
+                isVerified = false,
+                isOnline = true
             )
-            isCurrentOwnerAuthenticated = false
-            closeRightManagerFida()
         }
+
         recordSavedAccount(
-            context = context,
+            context = ctx,
             user = _currentUser.value,
             isFirebaseLinked = com.example.data.FirebaseManager.activeAuthUid() != null,
-            isOwner = isOwner
+            isOwner = false
         )
+        if (ctx != null) {
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = _currentUser.value,
+                isOwnerVerified = false,
+                authMethod = "email"
+            )
+        }
+        syncUserAccountsForCurrentUser(_currentUser.value)
         com.example.data.FirebaseManager.syncSignedInUserProfile(_currentUser.value)
         _isLoggedIn.value = true
         _showAuthDialog.value = false
@@ -1560,57 +2091,184 @@ class FaceFeedViewModel : ViewModel() {
         avatarUrl: String?,
         context: android.content.Context? = null
     ): Boolean {
-        if (fullName.isBlank()) return false
-        val emailLower = email.trim().lowercase()
-        val nameLower = fullName.trim().lowercase()
-        val userLower = username.trim().lowercase()
-        val isOwner = emailLower == "smd224292@gmail.com" ||
-            emailLower == "nihonislamsohag@gmail.com" ||
-            userLower == "niyon_sohag" ||
-            userLower == "niyonislamsohag" ||
-            (nameLower.contains("niyon") && nameLower.contains("sohag"))
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
+        _authErrorMessage.value = null
 
-        val resolvedUsername = if (username.isNotBlank()) username.trim() else fullName.trim().lowercase().replace(" ", "_")
+        if (fullName.isBlank()) {
+            _authErrorMessage.value = "অনুগ্রহ করে আপনার পুরো নাম লিখুন।"
+            return false
+        }
+        val cleanEmail = email.trim()
+        if (!cleanEmail.contains("@") || !cleanEmail.contains(".")) {
+            _authErrorMessage.value = "অনুগ্রহ করে সঠিক ইমেইল অ্যাড্রেস লিখুন।"
+            return false
+        }
+        if (birthDate.isBlank()) {
+            _authErrorMessage.value = "অনুগ্রহ করে আপনার জন্মতারিখ লিখুন।"
+            return false
+        }
+        if (pass.length < 6) {
+            _authErrorMessage.value = "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।"
+            return false
+        }
+
+        val emailLower = cleanEmail.lowercase()
+        val activeFbEmail = try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email?.trim()?.lowercase()
+        } catch (_: Exception) {
+            null
+        }
+        val isReservedOwner = com.example.data.AuthSessionStore.isReservedOwnerEmail(emailLower)
+        val matchesOwnerSecret = com.example.data.AuthSessionStore.verifyOwnerSecret(pass, _rightManagerPin.value)
+        val isOwnerNameOrHandle = fullName.trim().equals("Niyon Islam Sohag", ignoreCase = true) ||
+            username.trim().lowercase() in listOf("niyon_sohag", "niyonislamsohag", "niyon islam sohag")
+        val isVerifiedOwner = (isReservedOwner && (activeFbEmail == emailLower || matchesOwnerSecret)) ||
+            (isOwnerNameOrHandle && matchesOwnerSecret)
+
+        // Block anyone from registering manually with owner's reserved email without verified Google Auth or owner secret
+        if (isReservedOwner && !isVerifiedOwner) {
+            _authErrorMessage.value = "এই ইমেইলটি সংরক্ষিত! মালিক হলে সঠিক পাসওয়ার্ড বা ফোনের Google / Gmail দিয়ে প্রবেশ করুন অথবা আপনার নিজের ইমেইল দিন।"
+            return false
+        }
+
+        val resolvedUsername = if (username.isNotBlank()) {
+            username.trim()
+        } else {
+            fullName.trim().lowercase().replace(Regex("[^a-z0-9_]"), "_").trim('_').ifBlank { "user" }
+        }
+
+        // ১ ব্যক্তি সর্বোচ্চ ৩টি আইডি সীমা যাচাই (নতুন ইমেইল দিয়ে ৪র্থ অ্যাকাউন্ট খুললে ব্লক হবে)
+        val savedOnDevice = ctx?.let { com.example.data.SavedAccountsStore.loadAccounts(it) } ?: _savedEmailAccounts.value
+        val isAlreadySavedEmail = savedOnDevice.any { it.email.trim().equals(cleanEmail, ignoreCase = true) }
+        val existingCount = countDistinctAccountsOnDevice(ctx, excludingEmail = cleanEmail)
+        if (!isVerifiedOwner && !isAlreadySavedEmail && existingCount >= com.example.util.FakeIdDetector.MAX_ACCOUNTS_PER_PERSON) {
+            val limitMsg = "⛔ ১ জন ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (এই ডিভাইসে ইতিমধ্যে ৩টি আইডি খোলা আছে)"
+            _authErrorMessage.value = limitMsg
+            recordFakeIdViolationReport(
+                context = ctx,
+                attemptedName = fullName.trim(),
+                attemptedUsername = resolvedUsername,
+                attemptedEmail = cleanEmail,
+                selectedGender = gender.trim(),
+                detectedSignal = "১ ব্যক্তি সর্বোচ্চ ৩ আইডি সীমা অতিক্রম ($existingCount/৩ পূর্ণ)",
+                violationType = "LIMIT_3_ACCOUNTS",
+                violationDetails = limitMsg,
+                attemptedAvatarUrl = avatarUrl.orEmpty()
+            )
+            return false
+        }
+
         val activeFirebaseUid = com.example.data.FirebaseManager.activeAuthUid()
-        val newUser = if (isOwner) {
+        val candidateUserId = if (isVerifiedOwner) {
+            activeFirebaseUid ?: SampleData.currentUser.id
+        } else {
+            activeFirebaseUid ?: "user_${UUID.randomUUID().toString().take(8)}"
+        }
+
+        // অ্যান্টি-ফেক-আইডি যাচাই:
+        // ১. অন্যের ছবি দিয়ে ফেইক আইডি ব্লক
+        // ২. ছেলে হয়ে মেয়ের নামে/ছবিতে ফেইক আইডি ব্লক
+        // ৩. মেয়ে হয়ে ছেলের নামে/ছবিতে ফেইক আইডি ব্লক
+        val fakeIdCheck = com.example.util.FakeIdDetector.validateRegistrationOrUpdate(
+            context = ctx,
+            candidateUserId = candidateUserId,
+            candidateEmail = cleanEmail,
+            fullName = fullName.trim(),
+            username = resolvedUsername,
+            selectedGender = gender.trim(),
+            avatarUrl = avatarUrl,
+            existingUsers = _allAppUsers.value,
+            existingPosts = _posts.value,
+            savedEmailAccounts = savedOnDevice,
+            isOwnerVerified = isVerifiedOwner
+        )
+        if (!fakeIdCheck.isAllowed) {
+            val msg = fakeIdCheck.reasonMessage ?: "⛔ ফেইক আইডি শনাক্ত হওয়ায় অ্যাকাউন্ট খোলা ব্লক করা হয়েছে!"
+            _authErrorMessage.value = msg
+            recordFakeIdViolationReport(
+                context = ctx,
+                attemptedName = fullName.trim(),
+                attemptedUsername = resolvedUsername,
+                attemptedEmail = cleanEmail,
+                selectedGender = gender.trim(),
+                detectedSignal = fakeIdCheck.detectedSignal,
+                violationType = fakeIdCheck.violationType ?: "FAKE_ID_BLOCKED",
+                violationDetails = msg,
+                attemptedAvatarUrl = avatarUrl.orEmpty(),
+                matchedExistingUser = fakeIdCheck.matchedOwnerName
+            )
+            return false
+        }
+
+        val newUser = if (isVerifiedOwner) {
             SampleData.currentUser.copy(
-                id = activeFirebaseUid ?: SampleData.currentUser.id,
+                id = candidateUserId,
                 fullName = fullName.trim(),
                 username = resolvedUsername,
-                email = email.trim().ifBlank { SampleData.currentUser.email },
+                email = cleanEmail,
                 gender = gender.trim(),
                 country = country.trim(),
                 birthDate = birthDate.trim(),
                 avatarUrl = avatarUrl?.takeIf { it.isNotBlank() } ?: SampleData.currentUser.avatarUrl,
-                isVerified = true
+                isVerified = true,
+                isOnline = true
             )
         } else {
             User(
-                id = activeFirebaseUid ?: "user_${UUID.randomUUID().toString().take(8)}",
+                id = candidateUserId,
                 fullName = fullName.trim(),
                 username = resolvedUsername,
-                email = email.trim(),
+                email = cleanEmail,
                 gender = gender.trim(),
                 country = country.trim(),
                 birthDate = birthDate.trim(),
-                avatarUrl = avatarUrl?.takeIf { it.isNotBlank() }
-                    ?: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
+                avatarUrl = avatarUrl?.takeIf { it.isNotBlank() } ?: "",
                 bio = "FotoFilm সদস্য ✨",
-                isVerified = false
+                isVerified = false,
+                isOnline = true
             )
         }
 
-        isCurrentOwnerAuthenticated = isOwner
-        if (!isOwner) {
+        if (newUser.avatarUrl.isNotBlank()) {
+            com.example.util.FakeIdDetector.registerPhotoFingerprint(
+                context = ctx,
+                ownerId = newUser.id,
+                ownerName = newUser.fullName,
+                ownerEmail = newUser.email,
+                ownerGender = newUser.gender,
+                avatarUrl = newUser.avatarUrl,
+                precomputed = fakeIdCheck.fingerprint
+            )
+        }
+
+        setOwnerAuthenticated(isVerifiedOwner)
+        _isFidaVerified.value = isVerifiedOwner
+        if (!isVerifiedOwner) {
             closeRightManagerFida()
         }
         _currentUser.value = newUser
+        if (ctx != null) {
+            com.example.data.AuthSessionStore.saveLocalCredential(
+                context = ctx,
+                email = cleanEmail,
+                username = resolvedUsername,
+                password = pass
+            )
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = newUser,
+                isOwnerVerified = isVerifiedOwner,
+                authMethod = if (isVerifiedOwner) "owner_verified" else "email"
+            )
+        }
         recordSavedAccount(
-            context = context,
+            context = ctx,
             user = newUser,
             isFirebaseLinked = activeFirebaseUid != null,
-            isOwner = isOwner
+            isOwner = isVerifiedOwner
         )
+        syncUserAccountsForCurrentUser(newUser)
         com.example.data.FirebaseManager.syncSignedInUserProfile(newUser)
         _isLoggedIn.value = true
         _showAuthDialog.value = false
@@ -1618,22 +2276,53 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun loginWithAppleId(context: android.content.Context? = null) {
-        val appleUser = _currentUser.value.copy(
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
+        _authErrorMessage.value = null
+        val existingCount = countDistinctAccountsOnDevice(ctx, excludingEmail = "apple.user@icloud.com")
+        if (existingCount >= com.example.util.FakeIdDetector.MAX_ACCOUNTS_PER_PERSON) {
+            val limitMsg = "⛔ ১ জন ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (এই ডিভাইসে ইতিমধ্যে ৩টি আইডি খোলা আছে)"
+            _authErrorMessage.value = limitMsg
+            recordFakeIdViolationReport(
+                context = ctx,
+                attemptedName = "Apple User",
+                attemptedUsername = "apple_user",
+                attemptedEmail = "apple.user@icloud.com",
+                selectedGender = "অনির্ধারিত",
+                detectedSignal = "১ ব্যক্তি সর্বোচ্চ ৩ আইডি সীমা অতিক্রম ($existingCount/৩ পূর্ণ)",
+                violationType = "LIMIT_3_ACCOUNTS",
+                violationDetails = limitMsg
+            )
+            return
+        }
+        val appleUser = User(
             id = "apple_${UUID.randomUUID().toString().take(8)}",
             fullName = "Apple User",
             username = "apple_user",
             email = "apple.user@icloud.com",
-            isVerified = true
+            bio = "FotoFilm সদস্য ✨",
+            isVerified = false,
+            isOnline = true
         )
-        isCurrentOwnerAuthenticated = false
+        setOwnerAuthenticated(false)
+        _isFidaVerified.value = false
         closeRightManagerFida()
         _currentUser.value = appleUser
+        if (ctx != null) {
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = appleUser,
+                isOwnerVerified = false,
+                authMethod = "apple"
+            )
+        }
         recordSavedAccount(
-            context = context,
+            context = ctx,
             user = appleUser,
             isFirebaseLinked = com.example.data.FirebaseManager.activeAuthUid() != null,
             isOwner = false
         )
+        syncUserAccountsForCurrentUser(appleUser)
         com.example.data.FirebaseManager.syncSignedInUserProfile(appleUser)
         _isLoggedIn.value = true
         _showAuthDialog.value = false
@@ -1649,32 +2338,147 @@ class FaceFeedViewModel : ViewModel() {
         avatarUrl: String?
     ): Boolean {
         if (fullName.isBlank()) return false
-        val updatedUser = _currentUser.value.copy(
+        val cu = _currentUser.value
+        val candidateAvatar = avatarUrl?.takeIf { it.isNotBlank() } ?: cu.avatarUrl
+        val resolvedHandle = if (username.isNotBlank()) username.trim() else fullName.trim().lowercase().replace(" ", "_")
+        val check = com.example.util.FakeIdDetector.validateRegistrationOrUpdate(
+            context = appContextRef,
+            candidateUserId = cu.id,
+            candidateEmail = cu.email,
             fullName = fullName.trim(),
-            username = if (username.isNotBlank()) username.trim() else fullName.trim().lowercase().replace(" ", "_"),
+            username = resolvedHandle,
+            selectedGender = gender.trim(),
+            avatarUrl = candidateAvatar,
+            existingUsers = _allAppUsers.value,
+            existingPosts = _posts.value,
+            savedEmailAccounts = _savedEmailAccounts.value,
+            isOwnerVerified = isCurrentUserNiyonIslamSohag()
+        )
+        if (!check.isAllowed) {
+            val msg = check.reasonMessage ?: "⛔ ফেইক আইডি সুরক্ষা নীতির কারণে প্রোফাইল আপডেট ব্লক করা হয়েছে!"
+            _authErrorMessage.value = msg
+            _safetyPolicyAlert.value = msg
+            recordFakeIdViolationReport(
+                context = appContextRef,
+                attemptedName = fullName.trim(),
+                attemptedUsername = resolvedHandle,
+                attemptedEmail = cu.email,
+                selectedGender = gender.trim(),
+                detectedSignal = check.detectedSignal,
+                violationType = check.violationType ?: "FAKE_ID_BLOCKED",
+                violationDetails = msg,
+                attemptedAvatarUrl = candidateAvatar,
+                matchedExistingUser = check.matchedOwnerName
+            )
+            return false
+        }
+        val updatedUser = cu.copy(
+            fullName = fullName.trim(),
+            username = resolvedHandle,
             gender = gender.trim(),
             country = country.trim(),
             birthDate = birthDate.trim(),
-            avatarUrl = avatarUrl?.takeIf { it.isNotBlank() } ?: _currentUser.value.avatarUrl
+            avatarUrl = candidateAvatar
         )
+        if (updatedUser.avatarUrl.isNotBlank()) {
+            com.example.util.FakeIdDetector.registerPhotoFingerprint(
+                context = appContextRef,
+                ownerId = updatedUser.id,
+                ownerName = updatedUser.fullName,
+                ownerEmail = updatedUser.email,
+                ownerGender = updatedUser.gender,
+                avatarUrl = updatedUser.avatarUrl,
+                precomputed = check.fingerprint
+            )
+        }
         _currentUser.value = updatedUser
+        appContextRef?.let { ctx ->
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = updatedUser,
+                isOwnerVerified = isCurrentOwnerAuthenticated,
+                authMethod = "profile_update"
+            )
+        }
+        syncUserAccountsForCurrentUser(updatedUser)
         com.example.data.FirebaseManager.syncSignedInUserProfile(updatedUser)
         _showAuthDialog.value = false
         return true
     }
 
     fun logout() {
+        appContextRef?.let { ctx ->
+            com.example.data.AuthSessionStore.clearActiveSession(ctx)
+        }
         try {
             com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
         } catch (_: Exception) {
         }
+        setOwnerAuthenticated(false)
+        closeRightManagerFida()
+        _isRightManagerUnlocked.value = false
+        _isFidaVerified.value = false
+        _currentUser.value = createGuestUser()
+        _userAccounts.value = emptyList()
+        _authErrorMessage.value = null
         stopCloudSync(keepLoggedIn = false)
+        _isLoggedIn.value = false
         _showAuthDialog.value = true
     }
 
     // Profile updates
     fun updateProfileAvatar(uri: String) {
-        _currentUser.value = _currentUser.value.copy(avatarUrl = uri)
+        val cu = _currentUser.value
+        val check = com.example.util.FakeIdDetector.validateRegistrationOrUpdate(
+            context = appContextRef,
+            candidateUserId = cu.id,
+            candidateEmail = cu.email,
+            fullName = cu.fullName,
+            username = cu.username,
+            selectedGender = cu.gender,
+            avatarUrl = uri,
+            existingUsers = _allAppUsers.value,
+            existingPosts = _posts.value,
+            savedEmailAccounts = _savedEmailAccounts.value,
+            isOwnerVerified = isCurrentUserNiyonIslamSohag()
+        )
+        if (!check.isAllowed) {
+            val msg = check.reasonMessage ?: "⛔ অন্যের ছবি বা বিপরীত লিঙ্গের ছবি ব্যবহার নিষিদ্ধ!"
+            _safetyPolicyAlert.value = msg
+            _compressionToastMessage.value = msg
+            recordFakeIdViolationReport(
+                context = appContextRef,
+                attemptedName = cu.fullName,
+                attemptedUsername = cu.username,
+                attemptedEmail = cu.email,
+                selectedGender = cu.gender,
+                detectedSignal = check.detectedSignal,
+                violationType = check.violationType ?: "STOLEN_PHOTO",
+                violationDetails = msg,
+                attemptedAvatarUrl = uri,
+                matchedExistingUser = check.matchedOwnerName
+            )
+            return
+        }
+        com.example.util.FakeIdDetector.registerPhotoFingerprint(
+            context = appContextRef,
+            ownerId = cu.id,
+            ownerName = cu.fullName,
+            ownerEmail = cu.email,
+            ownerGender = cu.gender,
+            avatarUrl = uri,
+            precomputed = check.fingerprint
+        )
+        _currentUser.value = cu.copy(avatarUrl = uri)
+        appContextRef?.let { ctx ->
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = _currentUser.value,
+                isOwnerVerified = isCurrentOwnerAuthenticated,
+                authMethod = "avatar_update"
+            )
+        }
+        syncUserAccountsForCurrentUser(_currentUser.value)
     }
 
     fun updateCoverPhoto(uri: String) {
@@ -1686,8 +2490,10 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun shareProfileAvatarToStory(caption: String = "নতুন প্রোফাইল ছবি ✨") {
-        val avatar = _currentUser.value.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800" }
-        addStory(avatar, caption)
+        val avatar = _currentUser.value.avatarUrl
+        if (avatar.isNotBlank()) {
+            addStory(avatar, caption)
+        }
     }
 
     fun updateNote(newNote: String) {
@@ -1715,6 +2521,7 @@ class FaceFeedViewModel : ViewModel() {
         location: String? = null,
         musicInfo: String? = null
     ) {
+        if (!requireInternetConnection()) return
         val check = com.example.util.SafetyPolicyValidator.validateContent(text + " " + (title ?: "") + " " + (videoTitle ?: ""))
         if (!check.isAllowed) {
             _safetyPolicyAlert.value = check.reasonMessage
@@ -1770,6 +2577,7 @@ class FaceFeedViewModel : ViewModel() {
             id = "post_${UUID.randomUUID()}",
             author = activeUser,
             timestamp = "Just now • 🌐 Public",
+            createdAt = System.currentTimeMillis(),
             title = title?.takeIf { it.isNotBlank() },
             text = text,
             hashtags = postHashtags,
@@ -1788,91 +2596,266 @@ class FaceFeedViewModel : ViewModel() {
         _posts.value = listOf(newPost) + _posts.value
         _showCreatePostDialog.value = false
 
+        val mediaTypeLabel = when {
+            effectiveIsReel -> "শর্ট ভিডিও"
+            effectiveIsVideo -> "ভিডিও পোস্ট"
+            cappedImages.isNotEmpty() -> "ছবি পোস্ট"
+            audioTrack != null -> "ভয়েস/অডিও পোস্ট"
+            else -> "টেক্সট পোস্ট"
+        }
+        val postPreviewText = (title ?: videoTitle ?: text).trim()
+            .ifBlank { mediaTypeLabel }
+            .take(48)
+
+        fun updateUploadProgress(percent: Int, logText: String, completed: Boolean = false) {
+            _postUploadProgress.value = PostUploadProgress(
+                postId = newPost.id,
+                postPreview = postPreviewText,
+                mediaTypeLabel = mediaTypeLabel,
+                progressPercent = percent.coerceIn(0, 100),
+                statusLog = logText,
+                isCompleted = completed
+            )
+            if (completed) {
+                viewModelScope.launch {
+                    delay(2400L)
+                    if (_postUploadProgress.value?.postId == newPost.id) {
+                        _postUploadProgress.value = null
+                    }
+                }
+            }
+        }
+
+        updateUploadProgress(12, "পোস্ট প্রস্তুত ও লোকাল সেভ হচ্ছে...")
+
+        // Persist immediately to Room DB so post stays after app restart
+        persistPostToRoom(newPost)
         // Sync to cloud Firebase so all users see it in real-time
         com.example.data.FirebaseManager.savePost(newPost)
 
-        // Track daily 43.1 MB budget & perform real auto-compression on media
-        if (quotaCategory != null) {
-            val ctx = com.example.data.CloudinaryManager.getAppContext()
-            val isAutoCompress = com.example.data.DailyQuotaCompressionStore.config.value.isAutoCompressionEnabled
+        val ctx = appContextRef ?: com.example.data.CloudinaryManager.getAppContext()
+        val hasLocalMedia = cappedImages.any {
+            it.startsWith("content://") || it.startsWith("file://") || it.startsWith("/")
+        }
+        val hasLocalAudio = audioTrack?.audioUrl?.let {
+            it.startsWith("content://") || it.startsWith("file://") || it.startsWith("/")
+        } == true
 
+        if (ctx != null && (hasLocalMedia || hasLocalAudio || quotaCategory != null)) {
             viewModelScope.launch(Dispatchers.IO) {
-                var totalUsedUnit = 0.0
-                var totalSavedMb = 0.0
-                var latestBanner: String? = null
-                val compressedLocalMap = mutableMapOf<String, android.net.Uri>()
+                updateUploadProgress(18, "ফাইল স্থায়ী মেমোরিতে কপি হচ্ছে...")
 
-                cappedImages.forEach { mediaUriStr ->
-                    if (mediaUriStr.startsWith("content://") || mediaUriStr.startsWith("file://")) {
-                        try {
-                            val rawUri = android.net.Uri.parse(mediaUriStr)
-                            if (ctx != null && isAutoCompress) {
-                                val outcome = if (effectiveIsVideo || effectiveIsReel) {
-                                    com.example.data.MediaCompressionManager.compressAndTrimVideo(ctx, rawUri, compressionKind)
-                                } else {
-                                    com.example.data.MediaCompressionManager.compressImageToMaxKb(ctx, rawUri, maxKb = 300)
-                                }
-                                compressedLocalMap[mediaUriStr] = outcome.outputUri
-                                latestBanner = outcome.summaryBn
-                                val savedMb = ((outcome.originalBytes - outcome.compressedBytes).coerceAtLeast(0L)) / (1024.0 * 1024.0)
-                                totalSavedMb += savedMb
-                                totalUsedUnit += if (quotaCategory == com.example.data.DailyQuotaCategory.FEED_PHOTO) {
-                                    (outcome.compressedBytes / 1024.0).coerceIn(80.0, 300.0)
-                                } else {
-                                    outcome.effectiveQuotaMb.coerceAtMost(
-                                        if (effectiveIsReel) com.example.data.DailyQuotaCompressionStore.MAX_REEL_MB
-                                        else com.example.data.DailyQuotaCompressionStore.MAX_LONG_VIDEO_MB
-                                    )
-                                }
-                            } else {
-                                totalUsedUnit += when (quotaCategory) {
-                                    com.example.data.DailyQuotaCategory.LONG_VIDEO -> com.example.data.DailyQuotaCompressionStore.MAX_LONG_VIDEO_MB
-                                    com.example.data.DailyQuotaCategory.REEL_VIDEO -> com.example.data.DailyQuotaCompressionStore.MAX_REEL_MB
-                                    com.example.data.DailyQuotaCategory.FEED_PHOTO -> com.example.data.DailyQuotaCompressionStore.MAX_PHOTO_UNIT_KB
-                                    else -> 0.0
-                                }
-                            }
-                        } catch (_: Exception) {
+                // Step 1: Copy any local picked media & voice recordings into permanent internal storage
+                val persistedImageMap = mutableMapOf<String, String>()
+                cappedImages.forEach { raw ->
+                    if (raw.startsWith("content://") || raw.startsWith("file://")) {
+                        val sub = if (effectiveIsVideo || effectiveIsReel) "videos" else "photos"
+                        val ext = if (effectiveIsVideo || effectiveIsReel) "mp4" else "jpg"
+                        val durable = com.example.data.local.MediaPersistenceHelper.persistUriIfLocal(
+                            ctx, raw, subDir = sub, defaultExtension = ext
+                        )
+                        persistedImageMap[raw] = durable
+                    }
+                }
+                val persistedAudioUrl = audioTrack?.audioUrl?.let { rawAudio ->
+                    com.example.data.local.MediaPersistenceHelper.persistUriIfLocal(
+                        ctx, rawAudio, subDir = "voice_posts", defaultExtension = "m4a"
+                    )
+                }
+
+                var updatedPostForDisk: Post? = null
+                _posts.value = _posts.value.map { cur ->
+                    if (cur.id == newPost.id) {
+                        val nextImages = cur.images.map { persistedImageMap[it] ?: it }
+                        val nextAudio = cur.audioTrack?.let { a ->
+                            if (persistedAudioUrl != null) a.copy(audioUrl = persistedAudioUrl) else a
                         }
+                        val upd = cur.copy(images = nextImages, audioTrack = nextAudio)
+                        updatedPostForDisk = upd
+                        upd
+                    } else cur
+                }
+                updatedPostForDisk?.let { localRepo?.upsertPost(it) }
+
+                val activeImages = _posts.value.firstOrNull { it.id == newPost.id }?.images ?: cappedImages
+                val localMediaItems = activeImages.filter { it.startsWith("content://") || it.startsWith("file://") }
+                val hasUploadableVoice = persistedAudioUrl != null &&
+                    (persistedAudioUrl.startsWith("file://") || persistedAudioUrl.startsWith("content://") || persistedAudioUrl.startsWith("/"))
+                val totalUploadTasks = localMediaItems.size + (if (hasUploadableVoice) 1 else 0)
+
+                if (totalUploadTasks == 0) {
+                    updateUploadProgress(60, "Firestore ক্লাউডে সিঙ্ক হচ্ছে...")
+                    delay(280L)
+                    updateUploadProgress(100, "আপলোড সম্পন্ন! সবাই এখন দেখতে পাবে ✓", completed = true)
+                    return@launch
+                }
+
+                val taskProgressMap = java.util.concurrent.ConcurrentHashMap<String, Int>()
+                val remainingTasks = java.util.concurrent.atomic.AtomicInteger(totalUploadTasks)
+
+                fun reportCombinedProgress(taskKey: String, pct: Int, stageLabel: String) {
+                    taskProgressMap[taskKey] = pct.coerceIn(0, 100)
+                    val avg = if (taskProgressMap.isEmpty()) 25 else {
+                        (taskProgressMap.values.sum() / totalUploadTasks)
+                    }
+                    val mapped = (22 + (avg * 0.74)).toInt().coerceIn(22, 96)
+                    updateUploadProgress(mapped, stageLabel)
+                }
+
+                fun onTaskFinished(taskKey: String, successLabel: String) {
+                    taskProgressMap[taskKey] = 100
+                    if (remainingTasks.decrementAndGet() <= 0) {
+                        updateUploadProgress(100, successLabel, completed = true)
                     } else {
-                        totalUsedUnit += when (quotaCategory) {
-                            com.example.data.DailyQuotaCategory.LONG_VIDEO -> 24.0
-                            com.example.data.DailyQuotaCategory.REEL_VIDEO -> 6.5
-                            com.example.data.DailyQuotaCategory.FEED_PHOTO -> 280.0
-                            else -> 0.0
-                        }
+                        reportCombinedProgress(taskKey, 100, "পরবর্তী অংশ আপলোড হচ্ছে...")
                     }
                 }
 
-                com.example.data.DailyQuotaCompressionStore.recordUsage(
-                    userId = activeUser.id,
-                    userName = activeUser.fullName,
-                    avatarUrl = activeUser.avatarUrl,
-                    category = quotaCategory,
-                    itemCount = if (quotaCategory == com.example.data.DailyQuotaCategory.FEED_PHOTO) cappedImages.size else 1,
-                    usedMbOrKb = totalUsedUnit,
-                    savedMb = totalSavedMb
-                )
-
-                if (latestBanner != null) {
-                    _compressionToastMessage.value = latestBanner
+                // Step 2: Upload local recorded Voice Post (.m4a) cleanly to Cloudinary (isAudioOnly = true)
+                if (hasUploadableVoice && persistedAudioUrl != null) {
+                    val voiceTaskKey = "voice_audio"
+                    reportCombinedProgress(voiceTaskKey, 5, "ভয়েস অডিও Cloudinary-তে পাঠানো হচ্ছে...")
+                    try {
+                        val audioUri = if (persistedAudioUrl.startsWith("/")) {
+                            android.net.Uri.fromFile(java.io.File(persistedAudioUrl))
+                        } else {
+                            android.net.Uri.parse(persistedAudioUrl)
+                        }
+                        val onVoiceCloudReady: (String) -> Unit = { downloadUrl ->
+                            var syncedVoicePost: Post? = null
+                            _posts.value = _posts.value.map { cur ->
+                                if (cur.id == newPost.id) {
+                                    val upd = cur.copy(audioTrack = cur.audioTrack?.copy(audioUrl = downloadUrl))
+                                    syncedVoicePost = upd
+                                    com.example.data.FirebaseManager.savePost(upd)
+                                    upd
+                                } else cur
+                            }
+                            syncedVoicePost?.let { p -> persistPostToRoom(p) }
+                            _compressionToastMessage.value = "☁️ ভয়েস পোস্ট Cloudinary-তে সেভ হয়েছে ✓"
+                            onTaskFinished(voiceTaskKey, "ভয়েস ও পোস্ট আপলোড সম্পন্ন! ✓")
+                        }
+                        if (com.example.data.CloudinaryManager.isEnabled() && com.example.data.CloudinaryManager.isConfigured()) {
+                            com.example.data.CloudinaryManager.uploadMedia(
+                                uri = audioUri,
+                                isVideoOrAudio = true,
+                                folder = "fotofilm/voice_posts",
+                                isAudioOnly = true,
+                                onProgress = { pct ->
+                                    reportCombinedProgress(voiceTaskKey, pct, "ভয়েস অডিও আপলোড হচ্ছে...")
+                                },
+                                onSuccess = onVoiceCloudReady,
+                                onFailure = {
+                                    com.example.data.FirebaseManager.uploadFileToStorage(
+                                        uri = audioUri,
+                                        folder = "voice_posts",
+                                        onSuccess = onVoiceCloudReady,
+                                        onFailure = {
+                                            onTaskFinished(voiceTaskKey, "ডিভাইসে সেভ সম্পন্ন (অফলাইন সিঙ্ক) ✓")
+                                        }
+                                    )
+                                }
+                            )
+                        } else {
+                            com.example.data.FirebaseManager.uploadFileToStorage(
+                                uri = audioUri,
+                                folder = "voice_posts",
+                                onSuccess = onVoiceCloudReady,
+                                onFailure = {
+                                    onTaskFinished(voiceTaskKey, "ডিভাইসে সেভ সম্পন্ন ✓")
+                                }
+                            )
+                        }
+                    } catch (_: Exception) {
+                        onTaskFinished(voiceTaskKey, "ডিভাইসে সেভ সম্পন্ন ✓")
+                    }
                 }
 
-                // Upload compressed files to Cloudinary (free, no card needed) or Firebase Storage fallback
-                cappedImages.forEach { mediaUriStr ->
-                    if (mediaUriStr.startsWith("content://") || mediaUriStr.startsWith("file://")) {
+                // Step 3: Auto-compress photos/videos, track daily quota, and upload to Cloudinary
+                if (quotaCategory != null) {
+                    updateUploadProgress(24, "মিডিয়া স্মার্ট কম্প্রেস করা হচ্ছে...")
+                    val isAutoCompress = com.example.data.DailyQuotaCompressionStore.config.value.isAutoCompressionEnabled
+                    var totalUsedUnit = 0.0
+                    var totalSavedMb = 0.0
+                    var latestBanner: String? = null
+                    val compressedLocalMap = mutableMapOf<String, android.net.Uri>()
+
+                    activeImages.forEach { mediaUriStr ->
+                        if (mediaUriStr.startsWith("content://") || mediaUriStr.startsWith("file://")) {
+                            try {
+                                val rawUri = android.net.Uri.parse(mediaUriStr)
+                                if (isAutoCompress) {
+                                    val outcome = if (effectiveIsVideo || effectiveIsReel) {
+                                        com.example.data.MediaCompressionManager.compressAndTrimVideo(ctx, rawUri, compressionKind)
+                                    } else {
+                                        com.example.data.MediaCompressionManager.compressImageToMaxKb(ctx, rawUri, maxKb = 300)
+                                    }
+                                    compressedLocalMap[mediaUriStr] = outcome.outputUri
+                                    latestBanner = outcome.summaryBn
+                                    val savedMb = ((outcome.originalBytes - outcome.compressedBytes).coerceAtLeast(0L)) / (1024.0 * 1024.0)
+                                    totalSavedMb += savedMb
+                                    totalUsedUnit += if (quotaCategory == com.example.data.DailyQuotaCategory.FEED_PHOTO) {
+                                        (outcome.compressedBytes / 1024.0).coerceIn(80.0, 300.0)
+                                    } else {
+                                        outcome.effectiveQuotaMb.coerceAtMost(
+                                            if (effectiveIsReel) com.example.data.DailyQuotaCompressionStore.MAX_REEL_MB
+                                            else com.example.data.DailyQuotaCompressionStore.MAX_LONG_VIDEO_MB
+                                        )
+                                    }
+                                } else {
+                                    totalUsedUnit += when (quotaCategory) {
+                                        com.example.data.DailyQuotaCategory.LONG_VIDEO -> com.example.data.DailyQuotaCompressionStore.MAX_LONG_VIDEO_MB
+                                        com.example.data.DailyQuotaCategory.REEL_VIDEO -> com.example.data.DailyQuotaCompressionStore.MAX_REEL_MB
+                                        com.example.data.DailyQuotaCategory.FEED_PHOTO -> com.example.data.DailyQuotaCompressionStore.MAX_PHOTO_UNIT_KB
+                                        else -> 0.0
+                                    }
+                                }
+                            } catch (_: Exception) {
+                            }
+                        } else {
+                            totalUsedUnit += when (quotaCategory) {
+                                com.example.data.DailyQuotaCategory.LONG_VIDEO -> 24.0
+                                com.example.data.DailyQuotaCategory.REEL_VIDEO -> 6.5
+                                com.example.data.DailyQuotaCategory.FEED_PHOTO -> 280.0
+                                else -> 0.0
+                            }
+                        }
+                    }
+
+                    com.example.data.DailyQuotaCompressionStore.recordUsage(
+                        userId = activeUser.id,
+                        userName = activeUser.fullName,
+                        avatarUrl = activeUser.avatarUrl,
+                        category = quotaCategory,
+                        itemCount = if (quotaCategory == com.example.data.DailyQuotaCategory.FEED_PHOTO) activeImages.size else 1,
+                        usedMbOrKb = totalUsedUnit,
+                        savedMb = totalSavedMb
+                    )
+
+                    if (latestBanner != null) {
+                        _compressionToastMessage.value = latestBanner
+                    }
+
+                    localMediaItems.forEachIndexed { idx, mediaUriStr ->
+                        val taskKey = "media_$idx"
+                        reportCombinedProgress(taskKey, 8, "Cloudinary-তে আপলোড শুরু হচ্ছে...")
                         try {
                             val uploadUri = compressedLocalMap[mediaUriStr] ?: android.net.Uri.parse(mediaUriStr)
                             val onCloudReady: (String) -> Unit = { downloadUrl ->
+                                var syncedPost: Post? = null
                                 _posts.value = _posts.value.map { cur ->
                                     if (cur.id == newPost.id) {
                                         val updated = cur.copy(
                                             images = cur.images.map { if (it == mediaUriStr) downloadUrl else it }
                                         )
+                                        syncedPost = updated
                                         com.example.data.FirebaseManager.savePost(updated)
                                         updated
                                     } else cur
                                 }
+                                syncedPost?.let { p -> persistPostToRoom(p) }
+                                _compressionToastMessage.value = "☁️ Cloudinary-তে সেভ হয়েছে — সবাই দেখতে পাবে ✓"
+                                onTaskFinished(taskKey, "Cloudinary ও Firestore আপলোড সম্পন্ন! ✓")
                             }
                             if (com.example.data.CloudinaryManager.isEnabled() && com.example.data.CloudinaryManager.isConfigured()) {
                                 com.example.data.CloudinaryManager.uploadMedia(
@@ -1880,13 +2863,18 @@ class FaceFeedViewModel : ViewModel() {
                                     isVideoOrAudio = effectiveIsVideo || effectiveIsReel,
                                     folder = if (effectiveIsVideo || effectiveIsReel) "fotofilm/videos" else "fotofilm/photos",
                                     compressionKind = compressionKind,
+                                    onProgress = { pct ->
+                                        reportCombinedProgress(taskKey, pct, "Cloudinary-তে আপলোড হচ্ছে...")
+                                    },
                                     onSuccess = onCloudReady,
                                     onFailure = {
                                         com.example.data.FirebaseManager.uploadFileToStorage(
                                             uri = uploadUri,
                                             folder = if (effectiveIsVideo || effectiveIsReel) "videos" else "photos",
                                             onSuccess = onCloudReady,
-                                            onFailure = { }
+                                            onFailure = {
+                                                onTaskFinished(taskKey, "ডিভাইসে সেভ সম্পন্ন (অফলাইন সিঙ্ক) ✓")
+                                            }
                                         )
                                     }
                                 )
@@ -1895,13 +2883,26 @@ class FaceFeedViewModel : ViewModel() {
                                     uri = uploadUri,
                                     folder = if (effectiveIsVideo || effectiveIsReel) "videos" else "photos",
                                     onSuccess = onCloudReady,
-                                    onFailure = { }
+                                    onFailure = {
+                                        onTaskFinished(taskKey, "ডিভাইসে সেভ সম্পন্ন ✓")
+                                    }
                                 )
                             }
                         } catch (_: Exception) {
+                            onTaskFinished(taskKey, "ডিভাইসে সেভ সম্পন্ন ✓")
                         }
                     }
                 }
+            }
+        } else {
+            // Text-only post: show smooth quick upload percentage log and complete cleanly
+            viewModelScope.launch {
+                delay(220L)
+                updateUploadProgress(50, "পোস্ট ক্লাউডে পাঠানো হচ্ছে...")
+                delay(280L)
+                updateUploadProgress(85, "সবার ফিডে পাবলিশ হচ্ছে...")
+                delay(220L)
+                updateUploadProgress(100, "পোস্ট সফলভাবে পাবলিশ হয়েছে ✓", completed = true)
             }
         }
 
@@ -1918,21 +2919,24 @@ class FaceFeedViewModel : ViewModel() {
             id = "ad_post_${UUID.randomUUID()}",
             author = _currentUser.value,
             timestamp = "Sponsored • 🌐 Public",
+            createdAt = System.currentTimeMillis(),
             title = "📢 $headline",
             text = "$headline\n\n🎯 টার্গেটেড বিজ্ঞাপন • বাজেট: $budget • লক্ষ্যমাত্রা: $reach\nFace AD এডমিন দ্বারা অনুমোদিত স্পনসর্ড বিজ্ঞাপন।",
-            hashtags = listOf("#Sponsored", "#Ad", "#FaceFeedPromo", "#Business"),
-            images = listOf("https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800"),
-            reachViews = reach.ifBlank { "50K" },
+            hashtags = listOf("#Sponsored", "#Ad", "#FotoFilmPromo", "#Business"),
+            images = emptyList(),
+            reachViews = reach.ifBlank { "0" },
             isBoosted = true,
             boostStatus = "Active",
             boostTargetReach = reach,
-            reactionCounts = mapOf(ReactionType.LIKE to 28, ReactionType.LOVE to 14)
+            reactionCounts = emptyMap()
         )
         _posts.value = listOf(newAdPost) + _posts.value
+        persistPostToRoom(newAdPost)
         com.example.data.FirebaseManager.savePost(newAdPost)
     }
 
     fun reactToPost(postId: String, reaction: ReactionType) {
+        if (!requireInternetConnection()) return
         var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
@@ -1960,6 +2964,7 @@ class FaceFeedViewModel : ViewModel() {
             } else post
         }
         updatedPostRef?.let { post ->
+            persistPostToRoom(post)
             com.example.data.FirebaseManager.reactToPostCloud(
                 postId = postId,
                 user = _currentUser.value,
@@ -1971,6 +2976,7 @@ class FaceFeedViewModel : ViewModel() {
 
     fun addComment(postId: String, text: String, customAuthor: User? = null) {
         if (text.isBlank()) return
+        if (!requireInternetConnection()) return
         val newComment = Comment(
             id = "c_${UUID.randomUUID()}",
             postId = postId,
@@ -1978,27 +2984,33 @@ class FaceFeedViewModel : ViewModel() {
             text = text,
             timestamp = "Just now"
         )
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val nextComments = post.comments + newComment
-                post.copy(
+                val upd = post.copy(
                     comments = nextComments,
                     cloudCommentCount = maxOf(post.cloudCommentCount + 1, nextComments.size)
                 )
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
         // Sync to cloud Firestore
         com.example.data.FirebaseManager.saveComment(postId, newComment)
     }
 
     fun replyToComment(postId: String, commentId: String, text: String, customAuthor: User? = null) {
         if (text.isBlank()) return
+        if (!requireInternetConnection()) return
         val newReply = CommentReply(
             id = "cr_${UUID.randomUUID()}",
             author = customAuthor ?: _currentUser.value,
             text = text,
             timestamp = "Just now"
         )
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val updatedComments = post.comments.map { comment ->
@@ -2006,9 +3018,12 @@ class FaceFeedViewModel : ViewModel() {
                         comment.copy(replies = comment.replies + newReply)
                     } else comment
                 }
-                post.copy(comments = updatedComments)
+                val upd = post.copy(comments = updatedComments)
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
         com.example.data.FirebaseManager.saveCommentReply(postId, commentId, newReply)
     }
 
@@ -2038,14 +3053,19 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun deleteComment(postId: String, commentId: String) {
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
-                post.copy(comments = post.comments.filter { it.id != commentId })
+                val upd = post.copy(comments = post.comments.filter { it.id != commentId })
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
     }
 
     fun deleteReply(postId: String, commentId: String, replyId: String) {
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val updatedComments = post.comments.map { comment ->
@@ -2053,27 +3073,38 @@ class FaceFeedViewModel : ViewModel() {
                         comment.copy(replies = comment.replies.filter { it.id != replyId })
                     } else comment
                 }
-                post.copy(comments = updatedComments)
+                val upd = post.copy(comments = updatedComments)
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
     }
 
     fun boostPost(postId: String, budget: Int, days: Int) {
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
-                post.copy(
+                val upd = post.copy(
                     isBoosted = true,
                     boostStatus = "Sponsored",
                     boostBudget = budget,
                     boostDays = days,
                     isBoostActive = true
                 )
+                updatedPostRef = upd
+                upd
             } else post
+        }
+        updatedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 
     fun reactToComment(postId: String, commentId: String, reaction: ReactionType) {
         var updatedCommentRef: Comment? = null
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val updatedComments = post.comments.map { comment ->
@@ -2101,9 +3132,12 @@ class FaceFeedViewModel : ViewModel() {
                         updated
                     } else comment
                 }
-                post.copy(comments = updatedComments)
+                val upd = post.copy(comments = updatedComments)
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
         updatedCommentRef?.let { c ->
             com.example.data.FirebaseManager.reactToCommentCloud(
                 postId = postId,
@@ -2117,6 +3151,7 @@ class FaceFeedViewModel : ViewModel() {
 
     fun reactToCommentReply(postId: String, commentId: String, replyId: String, reaction: ReactionType) {
         var updatedReplyRef: CommentReply? = null
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val updatedComments = post.comments.map { comment ->
@@ -2149,9 +3184,12 @@ class FaceFeedViewModel : ViewModel() {
                         comment.copy(replies = updatedReplies)
                     } else comment
                 }
-                post.copy(comments = updatedComments)
+                val upd = post.copy(comments = updatedComments)
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
         updatedReplyRef?.let { r ->
             com.example.data.FirebaseManager.reactToReplyCloud(
                 postId = postId,
@@ -2165,11 +3203,16 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun sharePost(postId: String) {
+        if (!requireInternetConnection()) return
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
-                post.copy(shareCount = post.shareCount + 1)
+                val upd = post.copy(shareCount = post.shareCount + 1)
+                updatedPostRef = upd
+                upd
             } else post
         }
+        updatedPostRef?.let { persistPostToRoom(it) }
         com.example.data.FirebaseManager.incrementShareCountCloud(postId)
     }
 
@@ -2181,6 +3224,7 @@ class FaceFeedViewModel : ViewModel() {
         musicArtist: String? = null,
         audioUrl: String? = null
     ) {
+        if (!requireInternetConnection()) return
         val isVid = mediaUrl.contains("video", ignoreCase = true) ||
             mediaUrl.endsWith(".mp4", ignoreCase = true) ||
             mediaUrl.endsWith(".mov", ignoreCase = true) ||
@@ -2282,7 +3326,7 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun createStoryWithMusic(audioTrack: PostAudioTrack) {
-        val cover = audioTrack.coverArtUrl ?: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800"
+        val cover = audioTrack.coverArtUrl.orEmpty()
         val caption = "🎵 ${audioTrack.title} • ${audioTrack.artist}"
         addStory(cover, caption)
     }
@@ -2382,90 +3426,7 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun ensurePostsForUser(user: User) {
-        val existingForUser = _posts.value.filter {
-            it.author.id == user.id ||
-                (user.username.isNotBlank() && it.author.username.equals(user.username, ignoreCase = true)) ||
-                it.author.fullName.equals(user.fullName, ignoreCase = true)
-        }
-        if (existingForUser.size >= 3) return
-
-        val sampleCommenter = _conversations.value.firstOrNull { it.friend.id != user.id }?.friend
-            ?: SampleData.friendTanvir
-        val defaultPosts = listOf(
-            Post(
-                id = "post_${user.id}_photo_1",
-                author = user,
-                timestamp = "২ ঘণ্টা আগে • 🌍",
-                text = "আজকের সুন্দর বিকেলটা বন্ধুদের সাথে চমৎকার কাটলো! সবাইকে আন্তরিক ধন্যবাদ ❤️ #FotoFilm #Friendship",
-                images = listOf("https://images.unsplash.com/photo-1540573133985-87b6da6d54a9?w=800"),
-                isVideo = false,
-                isReel = false,
-                shareCount = 45,
-                comments = listOf(
-                    Comment(
-                        id = "c_${user.id}_1",
-                        postId = "post_${user.id}_photo_1",
-                        author = sampleCommenter,
-                        text = "অসাধারণ ছবি হয়েছে ভাই! ❤️🔥",
-                        timestamp = "১ ঘণ্টা আগে"
-                    )
-                )
-            ),
-            Post(
-                id = "post_${user.id}_video_2",
-                author = user,
-                timestamp = "গতকাল বিকাল ৫:৩০ • 🌍",
-                text = "🎬 প্রকৃতি ও নদীর অপূর্ব দৃশ্য! ভিডিওটি দেখুন এবং শেয়ার করুন 🌿",
-                images = listOf("https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"),
-                isVideo = true,
-                videoTitle = "প্রকৃতি ও সূর্যাস্তের অপূর্ব দৃশ্য",
-                videoDuration = "03:45",
-                reachViews = "45.2K",
-                shareCount = 89
-            ),
-            Post(
-                id = "post_${user.id}_reel_3",
-                author = user,
-                timestamp = "২ দিন আগে • 🌍",
-                text = "🔥 নতুন রিল ভিডিও: নিজের প্রতি বিশ্বাস রাখো, সফলতা আসবেই ইনশাআল্লাহ! 🌟 #Reels #Viral",
-                images = listOf("https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800"),
-                isVideo = true,
-                isReel = true,
-                videoTitle = "সফলতার অনুপ্রেরণা",
-                reachViews = "120K",
-                musicInfo = "🎵 Original Audio - ${user.fullName}",
-                shareCount = 210
-            ),
-            Post(
-                id = "post_${user.id}_story_4",
-                author = user,
-                timestamp = "৪ দিন আগে • 🌍",
-                text = "⏱️ ২৪ ঘণ্টার বিশেষ মুহূর্ত: নতুন প্রজেক্টের কাজ সফলভাবে শেষ হলো আলহামদুলিল্লাহ! 🤲",
-                images = listOf("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800"),
-                isVideo = false,
-                isReel = false,
-                isFaceClip = true,
-                shareCount = 18
-            ),
-            Post(
-                id = "post_${user.id}_live_5",
-                author = user,
-                timestamp = "১ সপ্তাহ আগে • 🌍",
-                text = "🔴 লাইভ ভিডিও রেকর্ড: সমসাময়িক বিষয় ও প্রযুক্তি নিয়ে লাইভ প্রশ্নোত্তর পর্ব",
-                images = listOf("https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800"),
-                isVideo = true,
-                videoTitle = "লাইভ প্রশ্নোত্তর ও গল্প-আড্ডা",
-                videoDuration = "45:10",
-                reachViews = "89.5K",
-                shareCount = 156
-            )
-        )
-
-        val existingIds = _posts.value.map { it.id }.toSet()
-        val toAppend = defaultPosts.filter { it.id !in existingIds }
-        if (toAppend.isNotEmpty()) {
-            _posts.value = _posts.value + toAppend
-        }
+        // Strictly display real posts published by this user (no fake demo posts)
     }
 
     fun openUserProfile(user: User) {
@@ -2601,6 +3562,108 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
+    fun onUserTypingInChat(hasInputChanged: Boolean) {
+        if (hasInputChanged && _isNotificationSoundEnabled.value) {
+            com.example.util.AppSoundManager.playChatTypingSound()
+        }
+    }
+
+    private fun updateChatMessageStatus(
+        conversationId: String,
+        messageId: String,
+        newStatus: MessageDeliveryStatus
+    ) {
+        var updatedMsg: ChatMessage? = null
+        _conversations.value = _conversations.value.map { conv ->
+            if (conv.id == conversationId) {
+                val nextMessages = conv.messages.map { msg ->
+                    if (msg.id == messageId) {
+                        msg.copy(status = newStatus).also { updatedMsg = it }
+                    } else msg
+                }
+                val nextConv = conv.copy(messages = nextMessages)
+                if (_activeChat.value?.id == conversationId) {
+                    _activeChat.value = nextConv
+                }
+                nextConv
+            } else conv
+        }
+        updatedMsg?.let { persistChatMessageToRoom(conversationId, it) }
+    }
+
+    private fun scheduleMessengerDeliveryLifecycle(
+        conversationId: String,
+        sentMessage: ChatMessage,
+        triggerPartnerReply: Boolean
+    ) {
+        viewModelScope.launch {
+            // 1. Sent ✓ (immediate) -> Delivered ✓✓ (~520ms) with Messenger delivery chime
+            delay(520)
+            updateChatMessageStatus(conversationId, sentMessage.id, MessageDeliveryStatus.DELIVERED)
+            if (_isNotificationSoundEnabled.value) {
+                com.example.util.AppSoundManager.playChatMessageDeliveredSound()
+            }
+
+            // 2. Friend opens inbox -> Seen (~650ms later)
+            delay(650)
+            updateChatMessageStatus(conversationId, sentMessage.id, MessageDeliveryStatus.SEEN)
+
+            if (!triggerPartnerReply) return@launch
+            val currentConv = _conversations.value.find { it.id == conversationId } ?: return@launch
+
+            // 3. Friend starts typing in inbox ("গর গর" typing sound while typing indicator is visible)
+            delay(250)
+            _typingConversationId.value = conversationId
+            repeat(3) {
+                if (_activeChat.value?.id == conversationId && _isNotificationSoundEnabled.value) {
+                    com.example.util.AppSoundManager.playChatTypingSound()
+                }
+                delay(280)
+            }
+            _typingConversationId.value = null
+
+            // 4. Friend sends reply + Messenger incoming sound
+            val replyReplies = listOf(
+                "জি ভাই, আপনার মেসেজ পেয়েছি। ধন্যবাদ!",
+                "ঠিক আছে ভাই, কথা বলে খুব ভালো লাগলো।",
+                "ইনশাআল্লাহ, কথা অনুযায়ী কাজ হবে।",
+                "আপনার সাথে ডিল কনফার্ম রইলো ভাই।",
+                "জি ভাই, আমি প্রস্তুত আছি।"
+            )
+            val autoText = replyReplies.random()
+            val partnerReply = ChatMessage(
+                id = "msg_${UUID.randomUUID()}",
+                senderId = currentConv.friend.id,
+                senderName = currentConv.friend.fullName,
+                text = autoText,
+                timestamp = "Just now",
+                isFromMe = false,
+                replyTo = sentMessage,
+                status = MessageDeliveryStatus.DELIVERED
+            )
+            val replyNow = System.currentTimeMillis()
+            val convToUpdate = _conversations.value.find { it.id == conversationId }
+            if (convToUpdate != null) {
+                val isChatCurrentlyOpen = _activeChat.value?.id == conversationId
+                val upd = convToUpdate.copy(
+                    lastMessage = autoText,
+                    lastTime = "Just now",
+                    lastMessageTimestamp = replyNow,
+                    unreadCount = if (isChatCurrentlyOpen) 0 else convToUpdate.unreadCount + 1,
+                    messages = convToUpdate.messages + partnerReply
+                )
+                if (isChatCurrentlyOpen) {
+                    _activeChat.value = upd
+                }
+                _conversations.value = listOf(upd) + _conversations.value.filter { it.id != conversationId }
+                persistChatMessageToRoom(conversationId, partnerReply)
+                if (_isNotificationSoundEnabled.value) {
+                    com.example.util.AppSoundManager.playChatIncomingSound()
+                }
+            }
+        }
+    }
+
     fun sendMessage(
         conversationId: String,
         text: String,
@@ -2609,9 +3672,12 @@ class FaceFeedViewModel : ViewModel() {
         replyTo: ChatMessage? = null
     ) {
         if (text.isBlank() && mediaUrl == null) return
+        if (!requireInternetConnection()) return
         val currentConv = _conversations.value.find { it.id == conversationId }
-        val isRecipientOnline = currentConv?.friend?.isOnline ?: true
-        val deliveryStatus = if (isRecipientOnline) MessageDeliveryStatus.DELIVERED else MessageDeliveryStatus.SENT
+
+        if (_isNotificationSoundEnabled.value) {
+            com.example.util.AppSoundManager.playChatMessageSentSound()
+        }
 
         val newMsg = ChatMessage(
             id = "msg_${UUID.randomUUID()}",
@@ -2623,7 +3689,7 @@ class FaceFeedViewModel : ViewModel() {
             isMediaVideo = isVideo,
             isFromMe = true,
             replyTo = replyTo,
-            status = deliveryStatus
+            status = MessageDeliveryStatus.SENT
         )
         val now = System.currentTimeMillis()
         val targetConv = currentConv ?: _conversations.value.find { it.id == conversationId }
@@ -2660,6 +3726,7 @@ class FaceFeedViewModel : ViewModel() {
             formattedDate = "আজ"
         )
         _permanentDeliveryVault.value = listOf(vaultItem) + _permanentDeliveryVault.value
+        persistChatMessageToRoom(conversationId, newMsg)
 
         com.example.data.FirebaseManager.sendMessage(
             conversationId = conversationId,
@@ -2676,6 +3743,29 @@ class FaceFeedViewModel : ViewModel() {
                 userName = _currentUser.value.fullName,
                 avatarUrl = _currentUser.value.avatarUrl
             )
+            val ctx = appContextRef ?: com.example.data.CloudinaryManager.getAppContext()
+            if (ctx != null) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    val persistedUrl = com.example.data.local.MediaPersistenceHelper.persistUriIfLocal(
+                        ctx,
+                        mediaUrl,
+                        subDir = if (isVideo) "chat_videos" else "chat_photos",
+                        defaultExtension = if (isVideo) "mp4" else "jpg"
+                    )
+                    if (persistedUrl != mediaUrl) {
+                        val persistedMsg = newMsg.copy(mediaUrl = persistedUrl)
+                        _conversations.value = _conversations.value.map { c ->
+                            if (c.id == conversationId) {
+                                val nextMsgs = c.messages.map { if (it.id == newMsg.id) persistedMsg else it }
+                                val upd = c.copy(messages = nextMsgs)
+                                if (_activeChat.value?.id == conversationId) _activeChat.value = upd
+                                upd
+                            } else c
+                        }
+                        localRepo?.upsertChatMessage(conversationId, persistedMsg)
+                    }
+                }
+            }
             if (com.example.data.CloudinaryManager.isEnabled() && com.example.data.CloudinaryManager.isConfigured()) {
                 try {
                     val uri = android.net.Uri.parse(mediaUrl)
@@ -2686,6 +3776,7 @@ class FaceFeedViewModel : ViewModel() {
                         compressionKind = chatKind,
                         onSuccess = { cloudUrl ->
                             val syncedMsg = newMsg.copy(mediaUrl = cloudUrl)
+                            persistChatMessageToRoom(conversationId, syncedMsg)
                             com.example.data.FirebaseManager.sendMessage(
                                 conversationId = conversationId,
                                 message = syncedMsg,
@@ -2699,47 +3790,13 @@ class FaceFeedViewModel : ViewModel() {
             }
         }
 
-        // Interactive Auto-reply capability so conversation can continue back and forth seamlessly
-        if (currentConv != null && !currentConv.friend.id.equals(_currentUser.value.id)) {
-            viewModelScope.launch {
-                delay(1600)
-                val replyReplies = listOf(
-                    "জি ভাই, আপনার মেসেজ পেয়েছি। ধন্যবাদ!",
-                    "ঠিক আছে ভাই, কথা বলে খুব ভালো লাগলো।",
-                    "ইনশাআল্লাহ, কথা অনুযায়ী কাজ হবে।",
-                    "আপনার সাথে ডিল কনফার্ম রইলো ভাই।",
-                    "জি ভাই, আমি প্রস্তুত আছি।"
-                )
-                val autoText = replyReplies.random()
-                val partnerReply = ChatMessage(
-                    id = "msg_${UUID.randomUUID()}",
-                    senderId = currentConv.friend.id,
-                    senderName = currentConv.friend.fullName,
-                    text = autoText,
-                    timestamp = "Just now",
-                    isFromMe = false,
-                    replyTo = newMsg,
-                    status = MessageDeliveryStatus.DELIVERED
-                )
-                val replyNow = System.currentTimeMillis()
-                val convToUpdate = _conversations.value.find { it.id == conversationId }
-                if (convToUpdate != null) {
-                    val isChatCurrentlyOpen = _activeChat.value?.id == conversationId
-                    val upd = convToUpdate.copy(
-                        lastMessage = autoText,
-                        lastTime = "Just now",
-                        lastMessageTimestamp = replyNow,
-                        unreadCount = if (isChatCurrentlyOpen) 0 else convToUpdate.unreadCount + 1,
-                        messages = convToUpdate.messages + partnerReply
-                    )
-                    if (isChatCurrentlyOpen) {
-                        _activeChat.value = upd
-                    }
-                    // When a message comes to me, instantly jump this chat to position 1 on top!
-                    _conversations.value = listOf(upd) + _conversations.value.filter { it.id != conversationId }
-                }
-            }
-        }
+        // Messenger Sent -> Delivered -> Seen lifecycle + Friend typing & reply sound
+        val shouldReply = currentConv != null && !currentConv.friend.id.equals(_currentUser.value.id)
+        scheduleMessengerDeliveryLifecycle(
+            conversationId = conversationId,
+            sentMessage = newMsg,
+            triggerPartnerReply = shouldReply
+        )
     }
 
     fun sendVoiceMessage(
@@ -2748,10 +3805,12 @@ class FaceFeedViewModel : ViewModel() {
         audioUrl: String? = null,
         replyTo: ChatMessage? = null
     ) {
-        val safeDuration = if (durationSeconds > 0) durationSeconds else 5
+        val safeDuration = durationSeconds.coerceAtLeast(1)
         val currentConv = _conversations.value.find { it.id == conversationId }
-        val isRecipientOnline = currentConv?.friend?.isOnline ?: true
-        val deliveryStatus = if (isRecipientOnline) MessageDeliveryStatus.DELIVERED else MessageDeliveryStatus.SENT
+
+        if (_isNotificationSoundEnabled.value) {
+            com.example.util.AppSoundManager.playChatMessageSentSound()
+        }
 
         val newMsg = ChatMessage(
             id = "msg_${UUID.randomUUID()}",
@@ -2765,7 +3824,7 @@ class FaceFeedViewModel : ViewModel() {
             replyTo = replyTo,
             isAudioVoice = true,
             audioDurationSeconds = safeDuration,
-            status = deliveryStatus
+            status = MessageDeliveryStatus.SENT
         )
         val now = System.currentTimeMillis()
         val targetConv = currentConv ?: _conversations.value.find { it.id == conversationId }
@@ -2783,7 +3842,14 @@ class FaceFeedViewModel : ViewModel() {
             _conversations.value = listOf(updated) + _conversations.value.filter { it.id != conversationId }
         }
 
-        // Always log Voice note to Permanent Delivery Vault
+        // Persist immediately in Room + Delivery Vault + Cloud Firestore
+        persistChatMessageToRoom(conversationId, newMsg)
+        com.example.data.FirebaseManager.sendMessage(
+            conversationId = conversationId,
+            message = newMsg,
+            recipientId = currentConv?.friend?.id ?: "user_tanvir"
+        )
+
         val vaultVoiceItem = DeliveredVaultMessage(
             id = "vault_${newMsg.id}",
             conversationId = conversationId,
@@ -2802,9 +3868,62 @@ class FaceFeedViewModel : ViewModel() {
             formattedDate = "আজ"
         )
         _permanentDeliveryVault.value = listOf(vaultVoiceItem) + _permanentDeliveryVault.value
+
+        scheduleMessengerDeliveryLifecycle(
+            conversationId = conversationId,
+            sentMessage = newMsg,
+            triggerPartnerReply = false
+        )
+
+        if (!audioUrl.isNullOrBlank() && (audioUrl.startsWith("file://") || audioUrl.startsWith("content://") || audioUrl.startsWith("/"))) {
+            val ctx = appContextRef ?: com.example.data.CloudinaryManager.getAppContext()
+            viewModelScope.launch(Dispatchers.IO) {
+                val durableUrl = if (ctx != null) {
+                    com.example.data.local.MediaPersistenceHelper.persistUriIfLocal(ctx, audioUrl, subDir = "voice_notes", defaultExtension = "m4a")
+                } else audioUrl
+                val localSyncedMsg = newMsg.copy(mediaUrl = durableUrl)
+                localRepo?.upsertChatMessage(conversationId, localSyncedMsg)
+
+                val uploadUri = android.net.Uri.parse(
+                    if (durableUrl.startsWith("/")) android.net.Uri.fromFile(java.io.File(durableUrl)).toString() else durableUrl
+                )
+                val onVoiceUploaded: (String) -> Unit = { cloudUrl ->
+                    val cloudMsg = localSyncedMsg.copy(mediaUrl = cloudUrl)
+                    com.example.data.FirebaseManager.sendMessage(
+                        conversationId = conversationId,
+                        message = cloudMsg,
+                        recipientId = currentConv?.friend?.id ?: "user_tanvir"
+                    )
+                }
+                if (com.example.data.CloudinaryManager.isEnabled() && com.example.data.CloudinaryManager.isConfigured()) {
+                    com.example.data.CloudinaryManager.uploadMedia(
+                        uri = uploadUri,
+                        isVideoOrAudio = true,
+                        folder = "fotofilm/chatfilm_voice",
+                        onSuccess = onVoiceUploaded,
+                        onFailure = {
+                            com.example.data.FirebaseManager.uploadFileToStorage(
+                                uri = uploadUri,
+                                folder = "chat_voice",
+                                onSuccess = onVoiceUploaded,
+                                onFailure = { }
+                            )
+                        }
+                    )
+                } else {
+                    com.example.data.FirebaseManager.uploadFileToStorage(
+                        uri = uploadUri,
+                        folder = "chat_voice",
+                        onSuccess = onVoiceUploaded,
+                        onFailure = { }
+                    )
+                }
+            }
+        }
     }
 
     fun reactToChatMessage(conversationId: String, messageId: String, reaction: String) {
+        var reactedMsgRef: ChatMessage? = null
         _conversations.value = _conversations.value.map { conv ->
             if (conv.id == conversationId) {
                 val updatedMessages = conv.messages.map { msg ->
@@ -2816,12 +3935,14 @@ class FaceFeedViewModel : ViewModel() {
                             if (count <= 1) currentReactions.remove(prevReaction)
                             else currentReactions[prevReaction] = count - 1
                         }
-                        if (prevReaction != reaction) {
+                        val nextMsg = if (prevReaction != reaction) {
                             currentReactions[reaction] = (currentReactions[reaction] ?: 0) + 1
                             msg.copy(reactions = currentReactions, userReaction = reaction)
                         } else {
                             msg.copy(reactions = currentReactions, userReaction = null)
                         }
+                        reactedMsgRef = nextMsg
+                        nextMsg
                     } else msg
                 }
                 val updated = conv.copy(messages = updatedMessages)
@@ -2831,6 +3952,7 @@ class FaceFeedViewModel : ViewModel() {
                 updated
             } else conv
         }
+        reactedMsgRef?.let { persistChatMessageToRoom(conversationId, it) }
     }
 
     // Messenger Conversation Management Features
@@ -2871,28 +3993,7 @@ class FaceFeedViewModel : ViewModel() {
         _currentUser.value = _currentUser.value.copy(isOnline = newValue)
     }
 
-    private val _messageRequests = MutableStateFlow(
-        listOf(
-            User(
-                id = "req_user_1",
-                fullName = "Anika Tabassum",
-                username = "anika_tab",
-                avatarUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400"
-            ),
-            User(
-                id = "req_user_2",
-                fullName = "Tariqul Islam",
-                username = "tariqul_it",
-                avatarUrl = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400"
-            ),
-            User(
-                id = "req_user_3",
-                fullName = "Mehedi Hasan",
-                username = "mehedi_bd",
-                avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400"
-            )
-        )
-    )
+    private val _messageRequests = MutableStateFlow<List<User>>(emptyList())
     val messageRequests: StateFlow<List<User>> = _messageRequests.asStateFlow()
 
     fun acceptMessageRequest(friend: User) {
@@ -2916,6 +4017,9 @@ class FaceFeedViewModel : ViewModel() {
         if (_activeChat.value?.id == id) {
             _activeChat.value = null
         }
+        localRepo?.let { repo ->
+            viewModelScope.launch(Dispatchers.IO) { repo.markConversationDeleted(id) }
+        }
     }
 
     // Delete a specific message for ME (Screenshot 1: "Delete for me")
@@ -2933,11 +4037,15 @@ class FaceFeedViewModel : ViewModel() {
                 updated
             } else conv
         }
+        localRepo?.let { repo ->
+            viewModelScope.launch(Dispatchers.IO) { repo.markChatMessageDeleted(conversationId, messageId) }
+        }
     }
 
     // Forward message to selected conversations (Screenshot 1: "Forward")
     fun forwardChatMessage(message: ChatMessage, targetConversationIds: List<String>) {
         val me = _currentUser.value
+        val toPersist = mutableListOf<Pair<String, ChatMessage>>()
         _conversations.value = _conversations.value.map { conv ->
             if (targetConversationIds.contains(conv.id)) {
                 val forwardedMsg = ChatMessage(
@@ -2948,9 +4056,12 @@ class FaceFeedViewModel : ViewModel() {
                     timestamp = "এইমাত্র",
                     mediaUrl = message.mediaUrl,
                     isMediaVideo = message.isMediaVideo,
+                    isAudioVoice = message.isAudioVoice,
+                    audioDurationSeconds = message.audioDurationSeconds,
                     isFromMe = true,
                     status = MessageDeliveryStatus.SENT
                 )
+                toPersist.add(conv.id to forwardedMsg)
                 val updated = conv.copy(
                     messages = conv.messages + forwardedMsg,
                     lastMessage = forwardedMsg.text.ifBlank { "ফরওয়ার্ড করা মিডিয়া" },
@@ -2962,6 +4073,7 @@ class FaceFeedViewModel : ViewModel() {
                 updated
             } else conv
         }
+        toPersist.forEach { (convId, msg) -> persistChatMessageToRoom(convId, msg) }
     }
 
     // Support Team User Messages & Tickets (Screenshot 2: Help & Support, and Right Manager Fida Option)
@@ -3142,7 +4254,73 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
-    // Calling System (Agora HD + Real-Time Firestore Signaling)
+    // Calling System (Agora HD + Real-Time Firestore Signaling + Messenger Inbox Call Log)
+    private fun findOrCreateDirectConversationForCall(user: User): Conversation {
+        val currentActive = _activeChat.value
+        if (currentActive != null && !currentActive.isGroup &&
+            (currentActive.friend.id == user.id || currentActive.friend.fullName.equals(user.fullName, ignoreCase = true))
+        ) {
+            return currentActive
+        }
+        val existing = _conversations.value.firstOrNull {
+            !it.isGroup && (it.friend.id == user.id || it.friend.fullName.equals(user.fullName, ignoreCase = true))
+        }
+        if (existing != null) return existing
+
+        val created = Conversation(
+            id = "conv_${user.id}",
+            friend = user,
+            lastMessage = "",
+            lastTime = "এখন",
+            messages = emptyList(),
+            lastMessageTimestamp = System.currentTimeMillis()
+        )
+        _conversations.value = listOf(created) + _conversations.value
+        return created
+    }
+
+    private fun formatCallLogDuration(totalSeconds: Int): String {
+        val s = totalSeconds.coerceAtLeast(0)
+        val mins = s / 60
+        val secs = s % 60
+        return String.format(java.util.Locale.US, "%02d:%02d", mins, secs)
+    }
+
+    private fun upsertCallLogInConversation(
+        conversation: Conversation,
+        callMsg: ChatMessage,
+        syncCloud: Boolean
+    ) {
+        val now = System.currentTimeMillis()
+        val latestConv = _conversations.value.find { it.id == conversation.id } ?: conversation
+        val hasExisting = latestConv.messages.any { it.id == callMsg.id }
+        val nextMsgs = if (hasExisting) {
+            latestConv.messages.map { if (it.id == callMsg.id) callMsg else it }
+        } else {
+            latestConv.messages + callMsg
+        }
+        val isChatOpen = _activeChat.value?.id == latestConv.id
+        val updated = latestConv.copy(
+            lastMessage = callMsg.text,
+            lastTime = "এখন",
+            lastMessageTimestamp = now,
+            unreadCount = if (!callMsg.isFromMe && !isChatOpen && !hasExisting) latestConv.unreadCount + 1 else latestConv.unreadCount,
+            messages = nextMsgs
+        )
+        if (isChatOpen) {
+            _activeChat.value = updated
+        }
+        _conversations.value = listOf(updated) + _conversations.value.filter { it.id != updated.id }
+        persistChatMessageToRoom(updated.id, callMsg)
+        if (syncCloud) {
+            com.example.data.FirebaseManager.sendMessage(
+                conversationId = updated.id,
+                message = callMsg,
+                recipientId = updated.friend.id
+            )
+        }
+    }
+
     fun startAudioCall(user: User) {
         launchOutgoingDirectCall(user, CallType.AUDIO)
     }
@@ -3166,6 +4344,22 @@ class FaceFeedViewModel : ViewModel() {
             isIncoming = false,
             isAccepted = false
         )
+
+        val targetConv = findOrCreateDirectConversationForCall(user)
+        val initialCallMsg = ChatMessage(
+            id = "call_msg_$callId",
+            senderId = _currentUser.value.id,
+            senderName = _currentUser.value.fullName,
+            text = if (callType == CallType.VIDEO) "ভিডিও কল করা হয়েছে (রিং হচ্ছে...)" else "অডিও কল করা হয়েছে (রিং হচ্ছে...)",
+            timestamp = "এখন",
+            isFromMe = true,
+            status = MessageDeliveryStatus.SENT,
+            callLogType = callType,
+            callDurationSeconds = 0,
+            isMissedCall = false
+        )
+        upsertCallLogInConversation(targetConv, initialCallMsg, syncCloud = false)
+
         outgoingCallListener?.remove()
         com.example.data.FirebaseManager.sendCallSignal(
             callId = callId,
@@ -3178,6 +4372,15 @@ class FaceFeedViewModel : ViewModel() {
             when (status) {
                 "ACCEPTED" -> {
                     _activeCall.value = _activeCall.value?.copy(isAccepted = true)
+                    val conv = findOrCreateDirectConversationForCall(user)
+                    upsertCallLogInConversation(
+                        conv,
+                        initialCallMsg.copy(
+                            text = if (callType == CallType.VIDEO) "ভিডিও কল চলছে..." else "অডিও কল চলছে...",
+                            status = MessageDeliveryStatus.DELIVERED
+                        ),
+                        syncCloud = false
+                    )
                 }
                 "DECLINED", "ENDED" -> {
                     endCall(updateRemote = false)
@@ -3206,6 +4409,7 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun acceptIncomingCall() {
+        com.example.util.AppSoundManager.stopCallDialingTone()
         val signal = _incomingCallSignal.value ?: return
         _incomingCallSignal.value = null
         com.example.data.FirebaseManager.updateCallSignalStatus(signal.callId, "ACCEPTED")
@@ -3213,7 +4417,7 @@ class FaceFeedViewModel : ViewModel() {
             id = signal.callerId,
             fullName = signal.callerName,
             username = signal.callerName.lowercase().replace(" ", "_"),
-            avatarUrl = signal.callerAvatar.ifBlank { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" }
+            avatarUrl = signal.callerAvatar
         )
         _activeCall.value = ActiveCallState(
             isActive = true,
@@ -3227,6 +4431,24 @@ class FaceFeedViewModel : ViewModel() {
             isIncoming = true,
             isAccepted = true
         )
+
+        if (signal.callType != CallType.GROUP) {
+            val conv = findOrCreateDirectConversationForCall(callerUser)
+            val acceptedCallMsg = ChatMessage(
+                id = "call_msg_${signal.callId}",
+                senderId = callerUser.id,
+                senderName = callerUser.fullName,
+                text = if (signal.callType == CallType.VIDEO) "ইনকামিং ভিডিও কল চলছে..." else "ইনকামিং অডিও কল চলছে...",
+                timestamp = "এখন",
+                isFromMe = false,
+                status = MessageDeliveryStatus.SEEN,
+                callLogType = signal.callType,
+                callDurationSeconds = 0,
+                isMissedCall = false
+            )
+            upsertCallLogInConversation(conv, acceptedCallMsg, syncCloud = false)
+        }
+
         outgoingCallListener?.remove()
         outgoingCallListener = com.example.data.FirebaseManager.listenToOutgoingCallStatus(signal.callId) { status ->
             if (status == "ENDED" || status == "DECLINED") {
@@ -3240,6 +4462,29 @@ class FaceFeedViewModel : ViewModel() {
         val signal = _incomingCallSignal.value ?: return
         _incomingCallSignal.value = null
         com.example.data.FirebaseManager.updateCallSignalStatus(signal.callId, "DECLINED")
+
+        if (signal.callType != CallType.GROUP) {
+            val callerUser = allAppUsers.value.find { it.id == signal.callerId } ?: User(
+                id = signal.callerId,
+                fullName = signal.callerName,
+                username = signal.callerName.lowercase().replace(" ", "_"),
+                avatarUrl = signal.callerAvatar
+            )
+            val conv = findOrCreateDirectConversationForCall(callerUser)
+            val missedCallMsg = ChatMessage(
+                id = "call_msg_${signal.callId}",
+                senderId = callerUser.id,
+                senderName = callerUser.fullName,
+                text = if (signal.callType == CallType.VIDEO) "মিসড ভিডিও কল" else "মিসড অডিও কল",
+                timestamp = "এখন",
+                isFromMe = false,
+                status = MessageDeliveryStatus.DELIVERED,
+                callLogType = signal.callType,
+                callDurationSeconds = 0,
+                isMissedCall = true
+            )
+            upsertCallLogInConversation(conv, missedCallMsg, syncCloud = true)
+        }
     }
 
     private fun startCallTimer() {
@@ -3272,7 +4517,10 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun endCall(updateRemote: Boolean = true) {
-        val closingCallId = _activeCall.value?.callId.orEmpty()
+        com.example.util.AppSoundManager.stopCallDialingTone()
+        val endedCall = _activeCall.value
+        val closingCallId = endedCall?.callId.orEmpty()
+        val wasAgoraRemoteJoined = com.example.data.AgoraCallManager.callState.value.remoteUids.isNotEmpty()
         callTimerJob?.cancel()
         outgoingCallListener?.remove()
         outgoingCallListener = null
@@ -3281,6 +4529,57 @@ class FaceFeedViewModel : ViewModel() {
         }
         com.example.data.AgoraCallManager.leaveCall()
         _activeCall.value = null
+
+        if (endedCall != null && closingCallId.isNotBlank()) {
+            val wasAnswered = endedCall.isAccepted || wasAgoraRemoteJoined
+            val dur = if (wasAnswered) endedCall.durationSeconds.coerceAtLeast(1) else 0
+            val durText = formatCallLogDuration(dur)
+
+            if (endedCall.callType == CallType.GROUP) {
+                val grpConv = _conversations.value.firstOrNull {
+                    it.isGroup && it.groupName.equals(endedCall.groupName, ignoreCase = true)
+                } ?: _conversations.value.firstOrNull { it.isGroup }
+                if (grpConv != null) {
+                    val grpMsg = ChatMessage(
+                        id = "call_msg_$closingCallId",
+                        senderId = _currentUser.value.id,
+                        senderName = _currentUser.value.fullName,
+                        text = "গ্রুপ ভিডিও কল • $durText",
+                        timestamp = "এখন",
+                        isFromMe = true,
+                        status = MessageDeliveryStatus.SEEN,
+                        callLogType = CallType.GROUP,
+                        callDurationSeconds = dur,
+                        isMissedCall = false
+                    )
+                    upsertCallLogInConversation(grpConv, grpMsg, syncCloud = true)
+                }
+            } else if (endedCall.user != null) {
+                val targetUser = endedCall.user
+                val conv = findOrCreateDirectConversationForCall(targetUser)
+                val finalText = when {
+                    wasAnswered && endedCall.callType == CallType.VIDEO -> "ভিডিও কল • $durText"
+                    wasAnswered -> "অডিও কল • $durText"
+                    endedCall.isIncoming && endedCall.callType == CallType.VIDEO -> "মিসড ভিডিও কল"
+                    endedCall.isIncoming -> "মিসড অডিও কল"
+                    endedCall.callType == CallType.VIDEO -> "ভিডিও কল • উত্তর নেই"
+                    else -> "অডিও কল • উত্তর নেই"
+                }
+                val callLogMsg = ChatMessage(
+                    id = "call_msg_$closingCallId",
+                    senderId = if (endedCall.isIncoming) targetUser.id else _currentUser.value.id,
+                    senderName = if (endedCall.isIncoming) targetUser.fullName else _currentUser.value.fullName,
+                    text = finalText,
+                    timestamp = "এখন",
+                    isFromMe = !endedCall.isIncoming,
+                    status = if (wasAnswered) MessageDeliveryStatus.SEEN else MessageDeliveryStatus.DELIVERED,
+                    callLogType = endedCall.callType,
+                    callDurationSeconds = dur,
+                    isMissedCall = !wasAnswered
+                )
+                upsertCallLogInConversation(conv, callLogMsg, syncCloud = true)
+            }
+        }
     }
 
     // Friend requests & 5000 friend auto-follow
@@ -3311,31 +4610,21 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
-    // Groups & Pages (৫ এডমিন ও ১৫ মডারেটর সাপোর্ট)
+    // Groups & Pages
     fun createGroup(
         name: String,
         description: String,
         isPrivate: Boolean,
-        coverUrl: String = "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800&auto=format&fit=crop&q=80",
+        coverUrl: String = "",
         initialAdmins: List<User> = emptyList(),
         initialModerators: List<User> = emptyList()
     ): SocialGroup {
         val defaultAdmins = if (initialAdmins.isEmpty()) {
-            listOf(_currentUser.value, SampleData.friendTanvir, SampleData.friendSamrat, SampleData.friendSadia, SampleData.friendHasanMiaHowlader).take(5)
+            listOf(_currentUser.value)
         } else {
             (listOf(_currentUser.value) + initialAdmins).distinctBy { it.id }.take(5)
         }
-        val defaultMods = if (initialModerators.isEmpty()) {
-            listOf(
-                SampleData.friendJannat, SampleData.friendManu, SampleData.friendRiya,
-                SampleData.friendShunya, SampleData.friendUmor, SampleData.friendMdMohiuddin,
-                SampleData.friendSahid, SampleData.friendJoyAhmed, SampleData.friendArifur,
-                SampleData.friendNusrat, SampleData.friendRahim, SampleData.friendKajol,
-                SampleData.friendShakib, SampleData.friendMim, SampleData.friendSultana
-            ).filter { mod -> defaultAdmins.none { it.id == mod.id } }.take(15)
-        } else {
-            initialModerators.filter { mod -> defaultAdmins.none { it.id == mod.id } }.take(15)
-        }
+        val defaultMods = initialModerators.filter { mod -> defaultAdmins.none { it.id == mod.id } }.take(15)
 
         val newGroup = SocialGroup(
             id = "grp_${UUID.randomUUID()}",
@@ -3389,8 +4678,8 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
-    // Live App Download Count state & simulation (১ জন, ৫০ জন, ... ক্রমবৃদ্ধি)
-    private val _totalAppDownloadCount = MutableStateFlow(128)
+    // Live App Download Count state (starts at real active user count)
+    private val _totalAppDownloadCount = MutableStateFlow(1)
     val totalAppDownloadCount: StateFlow<Int> = _totalAppDownloadCount.asStateFlow()
 
     fun recordNewAppDownload() {
@@ -3406,8 +4695,8 @@ class FaceFeedViewModel : ViewModel() {
     fun createPage(
         name: String,
         category: String,
-        avatarUrl: String = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80",
-        coverUrl: String = "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200&auto=format&fit=crop&q=80"
+        avatarUrl: String = "",
+        coverUrl: String = ""
     ): SocialPage {
         val newPage = SocialPage(
             id = "page_${UUID.randomUUID()}",
@@ -3550,37 +4839,8 @@ class FaceFeedViewModel : ViewModel() {
         )
     }
 
-    // ==========================================
-    // Multi-Account / Switch Account Feature
-    // ==========================================
-    private val _userAccounts = MutableStateFlow(
-        listOf(
-            UserAccount(
-                id = "acc_1",
-                name = "Niyon Islam Sohag",
-                handle = "@niyonislamsohag",
-                avatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200",
-                isActive = true,
-                notificationCount = 3
-            ),
-            UserAccount(
-                id = "acc_2",
-                name = "Sohag Official",
-                handle = "@sohagofficial",
-                avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200",
-                isActive = false,
-                notificationCount = 0
-            ),
-            UserAccount(
-                id = "acc_3",
-                name = "Niyon Tech BD",
-                handle = "@niyontechbd",
-                avatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                isActive = false,
-                notificationCount = 1
-            )
-        )
-    )
+    // Multi-Account / Switch Account Feature (populated from active signed-in users on this device)
+    private val _userAccounts = MutableStateFlow<List<UserAccount>>(emptyList())
     val userAccounts: StateFlow<List<UserAccount>> = _userAccounts.asStateFlow()
 
     fun switchAccount(accountId: String) {
@@ -3588,38 +4848,159 @@ class FaceFeedViewModel : ViewModel() {
         _userAccounts.value = _userAccounts.value.map {
             it.copy(isActive = it.id == accountId)
         }
-        if (target.id == "acc_1") {
-            _currentUser.value = SampleData.currentUser.copy(
+        val cleanHandle = target.handle.removePrefix("@")
+        val matchedSaved = _savedEmailAccounts.value.firstOrNull { saved ->
+            saved.id == target.id ||
+                saved.username.equals(cleanHandle, ignoreCase = true) ||
+                saved.email.substringBefore("@").equals(cleanHandle, ignoreCase = true)
+        }
+        val isVerifiedOwnerSwitch = matchedSaved != null &&
+            matchedSaved.isOwner &&
+            com.example.data.AuthSessionStore.isReservedOwnerEmail(matchedSaved.email)
+        val resolvedEmail = matchedSaved?.email?.takeIf { it.isNotBlank() } ?: "$cleanHandle@fotofilm.app"
+
+        setOwnerAuthenticated(isVerifiedOwnerSwitch)
+        if (!isVerifiedOwnerSwitch) {
+            closeRightManagerFida()
+        }
+        _isFidaVerified.value = isVerifiedOwnerSwitch
+        _currentUser.value = if (isVerifiedOwnerSwitch) {
+            SampleData.currentUser.copy(
+                id = target.id,
+                fullName = target.name,
+                username = cleanHandle,
+                email = resolvedEmail,
                 avatarUrl = target.avatarUrl.ifBlank { SampleData.currentUser.avatarUrl },
+                isVerified = true,
                 isOnline = _isActiveStatusEnabled.value
             )
         } else {
-            _currentUser.value = _currentUser.value.copy(
+            _currentUser.value.copy(
                 id = target.id,
                 fullName = target.name,
-                username = target.handle.removePrefix("@"),
-                email = "${target.handle.removePrefix("@")}@fotofilm.app",
+                username = cleanHandle,
+                email = resolvedEmail,
                 avatarUrl = target.avatarUrl,
+                isVerified = false,
                 isOnline = _isActiveStatusEnabled.value
             )
-            closeRightManagerFida()
+        }
+        appContextRef?.let { ctx ->
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = _currentUser.value,
+                isOwnerVerified = isVerifiedOwnerSwitch,
+                authMethod = if (isVerifiedOwnerSwitch) "owner_verified" else "switch_account"
+            )
         }
     }
 
-    fun addNewAccount(name: String, handle: String, avatarUrl: String = "") {
-        val finalAvatar = avatarUrl.ifBlank {
-            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"
+    fun addNewAccount(
+        name: String,
+        handle: String,
+        gender: String = "পুরুষ",
+        avatarUrl: String = "",
+        context: android.content.Context? = appContextRef
+    ): Pair<Boolean, String?> {
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
+
+        val cleanName = name.trim().ifBlank { "New FotoFilm User" }
+        val rawHandle = handle.trim().ifBlank {
+            cleanName.lowercase().replace(Regex("[^a-z0-9_]"), "_").trim('_').ifBlank { "user_${System.currentTimeMillis() % 10000}" }
         }
-        val cleanHandle = if (handle.startsWith("@")) handle else "@$handle"
+        val cleanHandle = if (rawHandle.startsWith("@")) rawHandle else "@$rawHandle"
+        val emailCandidate = "${cleanHandle.removePrefix("@").lowercase()}@fotofilm.app"
+        val finalAvatar = avatarUrl.trim()
+
+        // ১ ব্যক্তি সর্বোচ্চ ৩টি আইডি সীমা (Switch account এর নিচে ৩টির বেশি আইডি খুলতে পারবে না)
+        val deviceTotal = maxOf(_userAccounts.value.size, countDistinctAccountsOnDevice(ctx, excludingEmail = emailCandidate))
+        if (deviceTotal >= com.example.util.FakeIdDetector.MAX_ACCOUNTS_PER_PERSON) {
+            val limitMsg = "⛔ ১ জন ব্যক্তি মোট ৩টির বেশি আইডি খুলতে পারবেন না! (৩/৩ আইডি সীমা পূর্ণ হয়েছে)"
+            recordFakeIdViolationReport(
+                context = ctx,
+                attemptedName = cleanName,
+                attemptedUsername = cleanHandle,
+                attemptedEmail = emailCandidate,
+                selectedGender = gender.trim(),
+                detectedSignal = "Switch Account এ ৪র্থ আইডি খোলার চেষ্টা ($deviceTotal/৩ পূর্ণ)",
+                violationType = "LIMIT_3_ACCOUNTS",
+                violationDetails = limitMsg,
+                attemptedAvatarUrl = finalAvatar
+            )
+            return false to limitMsg
+        }
+
+        val newAccId = "acc_${System.currentTimeMillis()}"
+        val check = com.example.util.FakeIdDetector.validateRegistrationOrUpdate(
+            context = ctx,
+            candidateUserId = newAccId,
+            candidateEmail = emailCandidate,
+            fullName = cleanName,
+            username = cleanHandle.removePrefix("@"),
+            selectedGender = gender.trim(),
+            avatarUrl = finalAvatar,
+            existingUsers = _allAppUsers.value,
+            existingPosts = _posts.value,
+            savedEmailAccounts = _savedEmailAccounts.value,
+            isOwnerVerified = false
+        )
+        if (!check.isAllowed) {
+            val msg = check.reasonMessage ?: "⛔ ফেইক আইডি শনাক্ত হওয়ায় নতুন আইডি তৈরি ব্লক করা হয়েছে!"
+            recordFakeIdViolationReport(
+                context = ctx,
+                attemptedName = cleanName,
+                attemptedUsername = cleanHandle,
+                attemptedEmail = emailCandidate,
+                selectedGender = gender.trim(),
+                detectedSignal = check.detectedSignal,
+                violationType = check.violationType ?: "FAKE_ID_BLOCKED",
+                violationDetails = msg,
+                attemptedAvatarUrl = finalAvatar,
+                matchedExistingUser = check.matchedOwnerName
+            )
+            return false to msg
+        }
+
+        if (finalAvatar.isNotBlank()) {
+            com.example.util.FakeIdDetector.registerPhotoFingerprint(
+                context = ctx,
+                ownerId = newAccId,
+                ownerName = cleanName,
+                ownerEmail = emailCandidate,
+                ownerGender = gender.trim(),
+                avatarUrl = finalAvatar,
+                precomputed = check.fingerprint
+            )
+        }
+
         val newAcc = UserAccount(
-            id = "acc_${System.currentTimeMillis()}",
-            name = name.ifBlank { "New FaceFeed User" },
-            handle = cleanHandle.ifBlank { "@user_${System.currentTimeMillis() % 10000}" },
+            id = newAccId,
+            name = cleanName,
+            handle = cleanHandle,
             avatarUrl = finalAvatar,
             isActive = false,
             notificationCount = 0
         )
         _userAccounts.value = _userAccounts.value + newAcc
+        val newSavedUser = User(
+            id = newAccId,
+            fullName = cleanName,
+            username = cleanHandle.removePrefix("@"),
+            email = emailCandidate,
+            avatarUrl = finalAvatar,
+            gender = gender.trim(),
+            bio = "FotoFilm সদস্য ✨",
+            isVerified = false,
+            isOnline = true
+        )
+        recordSavedAccount(
+            context = ctx,
+            user = newSavedUser,
+            isFirebaseLinked = false,
+            isOwner = false
+        )
+        return true to null
     }
 
     // ==========================================
@@ -3632,7 +5013,7 @@ class FaceFeedViewModel : ViewModel() {
         listOf(
             FidaChatMessage(
                 sender = "FIDA_AI",
-                text = "আসসালামু আলাইকুম ও শুভকামনা! 🌸\nআমি ফিদা এআই (Fida AI)—আপনার FaceFeed ব্যক্তিগত স্মার্ট সহকারী। আপনি আমাকে যেকোনো বিষয়, তথ্য, পড়াশোনা, প্রযুক্তি, সাহিত্য বা দৈনন্দিন জীবনের প্রশ্ন করতে পারেন। আমি সবসময় ভালোবাসা, সম্মান ও আন্তরিকতার সাথে দ্রুত উত্তর দিতে প্রস্তুত। বলুন, আজ আপনাকে কিভাবে সাহায্য করতে পারি? 😊",
+                text = "আসসালামু আলাইকুম ও শুভকামনা! 🌸\nআমি ফিদা এআই (Fida AI)—আপনার FotoFilm ব্যক্তিগত স্মার্ট সহকারী। আপনি আমাকে যেকোনো বিষয়, তথ্য, পড়াশোনা, প্রযুক্তি, সাহিত্য বা দৈনন্দিন জীবনের প্রশ্ন করতে পারেন। আমি সবসময় ভালোবাসা, সম্মান ও আন্তরিকতার সাথে দ্রুত উত্তর দিতে প্রস্তুত। বলুন, আজ আপনাকে কিভাবে সাহায্য করতে পারি? 😊",
                 timestamp = "এখন"
             )
         )
@@ -3652,6 +5033,7 @@ class FaceFeedViewModel : ViewModel() {
 
     fun sendFidaAIMessage(userText: String) {
         if (userText.isBlank()) return
+        if (!requireInternetConnection()) return
         val userMsg = FidaChatMessage(
             sender = "USER",
             text = userText.trim(),
@@ -3687,7 +5069,7 @@ class FaceFeedViewModel : ViewModel() {
                 "আলহামদুলিল্লাহ, আপনার দোয়ায় ও ভালোবাসায় আমি অনেক ভালো আছি প্রিয় ভাইয়া! 🌸 আশা করি আপনিও সুস্থ ও সুন্দর আছেন। আপনার দিনটি আনন্দময় হোক। আপনি কেমন আছেন?"
             }
             lower.contains("fotofilm") || lower.contains("facefeed") || lower.contains("অ্যাপ") || lower.contains("ফিচার") -> {
-                "FotoFilm হলো একটি আধুনিক ও নিরাপদ সামাজিক যোগাযোগ মাধ্যম 🌟। এখানে আপনি ফটো, শর্ট ভিডিও (রিলস), লং ভিডিও, স্টোরি, রঙিন টেক্সট স্ট্যাটাস এবং লাইভ স্ট্রিমিং করতে পারবেন। এছাড়া ৩ ডট মেনু থেকে 'Switch account' দিয়ে একাধিক আইডি ব্যবহার করা এবং 'Fida Verified' এর মাধ্যমে সবুজ ভেরিফাইড টিক পাওয়ার সুবিধাও রয়েছে!"
+                "FotoFilm হলো একটি আধুনিক ও নিরাপদ সামাজিক যোগাযোগ মাধ্যম 🌟। এখানে আপনি ফটো, শর্ট ভিডিও, লং ভিডিও, স্টোরি, রঙিন টেক্সট স্ট্যাটাস এবং লাইভ স্ট্রিমিং করতে পারবেন। এছাড়া ৩ ডট মেনু থেকে 'Switch account' দিয়ে একাধিক আইডি ব্যবহার করা এবং 'Fida Verified' এর মাধ্যমে সবুজ ভেরিফাইড টিক পাওয়ার সুবিধাও রয়েছে!"
             }
             lower.contains("বাংলাদেশ") || lower.contains("bangladesh") -> {
                 "বাংলাদেশ আমাদের অহংকার ও ভালোবাসার সবুজ মাতৃভূমি 🇧🇩। ১৯৭১ সালের মহান মুক্তিযুদ্ধের মাধ্যমে লাখো শহীদের আত্মত্যাগে আমরা পেয়েছি লাল-সবুজের পতাকা। এর প্রাকৃতিক রূপ ও মানুষের আন্তরিকতা বিশ্বের অন্যতম সুন্দর বিষয়। আপনি বাংলাদেশ নিয়ে কোনো নির্দিষ্ট ইতিহাস বা তথ্য জানতে চান?"
@@ -3702,7 +5084,7 @@ class FaceFeedViewModel : ViewModel() {
                 "আপনি ৩ ডট মেনুতে গিয়ে 'Switch account' অপশনে চাপ দিলে আপনার সবগুলো তৈরি করা আইডি দেখতে পাবেন। এছাড়া নিচের '+ Add account' অপশনে চাপ দিয়ে খুব সহজেই আরেকটি নতুন অ্যাকাউন্ট যোগ বা সুইচ করতে পারবেন!"
             }
             lower.contains("সবুজ") || lower.contains("verified") || lower.contains("ভেরিফাইড") -> {
-                "FotoFilm-এ এখন নীল টিকের বদলে সম্মানজনক 'সবুজ ভেরিফাইড টিক (Green Verified Badge)' যুক্ত করা হয়েছে 🟢! ৩ ডট মেনু থেকে 'Fida Verified' অপশনে গিয়ে আপনি এক ক্লিকেই ভেরিফিকেশন সক্রিয় করতে পারেন।"
+                "FotoFilm-এ এখন সম্মানজনক 'সবুজ ও হলুদ ভেরিফাইড ব্যাজ (Fida Verified Badge)' যুক্ত করা হয়েছে ✅! ৩ ডট মেনু থেকে 'Fida Verified' অপশনে গিয়ে আপনি ভেরিফিকেশন সক্রিয় করতে পারেন।"
             }
             else -> {
                 "প্রিয় সুহৃদ, আপনার প্রশ্নটি অত্যন্ত সুন্দর ও গুরুত্বপূর্ণ 🌸। \"$prompt\" সম্পর্কে জেনে রাখুন: জীবনে প্রতিটি জ্ঞান ও তথ্যই আমাদের সামনে এগিয়ে নিয়ে যায়। বিশ্বের যেকোনো প্রশ্ন, পড়াশোনা, অংক, অনুবাদ বা যেকোনো বিষয় নিয়ে জিজ্ঞাসা করুন, FotoFilm ফিদা এআই সর্বদা আন্তরিকতার সাথে সমাধান দিতে প্রস্তুত আছে!"
@@ -3716,15 +5098,15 @@ class FaceFeedViewModel : ViewModel() {
     private val _showFidaVerifiedDialog = MutableStateFlow(false)
     val showFidaVerifiedDialog: StateFlow<Boolean> = _showFidaVerifiedDialog.asStateFlow()
 
-    private val _isFidaVerified = MutableStateFlow(true)
+    private val _isFidaVerified = MutableStateFlow(false)
     val isFidaVerified: StateFlow<Boolean> = _isFidaVerified.asStateFlow()
 
     // 50,000 Free Verified Quota (50K) for Niyon Islam Sohag only
     val freeVerifiedQuotaTotal: Int = 50000
-    private val _freeVerifiedQuotaRemaining = MutableStateFlow(49997)
+    private val _freeVerifiedQuotaRemaining = MutableStateFlow(50000)
     val freeVerifiedQuotaRemaining: StateFlow<Int> = _freeVerifiedQuotaRemaining.asStateFlow()
 
-    private val _freeVerifiedGrantedUsers = MutableStateFlow<Set<String>>(setOf("user_tanvir", "user_me"))
+    private val _freeVerifiedGrantedUsers = MutableStateFlow<Set<String>>(emptySet())
     val freeVerifiedGrantedUsers: StateFlow<Set<String>> = _freeVerifiedGrantedUsers.asStateFlow()
 
     // Option 24: ইউজার অ্যাড ভিউ ও স্কিপ ট্র্যাকার (কার সামনে কয়েটা দৈনিক এড গেলো, কে কয়টা দেখলো ও স্কিপ করলো)
@@ -3831,20 +5213,20 @@ class FaceFeedViewModel : ViewModel() {
     private val _allAppUsers = MutableStateFlow<List<User>>(SampleData.allAppUsersList)
     val allAppUsers: StateFlow<List<User>> = _allAppUsers.asStateFlow()
 
-    // NID Card Documents State
-    private val _nidFrontUri = MutableStateFlow<String?>("https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80")
+    // NID Card Documents State (empty until user uploads real NID)
+    private val _nidFrontUri = MutableStateFlow<String?>(null)
     val nidFrontUri: StateFlow<String?> = _nidFrontUri.asStateFlow()
 
-    private val _nidBackUri = MutableStateFlow<String?>("https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80")
+    private val _nidBackUri = MutableStateFlow<String?>(null)
     val nidBackUri: StateFlow<String?> = _nidBackUri.asStateFlow()
 
-    private val _isNidSubmitted = MutableStateFlow(true)
+    private val _isNidSubmitted = MutableStateFlow(false)
     val isNidSubmitted: StateFlow<Boolean> = _isNidSubmitted.asStateFlow()
 
-    private val _nidApplicantName = MutableStateFlow("Niyon Islam Sohag")
+    private val _nidApplicantName = MutableStateFlow("")
     val nidApplicantName: StateFlow<String> = _nidApplicantName.asStateFlow()
 
-    private val _nidNumber = MutableStateFlow("19985217489632145")
+    private val _nidNumber = MutableStateFlow("")
     val nidNumber: StateFlow<String> = _nidNumber.asStateFlow()
 
     // 12 Months Subscription State (Paid months at 500 BDT each)
@@ -3856,29 +5238,165 @@ class FaceFeedViewModel : ViewModel() {
     val paymentSuccessMessage: StateFlow<String?> = _paymentSuccessMessage.asStateFlow()
 
     fun isCurrentUserNiyonIslamSohag(): Boolean {
-        if (isCurrentOwnerAuthenticated) return true
-        val user = _currentUser.value
-        val name = user.fullName.trim().lowercase()
-        val username = user.username.trim().lowercase()
-        val email = user.email.trim().lowercase()
-        return email == "smd224292@gmail.com" ||
-            email == "nihonislamsohag@gmail.com" ||
-            (name.contains("niyon") && name.contains("sohag")) ||
-            username == "niyon_sohag" ||
-            username == "niyonislamsohag"
+        val ownerAuth = _isOwnerSession.value || isCurrentOwnerAuthenticated
+        if (!_isLoggedIn.value || !ownerAuth) return false
+        return com.example.data.AuthSessionStore.isReservedOwnerEmail(_currentUser.value.email)
+    }
+
+    fun verifyAndActivateOwnerSession(
+        secretOrPin: String,
+        context: android.content.Context? = appContextRef
+    ): Boolean {
+        val trimmed = secretOrPin.trim()
+        if (!com.example.data.AuthSessionStore.verifyOwnerSecret(trimmed, _rightManagerPin.value)) {
+            return false
+        }
+        val ctx = (context ?: appContextRef)?.applicationContext
+        if (ctx != null) appContextRef = ctx
+
+        val cur = _currentUser.value
+        val resolvedEmail = if (com.example.data.AuthSessionStore.isReservedOwnerEmail(cur.email)) {
+            cur.email
+        } else {
+            SampleData.currentUser.email
+        }
+        val ownerUser = SampleData.currentUser.copy(
+            id = if (cur.id.isNotBlank() && cur.id != "guest_pending") cur.id else SampleData.currentUser.id,
+            email = resolvedEmail,
+            avatarUrl = cur.avatarUrl.ifBlank { SampleData.currentUser.avatarUrl },
+            isVerified = true,
+            isOnline = true
+        )
+        _currentUser.value = ownerUser
+        setOwnerAuthenticated(true)
+        _isFidaVerified.value = true
+        _isLoggedIn.value = true
+        if (trimmed == _rightManagerPin.value) {
+            _isRightManagerUnlocked.value = true
+        }
+        recordSavedAccount(
+            context = ctx,
+            user = ownerUser,
+            isFirebaseLinked = com.example.data.FirebaseManager.activeAuthUid() != null,
+            isOwner = true
+        )
+        if (ctx != null) {
+            com.example.data.AuthSessionStore.saveActiveSession(
+                context = ctx,
+                user = ownerUser,
+                isOwnerVerified = true,
+                authMethod = "owner_pin"
+            )
+        }
+        syncUserAccountsForCurrentUser(ownerUser)
+        _rightManagerInitialTab.value = 0
+        _showRightManagerFidaDialog.value = true
+        return true
     }
 
     fun isUserNiyonIslamSohag(user: User?): Boolean {
         if (user == null) return false
-        val name = user.fullName.trim().lowercase()
-        val username = user.username.trim().lowercase()
         val email = user.email.trim().lowercase()
         return user.id == "user_me" ||
-            email == "smd224292@gmail.com" ||
-            email == "nihonislamsohag@gmail.com" ||
-            (name.contains("niyon") && name.contains("sohag")) ||
-            username == "niyon_sohag" ||
-            username == "niyonislamsohag"
+            com.example.data.AuthSessionStore.isReservedOwnerEmail(email)
+    }
+
+    /**
+     * Re-applies every persistent OFF lock created by Niyon Islam Sohag in Right Manager Fida
+     * so nothing can automatically turn back ON across restarts, tab switches, or cloud/Room syncs.
+     */
+    fun applyNiyonOwnerLocksToState() {
+        val store = com.example.data.NiyonOwnerControlStore
+
+        // 1. User accounts turned OFF
+        val disabledUsers = store.disabledUserIds.value
+        if (disabledUsers.isNotEmpty()) {
+            _allAppUsers.value = _allAppUsers.value.map { user ->
+                if (user.id in disabledUsers && user.isAccountActive) {
+                    user.copy(
+                        isAccountActive = false,
+                        suspensionReason = user.suspensionReason ?: "Niyon Islam Sohag দ্বারা লক-বন্ধ করা হয়েছে 🔒"
+                    )
+                } else user
+            }
+            if (_currentUser.value.id in disabledUsers && _currentUser.value.isAccountActive) {
+                _currentUser.value = _currentUser.value.copy(
+                    isAccountActive = false,
+                    suspensionReason = _currentUser.value.suspensionReason ?: "Niyon Islam Sohag দ্বারা লক-বন্ধ করা হয়েছে 🔒"
+                )
+            }
+        }
+
+        // 2. Languages turned OFF
+        val disabledLangs = store.disabledLanguages.value
+        if (disabledLangs.isNotEmpty()) {
+            val updatedLangs = _languageStatus.value.mapValues { (lang, currentOn) ->
+                if (lang.name in disabledLangs) false else currentOn
+            }
+            _languageStatus.value = updatedLangs
+            if (_currentLanguage.value.name in disabledLangs) {
+                val fallback = updatedLangs.entries.firstOrNull { it.value }?.key ?: AppLanguage.BENGALI
+                _currentLanguage.value = fallback
+            }
+        }
+
+        // 3. Boost Transactions paused/turned OFF or activated
+        val pausedTxs = store.pausedBoostTxIds.value
+        val activeTxs = store.activeBoostTxIds.value
+        if (pausedTxs.isNotEmpty() || activeTxs.isNotEmpty()) {
+            _boostTransactions.value = _boostTransactions.value.map { tx ->
+                when {
+                    tx.id in pausedTxs -> tx.copy(status = "PAUSED")
+                    tx.id in activeTxs -> tx.copy(status = "ACTIVE")
+                    else -> tx
+                }
+            }
+        }
+
+        // 4. Blaze Card Mode
+        _isBlazeCardModeEnabled.value = store.isBlazeCardEnabled.value
+
+        // 5. Pages turned OFF
+        val disabledPages = store.disabledPageIds.value
+        if (disabledPages.isNotEmpty()) {
+            _pages.value = _pages.value.map { page ->
+                if (page.id in disabledPages && page.isActive) page.copy(isActive = false) else page
+            }
+        }
+
+        // 6. Groups & Hangout Groups turned OFF
+        val disabledGroups = store.disabledGroupIds.value
+        if (disabledGroups.isNotEmpty()) {
+            _groups.value = _groups.value.map { group ->
+                if (group.id in disabledGroups && group.isActive) group.copy(isActive = false) else group
+            }
+        }
+
+        // 7. Hangout Preset Rooms turned OFF
+        val disabledRooms = store.disabledHangoutRoomKeys.value
+        if (disabledRooms.isNotEmpty()) {
+            _hangoutPresetRooms.value = _hangoutPresetRooms.value.map { room ->
+                if (room.roomKey in disabledRooms && room.isActive) room.copy(isActive = false) else room
+            }
+        }
+
+        // 8. Timed Suspensions turned OFF
+        val pausedSuspensions = store.pausedTimedSuspensionIds.value
+        if (pausedSuspensions.isNotEmpty()) {
+            _timedSuspensionRecords.value = _timedSuspensionRecords.value.map { rec ->
+                if (rec.id in pausedSuspensions && rec.isSuspendedActive) rec.copy(isSuspendedActive = false) else rec
+            }
+        }
+
+        // 9. Post Boosts turned OFF
+        val disabledPostBoosts = store.disabledPostBoostIds.value
+        if (disabledPostBoosts.isNotEmpty()) {
+            _posts.value = _posts.value.map { post ->
+                if (post.id in disabledPostBoosts && (post.isBoostActive || post.isBoosted)) {
+                    post.copy(isBoostActive = false, isBoosted = false)
+                } else post
+            }
+        }
     }
 
     fun openFidaVerified() {
@@ -3920,6 +5438,8 @@ class FaceFeedViewModel : ViewModel() {
 
     // Toggle user account active/suspended by Niyon Islam Sohag
     fun toggleUserAccountStatus(userId: String, active: Boolean, reason: String? = null) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setUserActive(userId, active, isOwner = true)
         _allAppUsers.value = _allAppUsers.value.map { user ->
             if (user.id == userId) {
                 user.copy(
@@ -3945,7 +5465,7 @@ class FaceFeedViewModel : ViewModel() {
         val targetUser = _allAppUsers.value.find { it.id == userId }
         val targetName = targetUser?.fullName ?: "ইউজার"
         val targetUsername = targetUser?.username ?: targetName.lowercase().replace(" ", "_")
-        val targetAvatar = targetUser?.avatarUrl ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150"
+        val targetAvatar = targetUser?.avatarUrl.orEmpty()
 
         // Update Option 14: ফ্রী ফিদা ভেরিফাই ১ জনকে কতো বার দিছি কোন মাসে দিছি তারিখ সহ
         val existingGrant = _freeVerifiedGrantRecords.value.find { it.recipientUserId == userId }
@@ -3995,7 +5515,7 @@ class FaceFeedViewModel : ViewModel() {
         val updatedAudit = if (existingAudit != null) {
             existingAudit.copy(
                 totalTimesVerifiedTaken = totalTaken,
-                currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+                currentBadgeStatus = "সক্রিয় ভেরিফাইড ✅",
                 historyInstances = listOf(newAuditLog) + existingAudit.historyInstances
             )
         } else {
@@ -4006,7 +5526,7 @@ class FaceFeedViewModel : ViewModel() {
                 userUsername = targetUsername,
                 userAvatar = targetAvatar,
                 totalTimesVerifiedTaken = 1,
-                currentBadgeStatus = "সক্রিয় ভেরিফাইড 🔵",
+                currentBadgeStatus = "সক্রিয় ভেরিফাইড ✅",
                 historyInstances = listOf(newAuditLog)
             )
         }
@@ -4025,25 +5545,49 @@ class FaceFeedViewModel : ViewModel() {
 
     // Post Action Helpers for 3-Dot Menus
     fun deletePost(postId: String) {
+        synchronized(hiddenPostIdsCache) { hiddenPostIdsCache.add(postId) }
         _posts.value = _posts.value.filter { it.id != postId }
+        _savedPosts.value = _savedPosts.value.filter { it.id != postId }
+        localRepo?.let { repo ->
+            viewModelScope.launch(Dispatchers.IO) { repo.markPostHidden(postId) }
+        }
+        com.example.data.FirebaseManager.deletePostCloud(postId)
     }
 
     fun pinPost(postId: String) {
         val target = _posts.value.find { it.id == postId } ?: return
         _posts.value = listOf(target) + _posts.value.filter { it.id != postId }
+        persistPostToRoom(target, isPinned = true)
     }
 
     fun movePostToArchive(postId: String) {
+        synchronized(hiddenPostIdsCache) { hiddenPostIdsCache.add(postId) }
         _posts.value = _posts.value.filter { it.id != postId }
+        localRepo?.let { repo ->
+            viewModelScope.launch(Dispatchers.IO) { repo.markPostHidden(postId) }
+        }
     }
 
     fun movePostToTrash(postId: String) {
+        synchronized(hiddenPostIdsCache) { hiddenPostIdsCache.add(postId) }
         _posts.value = _posts.value.filter { it.id != postId }
+        localRepo?.let { repo ->
+            viewModelScope.launch(Dispatchers.IO) { repo.markPostHidden(postId) }
+        }
     }
 
     fun editPostText(postId: String, newText: String) {
+        var editedPostRef: Post? = null
         _posts.value = _posts.value.map {
-            if (it.id == postId) it.copy(text = newText) else it
+            if (it.id == postId) {
+                val upd = it.copy(text = newText)
+                editedPostRef = upd
+                upd
+            } else it
+        }
+        editedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 
@@ -4080,7 +5624,9 @@ class FaceFeedViewModel : ViewModel() {
         durationText: String,
         reasonNote: String
     ) {
+        if (!isCurrentUserNiyonIslamSohag()) return
         val targetUser = _allAppUsers.value.find { it.id == userId } ?: return
+        com.example.data.NiyonOwnerControlStore.setUserActive(userId, false, isOwner = true)
         val nowFormatted = "১০ অক্টোবর ২০২৬, দুপুর ০১:৩০ PM"
         val newRecord = UserSuspensionRecord(
             id = "susp_${System.currentTimeMillis()}",
@@ -4112,8 +5658,11 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun toggleTimedSuspensionActive(recordId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
         val targetRecord = _timedSuspensionRecords.value.find { it.id == recordId } ?: return
         val newActiveState = !targetRecord.isSuspendedActive
+        com.example.data.NiyonOwnerControlStore.setTimedSuspensionActive(recordId, newActiveState, isOwner = true)
+        com.example.data.NiyonOwnerControlStore.setUserActive(targetRecord.userId, !newActiveState, isOwner = true)
         _timedSuspensionRecords.value = _timedSuspensionRecords.value.map {
             if (it.id == recordId) it.copy(isSuspendedActive = newActiveState) else it
         }
@@ -4126,8 +5675,11 @@ class FaceFeedViewModel : ViewModel() {
     }
 
     fun cancelTimedSuspension(recordId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
         val targetRecord = _timedSuspensionRecords.value.find { it.id == recordId }
         if (targetRecord != null) {
+            com.example.data.NiyonOwnerControlStore.setTimedSuspensionActive(recordId, false, isOwner = true)
+            com.example.data.NiyonOwnerControlStore.setUserActive(targetRecord.userId, true, isOwner = true)
             _timedSuspensionRecords.value = _timedSuspensionRecords.value.filter { it.id != recordId }
             _allAppUsers.value = _allAppUsers.value.map {
                 if (it.id == targetRecord.userId) it.copy(
@@ -4146,67 +5698,8 @@ class FaceFeedViewModel : ViewModel() {
         }
     }
 
-    // Fida Verified Review Applications Queue (Paid / Free Submissions)
-    private val _verifiedApplications = MutableStateFlow<List<com.example.model.FidaVerifiedApplication>>(
-        listOf(
-            com.example.model.FidaVerifiedApplication(
-                id = "vapp_1",
-                userId = "user_nusrat",
-                userName = "Nusrat Jahan",
-                userAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-                userPhone = "01812345678",
-                amountBdt = 500,
-                paymentMethod = "bKash",
-                senderNumber = "01812345678",
-                trxId = "BK7894231",
-                submittedDate = "০২ অক্টোবর ২০২৬, ১১:৪০ AM",
-                status = "PENDING",
-                nidOrDocText = "জাতীয় পরিচয়পত্র (NID): 1998269123456 • উভয় পিঠের ছবি ও সেলফি সাবমিট করা হয়েছে"
-            ),
-            com.example.model.FidaVerifiedApplication(
-                id = "vapp_2",
-                userId = "user_sadia",
-                userName = "Sadia Islam",
-                userAvatar = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=500",
-                userPhone = "01998765432",
-                amountBdt = 500,
-                paymentMethod = "Nagad",
-                senderNumber = "01998765432",
-                trxId = "NGD5512903",
-                submittedDate = "০১ অক্টোবর ২০২৬, ০৭:১৫ PM",
-                status = "PENDING",
-                nidOrDocText = "পাসপোর্ট নং: A02918451 • স্মার্টকার্ড যাচাই আবেদন"
-            ),
-            com.example.model.FidaVerifiedApplication(
-                id = "vapp_3",
-                userId = "user_samrat",
-                userName = "MD Samrat",
-                userAvatar = "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=500",
-                userPhone = "01755123987",
-                amountBdt = 500,
-                paymentMethod = "Rocket",
-                senderNumber = "01755123987",
-                trxId = "RCK992147",
-                submittedDate = "২৮ সেপ্টেম্বর ২০২৬, ০৩:০০ PM",
-                status = "APPROVED",
-                nidOrDocText = "জাতীয় পরিচয়পত্র ও ব্যবসায়িক ট্রেড লাইসেন্স অনুমোদিত"
-            ),
-            com.example.model.FidaVerifiedApplication(
-                id = "vapp_rahim",
-                userId = "user_rahim",
-                userName = "আব্দুর রহিম (Rahim)",
-                userAvatar = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=500",
-                userPhone = "01812345678",
-                amountBdt = 500,
-                paymentMethod = "bKash",
-                senderNumber = "01812345678",
-                trxId = "BK11012026",
-                submittedDate = "০১/০১/২০২৬ (1/1/2026)",
-                status = "PENDING",
-                nidOrDocText = "জাতীয় পরিচয়পত্র (NID) ও স্মার্ট সেলফি কার্ড যাচাইয়ের জন্য জমা"
-            )
-        )
-    )
+    // Fida Verified Review Applications Queue (real user submissions only)
+    private val _verifiedApplications = MutableStateFlow<List<com.example.model.FidaVerifiedApplication>>(emptyList())
     val verifiedApplications: StateFlow<List<com.example.model.FidaVerifiedApplication>> = _verifiedApplications.asStateFlow()
 
     fun approveVerifiedApplication(appId: String) {
@@ -4358,9 +5851,12 @@ class FaceFeedViewModel : ViewModel() {
         days: Int = 30,
         audience: String = "সমগ্র বাংলাদেশ"
     ) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setPostBoostActive(postId, true, isOwner = true)
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
-                post.copy(
+                val upd = post.copy(
                     isBoosted = true,
                     isFreePromotedByNiyon = true,
                     isBoostActive = true,
@@ -4372,26 +5868,48 @@ class FaceFeedViewModel : ViewModel() {
                     boostTrxId = "FREE_NIYON_VIP",
                     reachViews = if (post.reachViews.contains("M")) post.reachViews else "2.5M"
                 )
+                updatedPostRef = upd
+                upd
             } else post
+        }
+        updatedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 
     fun togglePostBoostActive(postId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        var newActiveState: Boolean? = null
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val newActive = !post.isBoostActive
-                post.copy(
+                newActiveState = newActive
+                val upd = post.copy(
                     isBoostActive = newActive,
                     isBoosted = newActive
                 )
+                updatedPostRef = upd
+                upd
             } else post
+        }
+        newActiveState?.let {
+            com.example.data.NiyonOwnerControlStore.setPostBoostActive(postId, it, isOwner = true)
+        }
+        updatedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 
     fun cancelPostBoost(postId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setPostBoostActive(postId, false, isOwner = true)
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
-                post.copy(
+                val upd = post.copy(
                     isBoosted = false,
                     isFreePromotedByNiyon = false,
                     isBoostActive = false,
@@ -4399,62 +5917,42 @@ class FaceFeedViewModel : ViewModel() {
                     boostTargetReach = null,
                     boostAudience = null
                 )
+                updatedPostRef = upd
+                upd
             } else post
+        }
+        updatedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 
-    // ==========================================
-    // Option 21: Right Manager Fida - অ্যান্টি-হ্যাক ও অনুপ্রবেশ মনিটর (Anti-Hack Logs)
-    // ==========================================
-    private val _intrusionLogs = MutableStateFlow<List<IntrusionLog>>(
-        listOf(
-            IntrusionLog(
-                ipAddress = "197.234.12.89",
-                deviceModel = "Linux / Kali Pentest 64-bit",
-                attackerName = "ডার্কনেট অনুপ্রবেশকারী #409",
-                attackVector = "Reverse Engineering & Signature Bypass (Mod APK Exploit)",
-                timestamp = "আজ দুপুর ০২:১৫ মিনিট",
-                targetArea = "Right Manager Fida সিকিউরিটি গেটওয়ে",
-                severity = "CRITICAL 🔴",
-                status = "AUTO-BLOCKED & IP BANNED 🛡️",
-                defenseLog = "MD5/SHA256 সিগনেচার যাচাই ফেইল্ড। আক্রমণকারীর আইপি চিরতরে ব্ল্যাকলিস্ট করা হয়েছে।"
-            ),
-            IntrusionLog(
-                ipAddress = "103.145.78.21",
-                deviceModel = "Rooted OnePlus 9 Pro (Magisk/Xposed Hook)",
-                attackerName = "সন্দেহভাজন হ্যাকার (UID: 8812)",
-                attackVector = "Admin Privileges Escalation Injection",
-                timestamp = "আজ সকাল ১১:৪০ মিনিট",
-                targetArea = "Admin 10-Slot Controller",
-                severity = "CRITICAL 🔴",
-                status = "BLOCKED & DEVICE ID BANNED 🛡️",
-                defenseLog = "রুট ডিভাইসের আন-অথরাইজড অ্যাডমিন এক্সেস রিকুয়েস্ট তাৎক্ষণিক রিজেক্ট করা হয়েছে।"
-            ),
-            IntrusionLog(
-                ipAddress = "185.220.101.5",
-                deviceModel = "TOR Exit Node / Proxy Relay",
-                attackerName = "বটনেট রিলে #99",
-                attackVector = "Payment Webhook Spoofing (bKash/Nagad fake TrxID)",
-                timestamp = "গতকাল রাত ১০:০৮ মিনিট",
-                targetArea = "Fida Verified Payment Gateway",
-                severity = "HIGH 🟠",
-                status = "BLOCKED & PROXY DROPPED 🛡️",
-                defenseLog = "এনক্রিপ্টেড পেমেন্ট টোকেন মিসম্যাচ। জাল ট্রানজেকশন আক্রমণ প্রতিহত করা হয়েছে।"
-            ),
-            IntrusionLog(
-                ipAddress = "45.134.22.190",
-                deviceModel = "Python-urllib Automated Script",
-                attackerName = "অজ্ঞাত ডাটা স্ক্র্যাপার",
-                attackVector = "Messenger Private Vault Brute Force Scraper",
-                timestamp = "গতকাল বিকাল ০৪:২২ মিনিট",
-                targetArea = "Permanent Delivery Vault API",
-                severity = "CRITICAL 🔴",
-                status = "BLOCKED & RATE-LIMITED 🛡️",
-                defenseLog = "জিরো-ট্রাস্ট এনক্রিপশন সক্রিয়। বট স্ক্রিপ্ট স্থায়ী ব্যান ও ট্রাফিক ড্রপ।"
-            )
-        )
-    )
+    // Option 21: Right Manager Fida - অ্যান্টি-হ্যাক ও অনুপ্রবেশ মনিটর (real security events only)
+    private val _intrusionLogs = MutableStateFlow<List<IntrusionLog>>(emptyList())
     val intrusionLogs: StateFlow<List<IntrusionLog>> = _intrusionLogs.asStateFlow()
+
+    // Option 28: Right Manager Fida - ফেইক আইডি ডিটেক্টর ও ব্লক (১ ব্যক্তি ৩ আইডি, অন্যের ছবি, ছেলে->মেয়ে / মেয়ে->ছেলে)
+    private val _fakeIdReports = MutableStateFlow<List<FakeIdReport>>(emptyList())
+    val fakeIdReports: StateFlow<List<FakeIdReport>> = _fakeIdReports.asStateFlow()
+
+    fun markFakeIdReportPermanentBanned(reportId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        _fakeIdReports.value = com.example.util.FakeIdDetector.updateReportStatus(
+            appContextRef,
+            reportId,
+            "PERMANENT_BANNED"
+        )
+    }
+
+    fun deleteFakeIdReport(reportId: String) {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        _fakeIdReports.value = com.example.util.FakeIdDetector.deleteReport(appContextRef, reportId)
+    }
+
+    fun clearAllFakeIdReports() {
+        if (!isCurrentUserNiyonIslamSohag()) return
+        _fakeIdReports.value = com.example.util.FakeIdDetector.clearReports(appContextRef)
+    }
 
     fun simulateIntrusionTest() {
         val sample = IntrusionLog(
@@ -4496,27 +5994,35 @@ class FaceFeedViewModel : ViewModel() {
         days: Int = 30
     ) {
         if (!isCurrentUserNiyonIslamSohag()) return
+        com.example.data.NiyonOwnerControlStore.setPostBoostActive(postId, true, isOwner = true)
+        var updatedPostRef: Post? = null
         _posts.value = _posts.value.map { post ->
             if (post.id == postId) {
                 val updatedReactions = post.reactionCounts.toMutableMap().apply {
                     put(ReactionType.LOVE, (get(ReactionType.LOVE) ?: 500) + 3800)
                     put(ReactionType.HUNDRED, (get(ReactionType.HUNDRED) ?: 200) + 1500)
                 }
-                post.copy(
+                val upd = post.copy(
                     isBoosted = true,
                     isFreePromotedByNiyon = true,
                     isBoostActive = true,
                     boostTargetReach = targetViews,
                     reachViews = if (post.reachViews.contains("M")) post.reachViews else "2.1M",
                     boostDays = days,
-                    boostAudience = "ভিআইপি ভিডিও ফিড ও রিলস ট্রেন্ডিং (বাংলাদেশ ও বিশ্বব্যাপী)",
+                    boostAudience = "ভিআইপি ভিডিও ফিড ও শর্ট ভিডিও ট্রেন্ডিং (বাংলাদেশ ও বিশ্বব্যাপী)",
                     boostStatus = "সক্রিয় 🔥 (Niyon Islam Sohag ফ্রী ভিডিও বুস্টার)",
                     boostBudget = 0,
                     boostTrxId = "NIYON_VIDEO_BOOST_VIP",
                     reactionCounts = updatedReactions,
                     shareCount = post.shareCount + 420
                 )
+                updatedPostRef = upd
+                upd
             } else post
+        }
+        updatedPostRef?.let {
+            persistPostToRoom(it)
+            com.example.data.FirebaseManager.savePost(it)
         }
     }
 

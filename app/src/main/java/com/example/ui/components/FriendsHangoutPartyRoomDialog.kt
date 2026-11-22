@@ -63,6 +63,8 @@ import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import com.example.util.AppSoundManager
+import com.example.util.LiveMicHelper
+import com.example.util.VoiceAudioManager
 import com.example.viewmodel.FaceFeedViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -88,6 +90,7 @@ data class PartyRoomMessage(
     val isVideo: Boolean = false,
     val isVoice: Boolean = false,
     val voiceDurationSec: Int = 0,
+    val voiceFileUri: String? = null,
     val isSystemJoin: Boolean = false,
     val badge: String? = null
 )
@@ -116,9 +119,9 @@ data class AudienceMember(
 @Composable
 fun FriendsHangoutPartyRoomDialog(
     viewModel: FaceFeedViewModel,
-    initialRoomName: String = "__অতিরিক্ত_–",
-    initialAvatarUrl: String = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
-    initialMemberCount: Int = 19,
+    initialRoomName: String = "বন্ধুদের আড্ডা",
+    initialAvatarUrl: String = "",
+    initialMemberCount: Int = 1,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -136,25 +139,39 @@ fun FriendsHangoutPartyRoomDialog(
     var isUserOnSeat by remember { mutableStateOf(false) }
     var mySeatIndex by remember { mutableIntStateOf(-1) }
     val agoraState by com.example.data.AgoraCallManager.callState.collectAsState()
+    var hasMicPermission by remember {
+        mutableStateOf(LiveMicHelper.hasMicPermission(context))
+    }
+    var hasAutoPromptedMic by remember { mutableStateOf(false) }
     var pendingAudioAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
+        hasMicPermission = granted || LiveMicHelper.hasMicPermission(context)
+        if (hasMicPermission) {
             pendingAudioAction?.invoke()
         } else {
-            Toast.makeText(context, "ভয়েস সিটে কথা বলতে মাইক্রোফোন অনুমতি দিন", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "ভয়েস সিট ও বয়েজ মেসেজের জন্য মাইক্রোফোন অনুমতি দিন", Toast.LENGTH_SHORT).show()
         }
         pendingAudioAction = null
     }
     val hangoutChannel = remember(groupNameInput) {
         com.example.data.AgoraCallManager.sanitizeChannelName("ff_hangout_${groupNameInput}")
     }
+    val hangoutMicTag = remember(hangoutChannel) { "hangout_$hangoutChannel" }
+    val hardwareMicLevel by LiveMicHelper.micLevel.collectAsState()
+    val isHardwareMicActive by LiveMicHelper.isMicActive.collectAsState()
+
+    LaunchedEffect(Unit) {
+        if (!hasMicPermission && !hasAutoPromptedMic) {
+            hasAutoPromptedMic = true
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     fun runWithMicAndAgora(action: () -> Unit) {
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
+        val granted = LiveMicHelper.hasMicPermission(context)
+        hasMicPermission = granted
         if (granted) {
             com.example.data.AgoraCallManager.joinCall(
                 context = context,
@@ -176,8 +193,11 @@ fun FriendsHangoutPartyRoomDialog(
             audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
-    DisposableEffect(Unit) {
+    DisposableEffect(hangoutMicTag) {
         onDispose {
+            LiveMicHelper.stopMonitoring(hangoutMicTag)
+            VoiceAudioManager.cancelRecording()
+            VoiceAudioManager.stopPlayback()
             com.example.data.AgoraCallManager.leaveCall()
         }
     }
@@ -191,8 +211,8 @@ fun FriendsHangoutPartyRoomDialog(
     var showLudoFromHangout by remember { mutableStateOf(false) }
     var showOnlineUsersDialog by remember { mutableStateOf(false) }
     var playingVoiceMsgId by remember { mutableStateOf<String?>(null) }
-    var giftCount by remember { mutableIntStateOf(7000) }
-    var roomQuote by remember { mutableStateOf("\"☆__শূণ্যতা__দিয়ে__পূর্ণতা__পাক__তবুও__শকের পুরুষ___সুঁখে__থাক্--.") }
+    var giftCount by remember { mutableIntStateOf(0) }
+    var roomQuote by remember { mutableStateOf("বন্ধুদের সাথে সুস্থ ও আনন্দময় আড্ডা রুম") }
 
     // Bottom Messaging & Media Panels State (lifted from bottom)
     var isChatInputVisible by remember { mutableStateOf(true) }
@@ -201,127 +221,31 @@ fun FriendsHangoutPartyRoomDialog(
     var voiceRecordDuration by remember { mutableIntStateOf(0) }
 
     // Follow and Follow-Back States in Friends Hangout Room (বন্ধুদের আড্ডায় একে অপরকে ফলো / ফলো ব্যাক)
-    var followedUserIds by remember { mutableStateOf(setOf<String>("a2")) }
+    var followedUserIds by remember { mutableStateOf(emptySet<String>()) }
     var invitedFriendIds by remember { mutableStateOf(setOf<String>()) }
     var reminderSetEvents by remember { mutableStateOf(setOf<String>()) }
     var selectedUserProfile by remember { mutableStateOf<AudienceMember?>(null) }
 
 
-    // 10 Seats matching exact Screenshot 20261026_200055:
+    // 10 Clean Interactive Audio/Voice Seats
     var seats by remember {
         mutableStateOf(
-            listOf(
+            (1..10).map { seatNum ->
                 PartyVoiceSeat(
-                    seatNumber = 1,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200",
-                    isLocked = false,
-                    isMuted = false,
-                    badgeLabel = "◇•*🍀জাঁন্নাঁ...",
-                    hasCyanRing = true,
-                    isSpeaking = true
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 2,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200",
-                    isLocked = false,
-                    isMuted = false,
-                    badgeLabel = "sukhi jibon",
-                    hasCyanRing = true,
-                    isSpeaking = false
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 3,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200",
-                    isLocked = false,
-                    isMuted = false,
-                    badgeLabel = "আমার আ...",
-                    hasCyanRing = false,
-                    isSpeaking = true
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 4,
+                    seatNumber = seatNum,
                     user = null,
-                    isLocked = true,
-                    isMuted = false,
-                    badgeLabel = "4"
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 5,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200",
-                    isLocked = false,
-                    isMuted = true,
-                    badgeLabel = "...⚡fac...",
-                    micBadgeColor = Color(0xFFE91E63)
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 6,
-                    user = null,
-                    isLocked = true,
-                    isMuted = false,
-                    badgeLabel = "6"
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 7,
-                    user = null,
-                    isLocked = true,
-                    isMuted = false,
-                    badgeLabel = "7"
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 8,
-                    user = null,
-                    isLocked = true,
-                    isMuted = false,
-                    badgeLabel = "8"
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 9,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200",
                     isLocked = false,
                     isMuted = false,
-                    badgeLabel = "জান্নাত"
-                ),
-                PartyVoiceSeat(
-                    seatNumber = 10,
-                    customAvatarUrl = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200",
-                    isLocked = false,
-                    isMuted = false,
-                    badgeLabel = "মো: নয়ন স...",
-                    micBadgeColor = Color(0xFF2979FF)
+                    badgeLabel = "$seatNum"
                 )
-            )
+            }
         )
     }
 
-    // Audience List matching Screenshot:
-    val audienceMembers = remember {
-        listOf(
-            AudienceMember("a1", "পিচ্চি ছেলে", "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200"),
-            AudienceMember("a2", "Md Sohag", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"),
-            AudienceMember("a3", "জামাই", "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=200")
-        )
-    }
+    val audienceMembers = remember { emptyList<AudienceMember>() }
 
-    // Live Messages list initialized with exact screenshot bubbles
     val messagesListState = rememberLazyListState()
-    var messages by remember {
-        mutableStateOf(
-            listOf(
-                PartyRoomMessage(
-                    id = "1",
-                    senderName = "আমার আম্মুর একমাত্র ছে...",
-                    senderAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200",
-                    message = "send 🤣"
-                ),
-                PartyRoomMessage(
-                    id = "2",
-                    senderName = "◇•*🍀জাঁন্নাঁত্—»❦",
-                    senderAvatar = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200",
-                    message = "send 🤣"
-                )
-            )
-        )
-    }
+    var messages by remember { mutableStateOf<List<PartyRoomMessage>>(emptyList()) }
 
     // Media Picker for Photos & Videos (Zero-permission Android picker)
     val mediaPickerLauncher = rememberLauncherForActivityResult(
@@ -333,7 +257,7 @@ fun FriendsHangoutPartyRoomDialog(
             messages = messages + PartyRoomMessage(
                 id = System.currentTimeMillis().toString(),
                 senderName = currentUser.fullName,
-                senderAvatar = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+                senderAvatar = currentUser.avatarUrl,
                 message = if (isVideo) "ভিডিও পাঠিয়েছেন 🎥" else "ছবি পাঠিয়েছেন 🖼️",
                 mediaUri = uri,
                 isVideo = isVideo
@@ -342,35 +266,22 @@ fun FriendsHangoutPartyRoomDialog(
         }
     }
 
-    // Voice record timer effect
-    LaunchedEffect(isVoiceRecording) {
-        if (isVoiceRecording) {
-            voiceRecordDuration = 0
-            while (isVoiceRecording) {
-                delay(1000)
-                voiceRecordDuration++
-            }
+    val isVoiceManagerRecording by VoiceAudioManager.isRecording.collectAsState()
+    val voiceManagerSec by VoiceAudioManager.recordingSeconds.collectAsState()
+    val playingVoiceItemId by VoiceAudioManager.playingItemId.collectAsState()
+    val isVoicePlaying by VoiceAudioManager.isPlaying.collectAsState()
+
+    LaunchedEffect(hasMicPermission, isUserOnSeat, isMyMicMuted, isVoiceRecording, agoraState.isJoinedChannel, hangoutMicTag) {
+        if (hasMicPermission && isUserOnSeat && !isMyMicMuted && !isVoiceRecording && !agoraState.isJoinedChannel) {
+            LiveMicHelper.startMonitoring(context, hangoutMicTag)
+        } else {
+            LiveMicHelper.stopMonitoring(hangoutMicTag)
         }
     }
 
-    // Voice playback audio effect when user taps a voice message bubble
-    LaunchedEffect(playingVoiceMsgId) {
-        if (playingVoiceMsgId != null) {
-            var toneGen: android.media.ToneGenerator? = null
-            try {
-                toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 80)
-                repeat(3) {
-                    if (playingVoiceMsgId == null) return@LaunchedEffect
-                    toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 110)
-                    delay(850)
-                }
-            } catch (_: Exception) {
-            } finally {
-                try {
-                    toneGen?.release()
-                } catch (_: Exception) {}
-                playingVoiceMsgId = null
-            }
+    LaunchedEffect(isVoiceManagerRecording, voiceManagerSec) {
+        if (isVoiceManagerRecording) {
+            voiceRecordDuration = voiceManagerSec
         }
     }
 
@@ -387,7 +298,7 @@ fun FriendsHangoutPartyRoomDialog(
         val newMsg = PartyRoomMessage(
             id = System.currentTimeMillis().toString(),
             senderName = currentUser.fullName,
-            senderAvatar = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+            senderAvatar = currentUser.avatarUrl,
             message = text.trim()
         )
         messages = messages + newMsg
@@ -399,31 +310,43 @@ fun FriendsHangoutPartyRoomDialog(
         val newMsg = PartyRoomMessage(
             id = System.currentTimeMillis().toString(),
             senderName = currentUser.fullName,
-            senderAvatar = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+            senderAvatar = currentUser.avatarUrl,
             message = "send $emoji"
         )
         messages = messages + newMsg
         Toast.makeText(context, "$emoji রিঅ্যাকশন পাঠানো হয়েছে!", Toast.LENGTH_SHORT).show()
     }
 
-    fun sendVoiceMessage(durationSec: Int) {
+    fun sendVoiceMessage(durationSec: Int, voiceUri: String?) {
         AppSoundManager.playSocialAdChime()
         val newMsg = PartyRoomMessage(
             id = System.currentTimeMillis().toString(),
             senderName = currentUser.fullName,
-            senderAvatar = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+            senderAvatar = currentUser.avatarUrl,
             message = "🎙️ ভয়েস মেসেজ (০:${if (durationSec < 10) "0$durationSec" else durationSec}) ▶️",
             isVoice = true,
-            voiceDurationSec = durationSec
+            voiceDurationSec = durationSec,
+            voiceFileUri = voiceUri
         )
         messages = messages + newMsg
         Toast.makeText(context, "ভয়েস মেসেজ সফলভাবে পাঠানো হয়েছে! 🎙️", Toast.LENGTH_SHORT).show()
     }
 
+    fun startRealHangoutVoiceRecording() {
+        LiveMicHelper.stopMonitoring(hangoutMicTag)
+        val started = VoiceAudioManager.startRecording(context, "hangout_room")
+        if (started) {
+            isVoiceRecording = true
+            Toast.makeText(context, "🎙️ আসল ভয়েস রেকর্ড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "মাইক্রোফোন চালু করা যায়নি, আবার চেষ্টা করুন", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     BackHandler { onDismiss() }
 
     val seatedOnlineCount = seats.count { it.user != null || it.customAvatarUrl != null }
-    val totalLiveOnlineUsers = seatedOnlineCount + audienceMembers.size + 42
+    val totalLiveOnlineUsers = seatedOnlineCount + audienceMembers.size + 1
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -487,14 +410,14 @@ fun FriendsHangoutPartyRoomDialog(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     // Room Avatar with border
-                    AsyncImage(
-                        model = groupAvatarUrl,
-                        contentDescription = "Room Avatar",
+                    FotoFilmAvatar(
+                        imageUrl = groupAvatarUrl,
+                        name = groupNameInput,
+                        isGroup = true,
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .border(1.5.dp, Color(0xFFE0E0E0), RoundedCornerShape(10.dp)),
-                        contentScale = ContentScale.Crop
+                            .border(1.5.dp, Color(0xFFE0E0E0), CircleShape),
+                        iconSize = 20.dp
                     )
 
                     Spacer(modifier = Modifier.width(8.dp))
@@ -584,6 +507,48 @@ fun FriendsHangoutPartyRoomDialog(
                     }
                 }
 
+                // Mic Permission Strip when permission not yet granted
+                if (!hasMicPermission) {
+                    Surface(
+                        color = Color(0xFFFFEBEE),
+                        border = BorderStroke(1.dp, BangladeshRed.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 3.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "🎙️ ভয়েস সিট ও বয়েজ পাঠাতে মাইক্রোফোন অনুমতি দিন",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = BangladeshRed,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = BangladeshRed,
+                                modifier = Modifier.clickable {
+                                    audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            ) {
+                                Text(
+                                    text = "চালু করুন",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Middle flexible container so Seats/Audience smoothly scroll when keyboard opens,
                 // keeping Chat Stream and "মেসেজ লিখুন..." input bar ALWAYS visible above keyboard.
                 Column(
@@ -641,7 +606,7 @@ fun FriendsHangoutPartyRoomDialog(
                                     selectedUserProfile = AudienceMember(
                                         id = "seat_${seat.seatNumber}",
                                         name = seat.badgeLabel ?: "Seat ${seat.seatNumber}",
-                                        avatarUrl = seat.customAvatarUrl ?: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=200"
+                                        avatarUrl = seat.customAvatarUrl ?: seat.user?.avatarUrl.orEmpty()
                                     )
                                 }
                             }
@@ -676,7 +641,7 @@ fun FriendsHangoutPartyRoomDialog(
                                     selectedUserProfile = AudienceMember(
                                         id = "seat_${seat.seatNumber}",
                                         name = seat.badgeLabel ?: "Seat ${seat.seatNumber}",
-                                        avatarUrl = seat.customAvatarUrl ?: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"
+                                        avatarUrl = seat.customAvatarUrl ?: seat.user?.avatarUrl.orEmpty()
                                     )
                                 } else {
                                     Toast.makeText(context, "সিট ${seat.badgeLabel ?: seat.seatNumber}", Toast.LENGTH_SHORT).show()
@@ -711,9 +676,12 @@ fun FriendsHangoutPartyRoomDialog(
                                     color = Color(0xFF0D47A1)
                                 )
                                 Text(
-                                    text = agoraState.statusText,
+                                    text = if (!isMyMicMuted && (agoraState.isJoinedChannel || isHardwareMicActive))
+                                        "🎙️ আসল মাইক চালু • ${(hardwareMicLevel * 100).toInt().coerceAtLeast(15)}%"
+                                    else if (isMyMicMuted) "🔇 মাইক মিউট"
+                                    else agoraState.statusText,
                                     fontSize = 9.sp,
-                                    color = Color(0xFF1565C0)
+                                    color = if (isMyMicMuted) BangladeshRed else Color(0xFF1565C0)
                                 )
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -824,14 +792,12 @@ fun FriendsHangoutPartyRoomDialog(
                                 }
                             ) {
                                 Box(contentAlignment = Alignment.BottomEnd) {
-                                    AsyncImage(
-                                        model = audience.avatarUrl,
-                                        contentDescription = audience.name,
+                                    FotoFilmAvatar(
+                                        imageUrl = audience.avatarUrl,
+                                        name = audience.name,
                                         modifier = Modifier
                                             .size(46.dp)
-                                            .clip(CircleShape)
-                                            .border(1.5.dp, if (isFollowed) Color(0xFF2E7D32) else Color(0xFF00B0FF), CircleShape),
-                                        contentScale = ContentScale.Crop
+                                            .border(1.5.dp, if (isFollowed) Color(0xFF2E7D32) else Color(0xFF00B0FF), CircleShape)
                                     )
                                     if (isFollowed) {
                                         Box(
@@ -908,13 +874,11 @@ fun FriendsHangoutPartyRoomDialog(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                             ) {
-                                AsyncImage(
-                                    model = msg.senderAvatar,
-                                    contentDescription = msg.senderName,
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                FotoFilmAvatar(
+                                    imageUrl = msg.senderAvatar,
+                                    name = msg.senderName,
+                                    modifier = Modifier.size(24.dp),
+                                    iconSize = 14.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
@@ -952,7 +916,10 @@ fun FriendsHangoutPartyRoomDialog(
                                         )
                                     }
                                 } else {
-                                    val isPlayingThisVoice = msg.isVoice && playingVoiceMsgId == msg.id
+                                    val isPlayingThisVoice = msg.isVoice && (
+                                        (msg.voiceFileUri != null && playingVoiceItemId == msg.id && isVoicePlaying) ||
+                                            (msg.voiceFileUri == null && playingVoiceMsgId == msg.id)
+                                        )
                                     Text(
                                         text = if (isPlayingThisVoice) "🔊 ভয়েস চলছে... ⏸️" else msg.message,
                                         fontSize = 12.sp,
@@ -960,7 +927,12 @@ fun FriendsHangoutPartyRoomDialog(
                                         fontWeight = if (msg.isVoice) FontWeight.Bold else FontWeight.Normal,
                                         modifier = if (msg.isVoice) {
                                             Modifier.clickable {
-                                                playingVoiceMsgId = if (playingVoiceMsgId == msg.id) null else msg.id
+                                                val fileUri = msg.voiceFileUri
+                                                if (fileUri != null) {
+                                                    VoiceAudioManager.togglePlay(context, msg.id, fileUri)
+                                                } else {
+                                                    Toast.makeText(context, "নতুন করে বয়েজ রেকর্ড করে শুনুন", Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         } else Modifier
                                     )
@@ -1066,6 +1038,7 @@ fun FriendsHangoutPartyRoomDialog(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     TextButton(onClick = {
                                         isVoiceRecording = false
+                                        VoiceAudioManager.cancelRecording()
                                         voiceRecordDuration = 0
                                         Toast.makeText(context, "ভয়েস রেকর্ড বাতিল করা হয়েছে", Toast.LENGTH_SHORT).show()
                                     }) {
@@ -1074,9 +1047,15 @@ fun FriendsHangoutPartyRoomDialog(
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Button(
                                         onClick = {
-                                            val dur = if (voiceRecordDuration == 0) 3 else voiceRecordDuration
+                                            val result = VoiceAudioManager.stopRecording()
+                                            val dur = result?.durationSeconds ?: if (voiceRecordDuration == 0) 1 else voiceRecordDuration
                                             isVoiceRecording = false
-                                            sendVoiceMessage(dur)
+                                            voiceRecordDuration = 0
+                                            if (result != null) {
+                                                sendVoiceMessage(dur, result.fileUri)
+                                            } else {
+                                                Toast.makeText(context, "ভয়েস রেকর্ড সেভ হয়নি, একটু লম্বা করে বলুন", Toast.LENGTH_SHORT).show()
+                                            }
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color.White),
                                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
@@ -1105,12 +1084,25 @@ fun FriendsHangoutPartyRoomDialog(
                                 .padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Voice (বয়েজ) Record Button
+                            // Voice (বয়েজ) Record Button (Real MediaRecorder + RECORD_AUDIO permission)
                             IconButton(
                                 onClick = {
-                                    isVoiceRecording = !isVoiceRecording
                                     if (isVoiceRecording) {
-                                        Toast.makeText(context, "🎙️ ভয়েস রেকর্ড শুরু হয়েছে...", Toast.LENGTH_SHORT).show()
+                                        val result = VoiceAudioManager.stopRecording()
+                                        val dur = result?.durationSeconds ?: if (voiceRecordDuration == 0) 1 else voiceRecordDuration
+                                        isVoiceRecording = false
+                                        voiceRecordDuration = 0
+                                        if (result != null) {
+                                            sendVoiceMessage(dur, result.fileUri)
+                                        }
+                                    } else {
+                                        if (LiveMicHelper.hasMicPermission(context)) {
+                                            hasMicPermission = true
+                                            startRealHangoutVoiceRecording()
+                                        } else {
+                                            pendingAudioAction = { startRealHangoutVoiceRecording() }
+                                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
                                     }
                                 },
                                 modifier = Modifier
@@ -1529,51 +1521,57 @@ fun FriendsHangoutPartyRoomDialog(
                     onDismissRequest = { showInviteFriendsDialog = false },
                     title = { Text("💌 আড্ডায় বন্ধুদের ইনভাইট করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
                     text = {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 280.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(SampleData.profileFriends.take(8)) { friend ->
-                                val isInvited = invitedFriendIds.contains(friend.id)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AsyncImage(
-                                        model = friend.avatarUrl,
-                                        contentDescription = friend.name,
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(friend.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
-                                        Text(if (friend.isOnline) "🟢 অনলাইনে আছেন" else "অফলাইন", fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                    Button(
-                                        onClick = {
-                                            if (!isInvited) {
-                                                invitedFriendIds = invitedFriendIds + friend.id
-                                                memberCount++
-                                                messages = messages + PartyRoomMessage(
-                                                    id = System.currentTimeMillis().toString(),
-                                                    senderName = friend.name,
-                                                    senderAvatar = friend.avatarUrl,
-                                                    message = "🎉 আড্ডা রুমে যোগ দিয়েছেন!"
-                                                )
-                                            }
-                                        },
-                                        enabled = !isInvited,
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isInvited) Color.Gray else FacebookBlue
-                                        )
+                        val friendList = SampleData.profileFriends.take(8)
+                        if (friendList.isEmpty()) {
+                            Text(
+                                text = "এখনো কোনো বন্ধু অনলাইনে নেই — আসল ব্যবহারকারী যুক্ত হলে এখান থেকে ইনভাইট করতে পারবেন।",
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 280.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(friendList) { friend ->
+                                    val isInvited = invitedFriendIds.contains(friend.id)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text(if (isInvited) "ইনভাইটেড ✓" else "ইনভাইট", fontSize = 11.sp)
+                                        FotoFilmAvatar(
+                                            imageUrl = friend.avatarUrl,
+                                            name = friend.name,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(friend.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1)
+                                            Text(if (friend.isOnline) "🟢 অনলাইনে আছেন" else "অফলাইন", fontSize = 10.sp, color = Color.Gray)
+                                        }
+                                        Button(
+                                            onClick = {
+                                                if (!isInvited) {
+                                                    invitedFriendIds = invitedFriendIds + friend.id
+                                                    memberCount++
+                                                    messages = messages + PartyRoomMessage(
+                                                        id = System.currentTimeMillis().toString(),
+                                                        senderName = friend.name,
+                                                        senderAvatar = friend.avatarUrl,
+                                                        message = "🎉 আড্ডা রুমে যোগ দিয়েছেন!"
+                                                    )
+                                                }
+                                            },
+                                            enabled = !isInvited,
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = if (isInvited) Color.Gray else FacebookBlue
+                                            )
+                                        ) {
+                                            Text(if (isInvited) "ইনভাইটেড ✓" else "ইনভাইট", fontSize = 11.sp)
+                                        }
                                     }
                                 }
                             }
@@ -1691,14 +1689,13 @@ fun FriendsHangoutPartyRoomDialog(
                 AlertDialog(
                     onDismissRequest = { selectedUserProfile = null },
                     icon = {
-                        AsyncImage(
-                            model = profile.avatarUrl,
-                            contentDescription = profile.name,
+                        FotoFilmAvatar(
+                            imageUrl = profile.avatarUrl,
+                            name = profile.name,
                             modifier = Modifier
                                 .size(72.dp)
-                                .clip(CircleShape)
                                 .border(2.5.dp, Color(0xFF00B0FF), CircleShape),
-                            contentScale = ContentScale.Crop
+                            iconSize = 32.dp
                         )
                     },
                     title = {
@@ -1788,11 +1785,11 @@ fun FriendsHangoutPartyRoomDialog(
                                             .background(Color(0xFFF1F8E9))
                                             .padding(8.dp)
                                     ) {
-                                        AsyncImage(
-                                            model = seat.customAvatarUrl ?: seat.user?.avatarUrl ?: "",
-                                            contentDescription = seat.badgeLabel,
-                                            modifier = Modifier.size(32.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                        FotoFilmAvatar(
+                                            imageUrl = seat.customAvatarUrl ?: seat.user?.avatarUrl,
+                                            name = seat.badgeLabel ?: "Seat",
+                                            modifier = Modifier.size(32.dp),
+                                            iconSize = 16.dp
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
@@ -1813,11 +1810,11 @@ fun FriendsHangoutPartyRoomDialog(
                                             .background(Color(0xFFF5F5F5))
                                             .padding(8.dp)
                                     ) {
-                                        AsyncImage(
-                                            model = aud.avatarUrl,
-                                            contentDescription = aud.name,
-                                            modifier = Modifier.size(32.dp).clip(CircleShape),
-                                            contentScale = ContentScale.Crop
+                                        FotoFilmAvatar(
+                                            imageUrl = aud.avatarUrl,
+                                            name = aud.name,
+                                            modifier = Modifier.size(32.dp),
+                                            iconSize = 16.dp
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
@@ -1863,20 +1860,19 @@ fun PartyVoiceSeatItem(
         ) {
             val avatarToUse = seat.customAvatarUrl ?: seat.user?.avatarUrl
 
-            if (avatarToUse != null) {
+            if (avatarToUse != null || seat.user != null) {
                 // Active user avatar with optional cyan ring or speaking green ring
-                AsyncImage(
-                    model = avatarToUse,
-                    contentDescription = seat.badgeLabel,
+                FotoFilmAvatar(
+                    imageUrl = avatarToUse,
+                    name = seat.user?.fullName ?: seat.badgeLabel.orEmpty(),
                     modifier = Modifier
                         .size(46.dp)
-                        .clip(CircleShape)
                         .border(
                             width = if (seat.hasCyanRing) 2.5.dp else 1.5.dp,
                             color = if (seat.hasCyanRing) Color(0xFF00E5FF) else if (seat.isSpeaking) Color(0xFF00E676) else Color(0xFFB0BEC5),
                             shape = CircleShape
                         ),
-                    contentScale = ContentScale.Crop
+                    iconSize = 22.dp
                 )
 
                 // Mute mic badge or blue mic badge matching Screenshot

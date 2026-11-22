@@ -3,32 +3,47 @@ package com.example.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.model.Translations
 import com.example.ui.components.AdBanner
+import com.example.ui.components.FotoFilmAvatar
 import com.example.ui.components.PostCard
 import com.example.ui.components.StoryTray
 import com.example.ui.theme.BangladeshGreen
@@ -39,10 +54,12 @@ import com.example.viewmodel.AppTab
 import com.example.viewmodel.FaceFeedViewModel
 import com.example.viewmodel.MediaPickerTarget
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: FaceFeedViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val currentLang by viewModel.currentLanguage.collectAsState()
     val strings = Translations.get(currentLang)
@@ -50,11 +67,16 @@ fun HomeScreen(
     val posts by viewModel.posts.collectAsState()
     val hasMorePosts by viewModel.hasMorePosts.collectAsState()
     val isLoadingMorePosts by viewModel.isLoadingMorePosts.collectAsState()
+    val isHomeRefreshing by viewModel.isHomeRefreshing.collectAsState()
+    val postUploadProgress by viewModel.postUploadProgress.collectAsState()
     val cloudQuotaNotice by viewModel.cloudQuotaNotice.collectAsState()
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val blockedUserIds by viewModel.blockedUserIds.collectAsState()
-    val visiblePosts = remember(posts, blockedUserIds) {
-        posts.filter { !blockedUserIds.contains(it.author.id) && !viewModel.isUserBlocked(it.author.id) }
+    val isInternetConnected by viewModel.isInternetConnected.collectAsState()
+    val pullToRefreshState = rememberPullToRefreshState()
+    val visiblePosts = remember(posts, blockedUserIds, isInternetConnected) {
+        if (!isInternetConnected) emptyList()
+        else posts.filter { !blockedUserIds.contains(it.author.id) && !viewModel.isUserBlocked(it.author.id) }
     }
 
     // Real Phone Gallery Launcher for Feed Posts
@@ -68,7 +90,12 @@ fun HomeScreen(
         }
     }
 
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    // Auto-scroll to top when a new post upload begins so upload progress below FotoFilm is visible
+    LaunchedEffect(postUploadProgress?.postId) {
+        if (postUploadProgress != null && listState.firstVisibleItemIndex > 1) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     // Clear Home badge when user scrolls to top
     LaunchedEffect(listState.firstVisibleItemIndex) {
@@ -79,23 +106,44 @@ fun HomeScreen(
 
     // Cursor-based infinite scroll: load next 30 posts when nearing the end
     LaunchedEffect(listState, visiblePosts.size, hasMorePosts, isLoadingMorePosts) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .collect { lastIndex ->
-                if (hasMorePosts && !isLoadingMorePosts && visiblePosts.isNotEmpty() && lastIndex >= visiblePosts.lastIndex - 2) {
-                    viewModel.loadMorePosts()
-                }
+        snapshotFlow {
+            val info = listState.layoutInfo
+            (info.visibleItemsInfo.lastOrNull()?.index ?: -1) to info.totalItemsCount
+        }.collect { (lastIndex, totalCount) ->
+            if (hasMorePosts && !isLoadingMorePosts && visiblePosts.isNotEmpty() && totalCount > 0 && lastIndex >= totalCount - 3) {
+                viewModel.loadMorePosts()
             }
+        }
     }
 
-    Column(
+    // =========================================================================
+    // FACEBOOK-STYLE FULL SCROLLABLE HOME FEED WITH PULL-TO-REFRESH:
+    // Pull down at the top to show circular Facebook spinner and load fresh posts!
+    // =========================================================================
+    PullToRefreshBox(
+        isRefreshing = isHomeRefreshing,
+        onRefresh = { viewModel.refreshHomeFeed() },
+        state = pullToRefreshState,
         modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pullToRefreshState,
+                isRefreshing = isHomeRefreshing,
+                containerColor = MaterialTheme.colorScheme.surface,
+                color = FacebookBlue,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
+    ) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // =========================================================================
-        // FIXED / NON-SCROLLING TOP SECTION:
-        // "What's on your mind?" Composer Card (বাকিগুলো স্ক্রোল হবে না - স্থির থাকবে)
-        // =========================================================================
+        item(key = "home_composer_card") {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,13 +162,13 @@ fun HomeScreen(
                         contentAlignment = Alignment.BottomEnd,
                         modifier = Modifier.clickable { viewModel.setTab(AppTab.PROFILE) }
                     ) {
-                        AsyncImage(
-                            model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                        FotoFilmAvatar(
+                            imageUrl = currentUser.avatarUrl,
+                            name = currentUser.fullName,
                             contentDescription = currentUser.fullName,
                             modifier = Modifier
                                 .size(42.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(CircleShape)
                         )
                         Box(
                             modifier = Modifier
@@ -205,18 +253,18 @@ fun HomeScreen(
                 }
             }
         }
+        } // End home_composer_card item
 
-        // =========================================================================
-        // FIXED NON-SCROLLING TOP SECTION (ইস্টুরির নিচে FotoFilm লোগু ও প্রোফাইল বাটন পর্যন্ত স্থির থাকবে):
-        // =========================================================================
+        // 1. Stories Tray (Add Story + Friends' stories - scrolls cleanly with feed)
+        item(key = "home_stories_tray") {
+            StoryTray(
+                viewModel = viewModel,
+                modifier = Modifier.padding(vertical = 2.dp)
+            )
+        }
 
-        // 1. Stories Tray (Add Story + Friends' stories - স্থির থাকবে)
-        StoryTray(
-            viewModel = viewModel,
-            modifier = Modifier.padding(vertical = 2.dp)
-        )
-
-        // 2. FotoFilm লোগু ও প্রোফাইল কার্ড (Welcome Bangladesh 🇧🇩 - Niyon Islam Sohag - স্থির থাকবে)
+        // 2. FotoFilm লোগু ও প্রোফাইল কার্ড (Welcome Bangladesh 🇧🇩 - Niyon Islam Sohag)
+        item(key = "home_welcome_profile_card") {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -297,55 +345,198 @@ fun HomeScreen(
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
             thickness = 0.8.dp
         )
+        } // End home_welcome_profile_card item
 
-        // Quota limit notice banner (if Firebase Spark daily limit reached)
-        if (cloudQuotaNotice != null) {
-            Surface(
-                color = Color(0xFFFFF3E0),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+        // 3. Post Upload Progress Log Card (ইস্টুরি ও FotoFilm-এর নিচে লাইভ আপলোড ও বাকি %)
+        item(key = "home_post_upload_progress_card") {
+            AnimatedVisibility(
+                visible = postUploadProgress != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Warning, contentDescription = "Quota Warning", tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = cloudQuotaNotice!!,
-                        fontSize = 11.sp,
-                        color = Color(0xFF4E342E),
-                        modifier = Modifier.weight(1f)
+                postUploadProgress?.let { upload ->
+                    val remainingPercent = (100 - upload.progressPercent).coerceIn(0, 100)
+                    val animatedFraction by animateFloatAsState(
+                        targetValue = (upload.progressPercent / 100f).coerceIn(0f, 1f),
+                        label = "post_upload_progress_anim"
                     )
-                    TextButton(
-                        onClick = {
-                            try {
-                                uriHandler.openUri(com.example.data.FIREBASE_BLAZE_UPGRADE_URL)
-                            } catch (_: Exception) { }
-                        }
+                    val accentColor = if (upload.isCompleted) BangladeshGreen else FacebookBlue
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .testTag("home_upload_progress_card"),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            accentColor.copy(alpha = 0.35f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        Text("Blaze", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BangladeshRed)
-                    }
-                    IconButton(onClick = { viewModel.dismissQuotaNotice() }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // সামনে FotoFilm লোগো + গোলাকার প্রোগ্রেস রিং
+                                Box(
+                                    modifier = Modifier.size(44.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        progress = { animatedFraction },
+                                        modifier = Modifier.fillMaxSize(),
+                                        color = accentColor,
+                                        trackColor = accentColor.copy(alpha = 0.16f),
+                                        strokeWidth = 3.dp
+                                    )
+                                    Image(
+                                        painter = painterResource(id = R.drawable.ic_fotofilm_logo),
+                                        contentDescription = "FotoFilm Upload Logo",
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = if (upload.isCompleted) {
+                                                "✅ ${upload.mediaTypeLabel} আপলোড সম্পন্ন!"
+                                            } else {
+                                                "⬆️ ${upload.mediaTypeLabel} আপলোড হচ্ছে..."
+                                            },
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = accentColor.copy(alpha = 0.12f)
+                                        ) {
+                                            Text(
+                                                text = if (upload.isCompleted) {
+                                                    "100% সম্পন্ন"
+                                                } else {
+                                                    "বাকি ${remainingPercent}%"
+                                                },
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = accentColor,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Text(
+                                        text = "${upload.postPreview} • ${upload.statusLog}",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                    Text(
+                                        text = "আপলোড হয়েছে: ${upload.progressPercent}%  •  বাকি আছে: ${remainingPercent}%",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = accentColor
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { viewModel.dismissPostUploadProgress() },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "আপলোড বার লুকান",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            LinearProgressIndicator(
+                                progress = { animatedFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = accentColor,
+                                trackColor = accentColor.copy(alpha = 0.15f)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // =========================================================================
-        // SCROLLING POSTS FEED:
-        // (এর নিচ থেকে উপরে যেন টেনে টেনে যে কোনো পোস্ট দেখা যায়)
-        // =========================================================================
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+        // Quota limit notice banner (if Firebase Spark daily limit reached)
+        if (cloudQuotaNotice != null) {
+            item(key = "home_quota_notice") {
+                Surface(
+                    color = Color(0xFFFFF3E0),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = "Quota Warning", tint = Color(0xFFE65100), modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = cloudQuotaNotice!!,
+                            fontSize = 11.sp,
+                            color = Color(0xFF4E342E),
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = {
+                                try {
+                                    uriHandler.openUri(com.example.data.FIREBASE_BLAZE_UPGRADE_URL)
+                                } catch (_: Exception) { }
+                            }
+                        ) {
+                            Text("Blaze", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = BangladeshRed)
+                        }
+                        IconButton(onClick = { viewModel.dismissQuotaNotice() }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                }
+            }
+        }
+
+            // Empty feed area stays completely clean until real posts load
 
             // Feed Posts with Google AdBanner after every 3 posts (whether photo or video, by any user)
             itemsIndexed(visiblePosts, key = { _, post -> post.id }) { index, post ->
@@ -374,7 +565,7 @@ fun HomeScreen(
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(28.dp), color = BangladeshGreen)
                     }
-                } else if (hasMorePosts) {
+                } else if (hasMorePosts && visiblePosts.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -389,6 +580,6 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                 }
             }
-        }
     }
+    } // End PullToRefreshBox
 }

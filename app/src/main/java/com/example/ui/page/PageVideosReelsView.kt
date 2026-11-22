@@ -70,22 +70,9 @@ fun PageVideosReelsView(
     var viewingVideo by remember { mutableStateOf<PageVideoItem?>(null) }
     var viewingReel by remember { mutableStateOf<PageReelItem?>(null) }
 
-    val longVideos = remember(page.id) {
-        mutableStateListOf(
-            PageVideoItem("v1", "${page.name}-এর নতুন এক্সক্লুসিভ ফুল ভিডিও", "12:45", "42K views", "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?w=600"),
-            PageVideoItem("v2", "কীভাবে সহজেই শুরু করবেন? সম্পূর্ণ গাইডলাইন", "08:20", "18K views", "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=600"),
-            PageVideoItem("v3", "কুয়াকাটা ট্যুর ও প্রাকৃতিক সৌন্দর্য ডকুফিল্ম", "15:10", "65K views", "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600")
-        )
-    }
+    val longVideos = remember(page.id) { mutableStateListOf<PageVideoItem>() }
 
-    val shortReels = remember(page.id) {
-        mutableStateListOf(
-            PageReelItem("r1", "আজকের স্পেশাল মুহূর্ত ✨", "Trending Lofi Beats", "120K", "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400"),
-            PageReelItem("r2", "প্রাকৃতিক সুন্দর দৃশ্য 🌿", "Acoustic Nature Vibes", "85K", "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=400"),
-            PageReelItem("r3", "FotoFilm স্পেশাল রিলস 🔥", "Studio Instrumental", "210K", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400"),
-            PageReelItem("r4", "ভাইরাল টিপস ও ট্রিকস 💡", "Groovy Tech Tune", "45K", "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400")
-        )
-    }
+    val shortReels = remember(page.id) { mutableStateListOf<PageReelItem>() }
 
     Column(
         modifier = Modifier
@@ -149,7 +136,7 @@ fun PageVideosReelsView(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Reels (রিলস শর্টস)",
+                            text = "Short Video (শর্ট ভিডিও)",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             color = if (selectedTab == 1) Color.White else Color.Black
@@ -190,13 +177,27 @@ fun PageVideosReelsView(
                 }
             }
 
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(longVideos) { video ->
+            if (longVideos.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "এখনো কোনো ভিডিও আপলোড করা হয়নি। উপরে 'ভিডিও আপলোড' বাটনে চাপ দিন।",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(longVideos) { video ->
                     Surface(
                         onClick = { viewingVideo = video },
                         shape = RoundedCornerShape(12.dp),
@@ -290,6 +291,7 @@ fun PageVideosReelsView(
                     }
                 }
             }
+            }
         } else {
             // ==========================================
             // Reels Section (Short Reels)
@@ -302,7 +304,7 @@ fun PageVideosReelsView(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "পেইজ রিলস ভিডিও (${shortReels.size})",
+                    text = "পেইজ শর্ট ভিডিও (${shortReels.size})",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 )
@@ -315,19 +317,33 @@ fun PageVideosReelsView(
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("রিল তৈরি করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("শর্ট ভিডিও তৈরি করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(shortReels) { reel ->
+            if (shortReels.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "এখনো কোনো শর্ট ভিডিও তৈরি করা হয়নি। উপরে 'শর্ট ভিডিও তৈরি করুন' বাটনে চাপ দিন।",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(shortReels) { reel ->
                     Surface(
                         onClick = { viewingReel = reel },
                         shape = RoundedCornerShape(12.dp),
@@ -394,6 +410,7 @@ fun PageVideosReelsView(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -464,20 +481,20 @@ fun PageVideosReelsView(
                     0,
                     PageReelItem(
                         id = "r_${System.currentTimeMillis()}",
-                        title = reelCaption.ifBlank { "নতুন শর্ট রিলস" },
+                        title = reelCaption.ifBlank { "নতুন শর্ট ভিডিও" },
                         musicName = selectedMusic,
                         views = "1",
                         thumbnail = uri.toString()
                     )
                 )
                 showCreateReelDialog = false
-                onToast("শর্ট রিলস সফলভাবে পাবলিশ হয়েছে! 🎬")
+                onToast("শর্ট ভিডিও সফলভাবে পাবলিশ হয়েছে! 🎬")
             }
         }
 
         AlertDialog(
             onDismissRequest = { showCreateReelDialog = false },
-            title = { Text("পেইজে শর্ট রিল তৈরি করুন") },
+            title = { Text("পেইজে শর্ট ভিডিও তৈরি করুন") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -511,7 +528,7 @@ fun PageVideosReelsView(
                     ) {
                         Icon(Icons.Default.Videocam, contentDescription = null)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("ভিডিও বাছুন ও রিল পোস্ট করুন")
+                        Text("ভিডিও বাছুন ও শর্ট ভিডিও পোস্ট করুন")
                     }
                 }
             },
@@ -554,7 +571,7 @@ fun PageVideosReelsView(
         val r = viewingReel!!
         AlertDialog(
             onDismissRequest = { viewingReel = null },
-            title = { Text("রিল: ${r.title}") },
+            title = { Text("Short Video: ${r.title}") },
             text = {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(modifier = Modifier.size(200.dp, 280.dp)) {
@@ -577,7 +594,7 @@ fun PageVideosReelsView(
                         TextButton(onClick = {
                             r.isLiked = !r.isLiked
                             if (r.isLiked) r.likes++ else r.likes--
-                            onToast(if (r.isLiked) "রীলে লাইক দেওয়া হয়েছে ❤️" else "লাইক সরানো হয়েছে")
+                            onToast(if (r.isLiked) "শর্ট ভিডিওতে লাইক দেওয়া হয়েছে ❤️" else "লাইক সরানো হয়েছে")
                         }) {
                             Icon(if (r.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null, tint = Color.Red)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -588,7 +605,7 @@ fun PageVideosReelsView(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("${r.comments}")
                         }
-                        TextButton(onClick = { onToast("রিলটি শেয়ার করা হয়েছে ↗️") }) {
+                        TextButton(onClick = { onToast("শর্ট ভিডিওটি শেয়ার করা হয়েছে ↗️") }) {
                             Icon(Icons.Default.Share, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("${r.shares}")

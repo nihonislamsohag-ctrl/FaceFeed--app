@@ -5,14 +5,21 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -25,11 +32,18 @@ import com.example.viewmodel.FaceFeedViewModel
 import com.example.viewmodel.MediaPickerTarget
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Initialize real-time Wi-Fi & Mobile Data Connectivity Monitor before other services
+        com.example.data.NetworkConnectivityManager.initialize(applicationContext)
+        // Initialize Niyon Islam Sohag persistent Owner Control Locks before other managers
+        com.example.data.NiyonOwnerControlStore.initialize(applicationContext)
+        // Initialize Service Quota Tracker (Firebase Read/Write, Cloudinary 25 GB, Agora 10,000 mins)
+        com.example.data.ServiceQuotaTracker.initialize(applicationContext)
         // Initialize Firebase Cloud Services with persistent cache & named Firestore database
         com.example.data.FirebaseManager.initialize(applicationContext)
         // Initialize FCM Notification Channels & register push token if signed in
@@ -45,6 +59,8 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             android.util.Log.e("MainActivity", "MobileAds initialization skipped: ${e.message}")
         }
+        // Initialize audio playback & voice engine context early
+        com.example.util.AppSoundManager.init(applicationContext)
         setContent {
             val viewModel: FaceFeedViewModel = viewModel()
             val isDark by viewModel.isDarkMode.collectAsState()
@@ -55,15 +71,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Load saved device accounts and resume any existing Firebase cloud sync quietly without showing any Google prompt
+            // Load local Room persisted posts/messages, saved accounts, and restore active auth session
             LaunchedEffect(Unit) {
+                viewModel.initializeLocalStorage(applicationContext)
                 viewModel.loadSavedEmailAccounts(applicationContext)
-                try {
-                    Firebase.auth.currentUser?.let { user ->
-                        viewModel.startCloudSyncForUser(user, applicationContext)
-                    }
-                } catch (_: Exception) {
-                }
+                viewModel.restoreAuthSession(applicationContext)
             }
 
             MyApplicationTheme(darkTheme = isDark) {
@@ -95,10 +107,25 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
     val showFidaAI by viewModel.showFidaAIDialog.collectAsState()
     val showFidaVerified by viewModel.showFidaVerifiedDialog.collectAsState()
     val showRightManagerFida by viewModel.showRightManagerFidaDialog.collectAsState()
+    val isOwnerSession by viewModel.isOwnerSession.collectAsState()
     val rightManagerInitialTab by viewModel.rightManagerInitialTab.collectAsState()
     val showAppDownloadWebHub by viewModel.showAppDownloadWebDialog.collectAsState()
     val viewingProfileUser by viewModel.viewingProfileUser.collectAsState()
     val compressionToastMessage by viewModel.compressionToastMessage.collectAsState()
+    val isInternetConnected by viewModel.isInternetConnected.collectAsState()
+
+    val notifContext = androidx.compose.ui.platform.LocalContext.current
+
+    // Enforce Facebook-style strict internet gating & immediate reload on reconnect
+    LaunchedEffect(isInternetConnected) {
+        if (!isInternetConnected) {
+            VideoPlaybackCoordinator.pauseActiveVideo()
+            com.example.util.AppSoundManager.pauseAudio()
+            viewModel.handleNetworkLost()
+        } else {
+            viewModel.onNetworkConnectivityRestored(notifContext)
+        }
+    }
 
     LaunchedEffect(compressionToastMessage) {
         if (compressionToastMessage != null) {
@@ -106,8 +133,6 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
             viewModel.clearCompressionToastMessage()
         }
     }
-
-    val notifContext = androidx.compose.ui.platform.LocalContext.current
     val notifPrefs = remember(notifContext) {
         notifContext.applicationContext.getSharedPreferences(
             "fotofilm_device_prefs",
@@ -145,6 +170,43 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
     val isInsideDirectChat = activeChat != null && activeTab == AppTab.MESSAGES
     val hideTopBar = isInsideDirectChat || activeTab == AppTab.MENU
 
+    val homeListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val maxHeaderCollapsePx = remember(density) { with(density) { 82.dp.toPx() } }
+    var topHeaderCollapsePx by remember { mutableFloatStateOf(0f) }
+    val topSectionCollapseFraction by remember {
+        derivedStateOf {
+            when (activeTab) {
+                AppTab.HOME -> (topHeaderCollapsePx / maxHeaderCollapsePx).coerceIn(0f, 1f)
+                AppTab.MESSAGES -> 1f
+                else -> 0f
+            }
+        }
+    }
+
+    LaunchedEffect(activeTab) {
+        if (activeTab != AppTab.HOME) {
+            topHeaderCollapsePx = 0f
+        }
+    }
+
+    LaunchedEffect(homeListState.firstVisibleItemIndex, homeListState.firstVisibleItemScrollOffset) {
+        if (homeListState.firstVisibleItemIndex == 0 && homeListState.firstVisibleItemScrollOffset == 0) {
+            topHeaderCollapsePx = 0f
+        }
+    }
+
+    val homeNestedScrollConnection = remember(maxHeaderCollapsePx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val deltaY = available.y
+                topHeaderCollapsePx = (topHeaderCollapsePx - deltaY).coerceIn(0f, maxHeaderCollapsePx)
+                return Offset.Zero
+            }
+        }
+    }
+
     BackHandler(enabled = activeTab != AppTab.HOME || activeChat != null) {
         if (activeChat != null) {
             viewModel.closeChat()
@@ -155,12 +217,76 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
         }
     }
 
+    if (!isInternetConnected) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            FacebookStyleOfflineScreen(viewModel = viewModel)
+
+            if (compressionToastMessage != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp, vertical = 32.dp),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFB71C1C),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = compressionToastMessage!!,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { viewModel.clearCompressionToastMessage() }) {
+                                Text("ঠিক আছে", color = Color(0xFFFFEB3B), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    // Strict Play Store Launch Gate: Users MUST Sign Up or Log In before entering the app
+    if (!isLoggedIn) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0F172A))
+        ) {
+            AuthDialog(
+                viewModel = viewModel,
+                onDismiss = { viewModel.setShowAuthDialog(false) }
+            )
+        }
+        return
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             if (!hideTopBar) {
-                FaceFeedTopBar(viewModel = viewModel)
+                FaceFeedTopBar(
+                    viewModel = viewModel,
+                    topSectionCollapseFraction = topSectionCollapseFraction,
+                    onHomeReselect = {
+                        topHeaderCollapsePx = 0f
+                        viewModel.refreshHomeFeed()
+                        coroutineScope.launch {
+                            homeListState.animateScrollToItem(0)
+                        }
+                    }
+                )
             }
         },
         bottomBar = {
@@ -173,9 +299,13 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .then(
+                    if (activeTab == AppTab.HOME) Modifier.nestedScroll(homeNestedScrollConnection)
+                    else Modifier
+                )
         ) {
             when (activeTab) {
-                AppTab.HOME -> HomeScreen(viewModel = viewModel)
+                AppTab.HOME -> HomeScreen(viewModel = viewModel, listState = homeListState)
                 AppTab.MESSAGES -> MessagesScreen(viewModel = viewModel)
                 AppTab.VIDEOS, AppTab.REELS -> VideosScreen(viewModel = viewModel)
                 AppTab.FRIENDS -> FriendsScreen(viewModel = viewModel)
@@ -258,7 +388,7 @@ fun FaceFeedApp(viewModel: FaceFeedViewModel) {
     }
 
     if (showRightManagerFida) {
-        if (viewModel.isCurrentUserNiyonIslamSohag()) {
+        if (isOwnerSession && viewModel.isCurrentUserNiyonIslamSohag()) {
             RightManagerFidaDialog(
                 viewModel = viewModel,
                 initialTab = rightManagerInitialTab,

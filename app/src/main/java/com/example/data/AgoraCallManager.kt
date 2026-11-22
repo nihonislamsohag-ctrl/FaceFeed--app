@@ -39,6 +39,15 @@ object AgoraCallManager {
 
     private var rtcEngine: RtcEngine? = null
     private var currentVideoMode: Boolean = false
+    private var joinedCallStartMs: Long = 0L
+
+    private fun flushActiveCallDuration(countCall: Boolean = true) {
+        if (joinedCallStartMs > 0L) {
+            val elapsedSec = ((System.currentTimeMillis() - joinedCallStartMs) / 1000L).coerceAtLeast(1L)
+            joinedCallStartMs = 0L
+            ServiceQuotaTracker.recordAgoraCallSeconds(elapsedSec, countCall = countCall)
+        }
+    }
 
     private val _callState = MutableStateFlow(
         AgoraRtcState(
@@ -93,6 +102,9 @@ object AgoraCallManager {
         override fun onJoinChannelSuccess(channel: String?, uid: Int, elapsed: Int) {
             mainHandler.post {
                 Log.d(TAG, "Agora joined channel=$channel uid=$uid")
+                if (joinedCallStartMs == 0L) {
+                    joinedCallStartMs = System.currentTimeMillis()
+                }
                 _callState.value = _callState.value.copy(
                     isSdkActive = true,
                     isJoinedChannel = true,
@@ -157,6 +169,7 @@ object AgoraCallManager {
         isVideoCall: Boolean,
         startMuted: Boolean = false
     ) {
+        ServiceQuotaTracker.initialize(context)
         val safeChannel = sanitizeChannelName(channelName)
         if (!isConfigured()) {
             _callState.value = _callState.value.copy(
@@ -308,6 +321,7 @@ object AgoraCallManager {
     }
 
     fun leaveCall() {
+        flushActiveCallDuration(countCall = true)
         try {
             rtcEngine?.stopPreview()
             rtcEngine?.leaveChannel()

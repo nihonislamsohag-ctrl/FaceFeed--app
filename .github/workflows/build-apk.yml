@@ -82,11 +82,29 @@ jobs:
           if [ ! -f .env ] && [ -f .env.example ]; then
             cp .env.example .env
           fi
+          touch .env
+          set_env_var() {
+            KEY="$1"
+            VAL="$2"
+            if [ -n "$VAL" ]; then
+              grep -v "^${KEY}=" .env > .env.tmp || true
+              mv .env.tmp .env
+              printf '%s=%s\n' "$KEY" "$VAL" >> .env
+            fi
+          }
+          set_env_var "GEMINI_API_KEY" "${GEMINI_API_KEY:-}"
+          set_env_var "CLOUDINARY_CLOUD_NAME" "${CLOUDINARY_CLOUD_NAME:-}"
+          set_env_var "CLOUDINARY_UPLOAD_PRESET" "${CLOUDINARY_UPLOAD_PRESET:-}"
+          set_env_var "AGORA_APP_ID" "${AGORA_APP_ID:-}"
           if [ ! -f app/google-services.json ] && [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
             printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
           fi
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+          AGORA_APP_ID: ${{ secrets.AGORA_APP_ID }}
 
       - name: Make Gradlew Executable
         run: chmod +x gradlew
@@ -134,6 +152,10 @@ jobs:
 
       - name: Build Summary
         if: always()
+        env:
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
+          AGORA_APP_ID: ${{ secrets.AGORA_APP_ID }}
         run: |
           {
             echo "## FotoFilm APK Build Summary"
@@ -153,6 +175,16 @@ jobs:
                 fi
                 echo '```'
               fi
+            fi
+            if [ -n "${CLOUDINARY_CLOUD_NAME:-}" ] && [ -n "${CLOUDINARY_UPLOAD_PRESET:-}" ]; then
+              echo "- Cloudinary Media Cloud: **Configured from GitHub Secrets**"
+            else
+              echo "- Cloudinary Media Cloud: **Missing in GitHub Secrets** (Add \`CLOUDINARY_CLOUD_NAME\` & \`CLOUDINARY_UPLOAD_PRESET\` in GitHub Repo -> Settings -> Secrets and variables -> Actions)"
+            fi
+            if [ -n "${AGORA_APP_ID:-}" ]; then
+              echo "- Agora Audio/Video Calling: **Configured from GitHub Secrets**"
+            else
+              echo "- Agora Audio/Video Calling: **Missing in GitHub Secrets** (Add \`AGORA_APP_ID\` in GitHub Repo -> Settings -> Secrets and variables -> Actions)"
             fi
             if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
               echo "- GitHub Release: **Published** under Releases -> latest"

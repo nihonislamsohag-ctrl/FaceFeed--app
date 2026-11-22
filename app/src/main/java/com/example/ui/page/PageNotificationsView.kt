@@ -50,7 +50,7 @@ fun PageNotificationsView(
     val notifications = remember(page.id, customNotifications) {
         val list = mutableListOf<PageNotificationItem>()
 
-        // Dynamic custom notifications
+        // Dynamic custom notifications only
         customNotifications.forEachIndexed { i, msg ->
             list.add(
                 PageNotificationItem(
@@ -60,76 +60,10 @@ fun PageNotificationsView(
                     time = "Just now",
                     icon = Icons.Default.Mail,
                     iconTint = BangladeshGreen,
-                    userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200"
+                    userAvatar = page.avatarUrl.ifBlank { null }
                 )
             )
         }
-
-        // Standard 6 Required Notification Types
-        list.addAll(
-            listOf(
-                // 1. New Like
-                PageNotificationItem(
-                    id = "pn_1",
-                    title = "নতুন লাইক ও রিঅ্যাকশন",
-                    description = "Tanvir Ahmed আপনার '${page.name}'-এর নতুন পোস্টে Love ❤️ রিঅ্যাক্ট করেছেন।",
-                    time = "5m ago",
-                    icon = Icons.Default.Favorite,
-                    iconTint = Color(0xFFE91E63),
-                    userAvatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"
-                ),
-                // 2. New Follow
-                PageNotificationItem(
-                    id = "pn_2",
-                    title = "নতুন ফলোয়ার",
-                    description = "Sadia Islam আপনার পেইজ ফলো করতে শুরু করেছেন।",
-                    time = "18m ago",
-                    icon = Icons.Default.PersonAdd,
-                    iconTint = BangladeshGreen,
-                    userAvatar = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200"
-                ),
-                // 3. New Comment
-                PageNotificationItem(
-                    id = "pn_3",
-                    title = "নতুন মন্তব্য (Comment)",
-                    description = "Md. Rahim মন্তব্য করেছেন: 'অনেক সুন্দর উপস্থাপনা ভাইয়া, এগিয়ে যান!'",
-                    time = "42m ago",
-                    icon = Icons.Default.ChatBubble,
-                    iconTint = Color(0xFF1976D2),
-                    userAvatar = "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200"
-                ),
-                // 4. New Message
-                PageNotificationItem(
-                    id = "pn_4",
-                    title = "নতুন মেসেজ",
-                    description = "Farhan Kabir পেইজ মেসেঞ্জারে নক দিয়েছেন।",
-                    time = "1h ago",
-                    icon = Icons.Default.Send,
-                    iconTint = Color(0xFF7B1FA2),
-                    userAvatar = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"
-                ),
-                // 5. New Share
-                PageNotificationItem(
-                    id = "pn_5",
-                    title = "পোস্ট শেয়ার হয়েছে",
-                    description = "Nusrat Jahan আপনার পেইজের পোস্টটি 'বাংলাদেশ ট্রাভেলার্স' গ্রুপে শেয়ার করেছেন।",
-                    time = "2h ago",
-                    icon = Icons.Default.Share,
-                    iconTint = Color(0xFF009688),
-                    userAvatar = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200"
-                ),
-                // 6. New Boost Result
-                PageNotificationItem(
-                    id = "pn_6",
-                    title = "বুস্ট ফলাফল আপডেট 🚀",
-                    description = "আপনার স্পনসরড বুস্টেড পোস্টটি ১৫,২০০ মানুষের কাছে পৌঁছেছে এবং ১,৪৫০টি এনগেজমেন্ট পেয়েছে!",
-                    time = "3h ago",
-                    icon = Icons.Default.RocketLaunch,
-                    iconTint = Color(0xFFE65100),
-                    userAvatar = page.avatarUrl
-                )
-            )
-        )
         list
     }
 
@@ -198,13 +132,27 @@ fun PageNotificationsView(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Notifications List
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            items(notifications) { notif ->
+        if (notifications.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "এখনো কোনো পেইজ নোটিফিকেশন নেই।",
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                items(notifications) { notif ->
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Color.White,
@@ -288,6 +236,7 @@ fun PageNotificationsView(
                             ) {}
                         }
                     }
+                }
                 }
             }
         }

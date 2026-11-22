@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -61,6 +62,9 @@ fun AuthDialog(
 ) {
     val currentLang by viewModel.currentLanguage.collectAsState()
     val savedEmailAccounts by viewModel.savedEmailAccounts.collectAsState()
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val authErrorMessage by viewModel.authErrorMessage.collectAsState()
+    val canDismiss = isLoggedIn
     val strings = Translations.get(currentLang)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -68,23 +72,25 @@ fun AuthDialog(
 
     LaunchedEffect(Unit) {
         viewModel.loadSavedEmailAccounts(context)
+        viewModel.clearAuthError()
     }
 
     var isSignUpTab by remember { mutableStateOf(true) }
 
-    // Sign Up & Log In Fields
-    var fullName by remember { mutableStateOf("Niyon Islam Sohag") }
-    var username by remember { mutableStateOf("Niyon Islam Sohag") }
-    var email by remember { mutableStateOf("smd224292@gmail.com") }
+    // Sign Up & Log In Fields (clean empty defaults for every new user)
+    var fullName by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("পুরুষ") }
     var country by remember { mutableStateOf("বাংলাদেশ 🇧🇩") }
-    var birthDate by remember { mutableStateOf("01/05/2004") }
-    var password by remember { mutableStateOf("12345678") }
-    var confirmPassword by remember { mutableStateOf("12345678") }
+    var birthDate by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
-    var selectedAvatarUrl by remember { mutableStateOf<String?>("https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500") }
+    var selectedAvatarUrl by remember { mutableStateOf<String?>(null) }
     var showPhoneGalleryDialog by remember { mutableStateOf(false) }
+    var localErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // Interactive Email/Gmail Account Picker State
     var showSignUpGmailChooser by remember { mutableStateOf(false) }
@@ -92,14 +98,6 @@ fun AuthDialog(
     var isFetchingPhoneGmails by remember { mutableStateOf(false) }
     var phoneGmailStatusMessage by remember { mutableStateOf<String?>(null) }
     var showAddGoogleFallback by remember { mutableStateOf(false) }
-
-    val presetAvatars = listOf(
-        "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-        "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=500",
-        "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=500",
-        "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=500"
-    )
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -185,13 +183,20 @@ fun AuthDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        onDismissRequest = { if (canDismiss) onDismiss() },
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = canDismiss,
+            dismissOnClickOutside = canDismiss
+        )
     ) {
+        BackHandler(enabled = !canDismiss) {
+            // Mandatory Sign Up / Log In gate: users cannot bypass without authenticating
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFF0F172A).copy(alpha = 0.95f))
+                .background(Color(0xFF0F172A).copy(alpha = 0.98f))
                 .padding(horizontal = 16.dp, vertical = 24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -210,17 +215,21 @@ fun AuthDialog(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Close button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, contentDescription = strings.cancel, tint = Color.LightGray)
+                    // Close button shown only when already logged in (e.g. switching accounts)
+                    if (canDismiss) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            IconButton(onClick = onDismiss) {
+                                Icon(Icons.Default.Close, contentDescription = strings.cancel, tint = Color.LightGray)
+                            }
                         }
+                    } else {
+                        Spacer(modifier = Modifier.height(6.dp))
                     }
 
-                    // Tab Selector: Sign Up vs Log In
+                    // Tab Selector: Sign Up (left) vs Log In (right)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -237,6 +246,8 @@ fun AuthDialog(
                                 .clickable {
                                     isSignUpTab = true
                                     showLoginGmailChooser = false
+                                    localErrorMessage = null
+                                    viewModel.clearAuthError()
                                 }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
@@ -257,6 +268,8 @@ fun AuthDialog(
                                 .clickable {
                                     isSignUpTab = false
                                     showSignUpGmailChooser = false
+                                    localErrorMessage = null
+                                    viewModel.clearAuthError()
                                 }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
@@ -298,40 +311,17 @@ fun AuthDialog(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "অথবা নিচের যেকোনো একটি ছবি বেছে নিন:",
-                            color = Color.LightGray,
-                            fontSize = 11.sp
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            presetAvatars.forEach { url ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .border(
-                                            width = if (selectedAvatarUrl == url) 2.5.dp else 0.dp,
-                                            color = if (selectedAvatarUrl == url) FacebookBlue else Color.Transparent,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { selectedAvatarUrl = url }
-                                ) {
-                                    AsyncImage(
-                                        model = url,
-                                        contentDescription = "Avatar",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
+                        if (!selectedAvatarUrl.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            AsyncImage(
+                                model = selectedAvatarUrl,
+                                contentDescription = "নির্বাচিত প্রোফাইল ছবি",
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(CircleShape)
+                                    .border(2.dp, FacebookBlue, CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -339,23 +329,38 @@ fun AuthDialog(
                         AuthField(
                             label = "${strings.fullName} *",
                             value = fullName,
-                            onValueChange = { fullName = it },
-                            leadingIcon = Icons.Default.Person
+                            onValueChange = {
+                                fullName = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
+                            leadingIcon = Icons.Default.Person,
+                            placeholder = "আপনার পুরো নাম লিখুন"
                         )
 
                         AuthField(
                             label = strings.username,
                             value = username,
-                            onValueChange = { username = it },
-                            leadingIcon = Icons.Default.AlternateEmail
+                            onValueChange = {
+                                username = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
+                            leadingIcon = Icons.Default.AlternateEmail,
+                            placeholder = "ইউজারনেম লিখুন (ঐচ্ছিক)"
                         )
 
                         // Interactive Email / Gmail Field with Device & Saved Accounts Chooser
                         EmailFieldWithAccountChooser(
                             label = "${strings.email} *",
                             value = email,
-                            onValueChange = { email = it },
+                            onValueChange = {
+                                email = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
                             leadingIcon = Icons.Default.Email,
+                            placeholder = "example@gmail.com",
                             isExpanded = showSignUpGmailChooser,
                             onToggleExpanded = { showSignUpGmailChooser = !showSignUpGmailChooser },
                             onOpenChooser = { showSignUpGmailChooser = true },
@@ -371,6 +376,8 @@ fun AuthDialog(
                                     selectedAvatarUrl = acc.avatarUrl
                                 }
                                 showSignUpGmailChooser = false
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
                             },
                             onPickPhoneGmails = handlePickPhoneGmails,
                             onAddNewGoogleAccount = handleAddNewGoogleAccount
@@ -412,35 +419,70 @@ fun AuthDialog(
                             label = strings.country,
                             value = country,
                             onValueChange = { country = it },
-                            leadingIcon = Icons.Default.Public
+                            leadingIcon = Icons.Default.Public,
+                            placeholder = "বাংলাদেশ 🇧🇩"
                         )
 
                         AuthField(
                             label = "${strings.birthDate} *",
                             value = birthDate,
-                            onValueChange = { birthDate = it },
-                            leadingIcon = Icons.Default.CalendarToday
+                            onValueChange = {
+                                birthDate = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
+                            leadingIcon = Icons.Default.CalendarToday,
+                            placeholder = "DD/MM/YYYY (যেমন: 01/05/2004)"
                         )
 
                         AuthField(
                             label = "${strings.password} *",
                             value = password,
-                            onValueChange = { password = it },
+                            onValueChange = {
+                                password = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
                             leadingIcon = Icons.Default.Lock,
                             isPassword = true,
                             passwordVisible = passwordVisible,
-                            onTogglePassword = { passwordVisible = !passwordVisible }
+                            onTogglePassword = { passwordVisible = !passwordVisible },
+                            placeholder = "কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড"
                         )
 
                         AuthField(
                             label = "${strings.confirmPassword} *",
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it },
+                            onValueChange = {
+                                confirmPassword = it
+                                localErrorMessage = null
+                                viewModel.clearAuthError()
+                            },
                             leadingIcon = Icons.Default.LockReset,
                             isPassword = true,
                             passwordVisible = confirmPasswordVisible,
-                            onTogglePassword = { confirmPasswordVisible = !confirmPasswordVisible }
+                            onTogglePassword = { confirmPasswordVisible = !confirmPasswordVisible },
+                            placeholder = "পাসওয়ার্ডটি আবার লিখুন"
                         )
+
+                        val displayedError = localErrorMessage ?: authErrorMessage
+                        if (!displayedError.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF7F1D1D),
+                                border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = displayedError,
+                                    color = Color(0xFFFECACA),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -473,7 +515,7 @@ fun AuthDialog(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Text(
-                            text = "সাইন আপ করার মাধ্যমে আপনি FotoFilm এর নীতিমালা মেনে নিচ্ছেন।",
+                            text = "সাইন আপ করার মাধ্যমে আপনি FotoFilm এর নীতিমালা মেনে নিচ্ছেন।\n🛡️ ১ ব্যক্তি সর্বোচ্চ ৩টি আইডি • অন্যের ছবি বা বিপরীত লিঙ্গের নামে ফেইক আইডি অটো-ব্লক হবে।",
                             color = Color.Gray,
                             fontSize = 10.sp,
                             lineHeight = 14.sp
@@ -484,17 +526,38 @@ fun AuthDialog(
                         // Confirm Account Submit Button
                         Button(
                             onClick = {
-                                viewModel.register(
-                                    fullName = fullName,
-                                    username = username,
-                                    email = email,
-                                    gender = gender,
-                                    country = country,
-                                    birthDate = birthDate,
-                                    pass = password,
-                                    avatarUrl = selectedAvatarUrl,
-                                    context = context
-                                )
+                                val trimmedEmail = email.trim()
+                                when {
+                                    fullName.isBlank() -> {
+                                        localErrorMessage = "অনুগ্রহ করে আপনার পুরো নাম লিখুন।"
+                                    }
+                                    !trimmedEmail.contains("@") || !trimmedEmail.contains(".") -> {
+                                        localErrorMessage = "অনুগ্রহ করে সঠিক ইমেইল অ্যাড্রেস লিখুন।"
+                                    }
+                                    birthDate.isBlank() -> {
+                                        localErrorMessage = "অনুগ্রহ করে আপনার জন্মতারিখ লিখুন।"
+                                    }
+                                    password.length < 6 -> {
+                                        localErrorMessage = "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।"
+                                    }
+                                    password != confirmPassword -> {
+                                        localErrorMessage = "দুইবারের পাসওয়ার্ড মেলেনি! একই পাসওয়ার্ড দিন।"
+                                    }
+                                    else -> {
+                                        localErrorMessage = null
+                                        viewModel.register(
+                                            fullName = fullName,
+                                            username = username,
+                                            email = email,
+                                            gender = gender,
+                                            country = country,
+                                            birthDate = birthDate,
+                                            pass = password,
+                                            avatarUrl = selectedAvatarUrl,
+                                            context = context
+                                        )
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -521,8 +584,13 @@ fun AuthDialog(
                             EmailFieldWithAccountChooser(
                                 label = "${strings.email} / ${strings.username} *",
                                 value = email,
-                                onValueChange = { email = it },
+                                onValueChange = {
+                                    email = it
+                                    localErrorMessage = null
+                                    viewModel.clearAuthError()
+                                },
                                 leadingIcon = Icons.Default.Person,
+                                placeholder = "example@gmail.com",
                                 isExpanded = showLoginGmailChooser,
                                 onToggleExpanded = { showLoginGmailChooser = !showLoginGmailChooser },
                                 onOpenChooser = { showLoginGmailChooser = true },
@@ -533,6 +601,8 @@ fun AuthDialog(
                                 onSelectSavedAccount = { acc ->
                                     email = acc.email
                                     showLoginGmailChooser = false
+                                    localErrorMessage = null
+                                    viewModel.clearAuthError()
                                 },
                                 onPickPhoneGmails = handlePickPhoneGmails,
                                 onAddNewGoogleAccount = handleAddNewGoogleAccount
@@ -541,12 +611,36 @@ fun AuthDialog(
                             AuthField(
                                 label = "${strings.password} *",
                                 value = password,
-                                onValueChange = { password = it },
+                                onValueChange = {
+                                    password = it
+                                    localErrorMessage = null
+                                    viewModel.clearAuthError()
+                                },
                                 leadingIcon = Icons.Default.Lock,
                                 isPassword = true,
                                 passwordVisible = passwordVisible,
-                                onTogglePassword = { passwordVisible = !passwordVisible }
+                                onTogglePassword = { passwordVisible = !passwordVisible },
+                                placeholder = "আপনার পাসওয়ার্ড লিখুন"
                             )
+
+                            val displayedLoginError = localErrorMessage ?: authErrorMessage
+                            if (!displayedLoginError.isNullOrBlank()) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFF7F1D1D),
+                                    border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = displayedLoginError,
+                                        color = Color(0xFFFECACA),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                    )
+                                }
+                            }
 
                             Spacer(modifier = Modifier.height(16.dp))
 
@@ -568,7 +662,20 @@ fun AuthDialog(
                             Spacer(modifier = Modifier.height(16.dp))
 
                             Button(
-                                onClick = { viewModel.login(email, password, context) },
+                                onClick = {
+                                    when {
+                                        email.isBlank() -> {
+                                            localErrorMessage = "অনুগ্রহ করে ইমেইল অ্যাড্রেস অথবা ইউজারনেম লিখুন।"
+                                        }
+                                        password.length < 6 -> {
+                                            localErrorMessage = "অনুগ্রহ করে কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড লিখুন।"
+                                        }
+                                        else -> {
+                                            localErrorMessage = null
+                                            viewModel.login(email, password, context)
+                                        }
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(50.dp)
@@ -645,6 +752,7 @@ private fun EmailFieldWithAccountChooser(
     value: String,
     onValueChange: (String) -> Unit,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector,
+    placeholder: String = "",
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     onOpenChooser: () -> Unit,
@@ -702,6 +810,9 @@ private fun EmailFieldWithAccountChooser(
                 .testTag("auth_email_field"),
             shape = RoundedCornerShape(10.dp),
             singleLine = true,
+            placeholder = if (placeholder.isNotBlank()) {
+                { Text(text = placeholder, color = Color(0xFF64748B), fontSize = 13.sp) }
+            } else null,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             leadingIcon = {
                 Icon(
@@ -904,7 +1015,8 @@ fun AuthField(
     isPassword: Boolean = false,
     passwordVisible: Boolean = false,
     onTogglePassword: (() -> Unit)? = null,
-    keyboardType: KeyboardType = KeyboardType.Text
+    keyboardType: KeyboardType = KeyboardType.Text,
+    placeholder: String = ""
 ) {
     Column(
         modifier = Modifier
@@ -924,6 +1036,9 @@ fun AuthField(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(10.dp),
             singleLine = true,
+            placeholder = if (placeholder.isNotBlank()) {
+                { Text(text = placeholder, color = Color(0xFF64748B), fontSize = 13.sp) }
+            } else null,
             visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             leadingIcon = {

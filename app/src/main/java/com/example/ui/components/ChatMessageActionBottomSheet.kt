@@ -517,13 +517,12 @@ fun ForwardMessageDialog(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                AsyncImage(
-                                    model = if (conv.isGroup) "https://images.unsplash.com/photo-1543269865-cbf427effbad?w=200" else conv.friend.avatarUrl,
-                                    contentDescription = conv.groupName ?: conv.friend.fullName,
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                FotoFilmAvatar(
+                                    imageUrl = if (conv.isGroup) "" else conv.friend.avatarUrl,
+                                    name = conv.groupName ?: conv.friend.fullName,
+                                    isGroup = conv.isGroup,
+                                    modifier = Modifier.size(36.dp),
+                                    iconSize = 18.dp
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column {

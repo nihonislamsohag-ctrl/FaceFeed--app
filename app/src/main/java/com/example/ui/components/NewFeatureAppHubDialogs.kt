@@ -123,7 +123,7 @@ fun SixSimFreeDataDialog(
                         Text("📡", fontSize = 24.sp)
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "আপনার সিমে টাকা বা এমবি শেষ হলেও FaceFeed বেসিকমোডে টেক্সট ও পোস্ট সম্পূর্ণ বিনামূল্যে ব্রাউজ করতে পারবেন!",
+                            text = "৬টি সিম (GP, Robi, Airtel, Teletalk, Banglalink, Skitto) দিয়ে ফ্রীতে ছবি ও পোস্ট, লাইক-কমেন্ট-শেয়ার-রিপ্লাই, ChatFilm টেক্সট ও ছবি, লুডু কিং গ্রুপ, ফিদা এআই এবং Marketplace ব্যবহার করতে পারবেন!",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
@@ -323,7 +323,7 @@ fun ProLevelCutAppDialog(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "• 4K আল্ট্রা এইচডি এক্সপোর্ট • রিলস ও শর্টস অটো-কাট • ওয়াটারমার্ক ছাড়া ফ্রী রেন্ডারিং • স্লোমোশন, ফিল্টার, ট্রানজিশন ও বাংলা ফন্ট যুক্ত করুন",
+                            text = "• 4K আল্ট্রা এইচডি এক্সপোর্ট • শর্ট ভিডিও অটো-কাট • ওয়াটারমার্ক ছাড়া ফ্রী রেন্ডারিং • স্লোমোশন, ফিল্টার, ট্রানজিশন ও বাংলা ফন্ট যুক্ত করুন",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 16.sp

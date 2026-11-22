@@ -87,7 +87,10 @@ fun RightManagerFidaDialog(
     val supportTickets by viewModel.supportTickets.collectAsState()
     val userAdAnalytics by viewModel.userAdAnalytics.collectAsState()
     val flaggedMessengerAudits by viewModel.flaggedMessengerAudits.collectAsState()
+    val hangoutPresetRooms by viewModel.hangoutPresetRooms.collectAsState()
+    val fakeIdReports by viewModel.fakeIdReports.collectAsState()
     val isRightManagerUnlocked by viewModel.isRightManagerUnlocked.collectAsState()
+    val lockedOffCount by viewModel.niyonLockedOffCount.collectAsState()
 
     // সিক্রেট সুরক্ষা: শুধুমাত্র Niyon Islam Sohag ব্যতীত অন্য কোনো ব্যবহারকারী প্রবেশ করতে পারবে না
     if (!viewModel.isCurrentUserNiyonIslamSohag()) {
@@ -207,7 +210,8 @@ fun RightManagerFidaDialog(
         verifiedApplications, allPages.size, allGroups.size, cyberOffenders.size,
         freeVerifiedGrantRecords.size, userVerificationAuditEntries.size,
         timedSuspensionRecords.size, permanentVault.size, totalDownloads, intrusionLogs.size,
-        supportTickets.size, userAdAnalytics.size, flaggedMessengerAudits.size
+        supportTickets.size, userAdAnalytics.size, flaggedMessengerAudits.size, hangoutPresetRooms.size,
+        fakeIdReports.size
     ) {
         listOf(
             Triple(0, "১. আইডি ও কোটা (${allUsers.size})", Icons.Default.People) to FacebookBlue,
@@ -216,7 +220,7 @@ fun RightManagerFidaDialog(
             Triple(3, "৪. ৪ ভাষা অন/অফ", Icons.Default.Language) to BangladeshGreen,
             Triple(4, "৫. বুস্ট ম্যানেজার (${boostTransactions.size})", Icons.Default.Campaign) to Color(0xFF1B5E20),
             Triple(5, "৬. ক্লাউড DB ও Cloudinary ☁️", Icons.Default.Cloud) to Color(0xFFE65100),
-            Triple(6, "৭. ফিদা ভেরিফাইড (${verifiedApplications.count { it.status == "PENDING" }})", Icons.Default.Verified) to Color(0xFF0D47A1),
+            Triple(6, "৭. ফিদা ভেরিফাইড (${verifiedApplications.count { it.status == "PENDING" }})", Icons.Default.Verified) to BangladeshGreen,
             Triple(7, "৮. পেজ ম্যানেজার (${allPages.size})", Icons.Default.Description) to Color(0xFF00897B),
             Triple(8, "৯. গ্রুপ ম্যানেজার (${allGroups.size})", Icons.Default.Groups) to Color(0xFF5D4037),
             Triple(9, "১০. পেমেন্ট হিস্ট্রি 💰", Icons.Default.AccountBalanceWallet) to Color(0xFFF57F17),
@@ -235,7 +239,9 @@ fun RightManagerFidaDialog(
             Triple(22, "২৩. সাপোর্ট টিম ইনবক্স (${supportTickets.size}) 🎧", Icons.Default.SupportAgent) to Color(0xFF00897B),
             Triple(23, "২৪. ইউজার অ্যাড ভিউ ও স্কিপ ট্র্যাকার (${userAdAnalytics.size}) 📊", Icons.Default.Leaderboard) to Color(0xFF6A1B9A),
             Triple(24, "২৫. ১ কোটি ইউজারের মেসেনজার খারাপ ছবি/ভিডিও/ভয়েস ফিল্টার (${flaggedMessengerAudits.size}) 🚨", Icons.Default.Warning) to Color(0xFFD50000),
-            Triple(25, "২৬. ৪৩.১ MB কোটা, কম্প্রেশন ও অল-টাইম ফ্রি 🗜️", Icons.Default.Compress) to BangladeshGreen
+            Triple(25, "২৬. ৪৩.১ MB কোটা, কম্প্রেশন ও অল-টাইম ফ্রি 🗜️", Icons.Default.Compress) to BangladeshGreen,
+            Triple(26, "২৭. বন্ধুদের সাথে আড্ডা গ্রুপ (${allGroups.size + hangoutPresetRooms.size}) 🎙️", Icons.Default.RecordVoiceOver) to Color(0xFF00838F),
+            Triple(27, "২৮. ফেইক আইডি ডিটেক্টর ও ব্লক (${fakeIdReports.size}) 🕵️", Icons.Default.GppBad) to Color(0xFFC62828)
         )
     }
 
@@ -308,6 +314,18 @@ fun RightManagerFidaDialog(
                                         fontSize = 11.sp,
                                         color = FacebookBlue,
                                         fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = if (lockedOffCount > 0) {
+                                            "🔒 আপনি চালু না করা পর্যন্ত $lockedOffCount টি অপশন লক-বন্ধ থাকবে"
+                                        } else {
+                                            "🔒 আপনি বন্ধ করলে চালু না করা পর্যন্ত বন্ধ থাকবে"
+                                        },
+                                        fontSize = 9.5.sp,
+                                        color = if (lockedOffCount > 0) Color(0xFFD32F2F) else BangladeshGreen,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
 
@@ -746,7 +764,11 @@ fun RightManagerFidaDialog(
                                 onToggle = { lang, isOn ->
                                     val success = viewModel.toggleLanguageStatus(lang, isOn)
                                     if (success) {
-                                        snackbarMessage = "${lang.displayName} ভাষাটি ${if (isOn) "অন (সক্রিয়)" else "অফ (নিষ্ক্রিয়)"} করা হয়েছে।"
+                                        snackbarMessage = if (isOn) {
+                                            "✅ ${lang.displayName} ভাষাটি অন (সক্রিয়) করা হয়েছে।"
+                                        } else {
+                                            "🔒 ${lang.displayName} ভাষাটি বন্ধ করা হয়েছে — আপনি (Niyon Islam Sohag) চালু না করা পর্যন্ত চালু হবে না।"
+                                        }
                                     } else {
                                         snackbarMessage = "⚠️ শুধুমাত্র Niyon Islam Sohag এই ভাষা অন বা অফ করতে পারবেন!"
                                     }
@@ -768,7 +790,11 @@ fun RightManagerFidaDialog(
                                 },
                                 onUpdateStatus = { txId, newStatus ->
                                     viewModel.updateBoostStatus(txId, newStatus)
-                                    snackbarMessage = "ক্যাম্পেইন স্ট্যাটাস আপডেট করা হয়েছে: $newStatus"
+                                    snackbarMessage = if (newStatus.equals("ACTIVE", ignoreCase = true)) {
+                                        "✅ ক্যাম্পেইন স্ট্যাটাস চালু করা হয়েছে: $newStatus"
+                                    } else {
+                                        "🔒 ক্যাম্পেইন বন্ধ করা হয়েছে ($newStatus) — আপনি চালু না করা পর্যন্ত চালু হবে না।"
+                                    }
                                 },
                                 onDeleteTransaction = { txId ->
                                     viewModel.deleteBoostTransaction(txId)
@@ -793,7 +819,7 @@ fun RightManagerFidaDialog(
                                     snackbarMessage = if (enabled) {
                                         "Cloudinary ফ্রি মিডিয়া আপলোড (২৫ GB/মাস) চালু করা হয়েছে ✓"
                                     } else {
-                                        "Cloudinary আপলোড বন্ধ করা হয়েছে (Firebase ব্যাকআপ সক্রিয়)"
+                                        "🔒 Cloudinary আপলোড বন্ধ করা হয়েছে — আপনি চালু না করা পর্যন্ত বন্ধ থাকবে"
                                     }
                                 },
                                 onToggleBlazeCard = { enabled ->
@@ -801,7 +827,7 @@ fun RightManagerFidaDialog(
                                     snackbarMessage = if (enabled) {
                                         "💳 ব্যাংক কার্ড ও Blaze পে-অ্যাজ-ইউ-গো মোড চালু করা হয়েছে ✓"
                                     } else {
-                                        "ফ্রি স্পার্ক মোড (কার্ড ছাড়া) সক্রিয় রাখা হয়েছে ✓"
+                                        "🔒 ব্যাংক কার্ড ও Blaze মোড বন্ধ রাখা হয়েছে — আপনি চালু না করা পর্যন্ত চালু হবে না ✓"
                                     }
                                 },
                                 onRefreshConnection = {
@@ -839,7 +865,11 @@ fun RightManagerFidaDialog(
                                 allPages = allPages,
                                 onTogglePage = { pageId, isActive ->
                                     viewModel.togglePageStatus(pageId, isActive)
-                                    snackbarMessage = "পেজের স্ট্যাটাস ${if (isActive) "'অন (সক্রিয়)'" else "'অফ (নিষ্ক্রিয়)'"} করা হয়েছে।"
+                                    snackbarMessage = if (isActive) {
+                                        "✅ পেজের স্ট্যাটাস 'অন (সক্রিয়)' করা হয়েছে।"
+                                    } else {
+                                        "🔒 পেজটি বন্ধ করা হয়েছে — আপনি (Niyon Islam Sohag) চালু না করা পর্যন্ত চালু হবে না।"
+                                    }
                                 }
                             )
                         }
@@ -849,7 +879,11 @@ fun RightManagerFidaDialog(
                                 allGroups = allGroups,
                                 onToggleGroup = { groupId, isActive ->
                                     viewModel.toggleGroupStatus(groupId, isActive)
-                                    snackbarMessage = "গ্রুপের স্ট্যাটাস ${if (isActive) "'অন (সক্রিয়)'" else "'অফ (নিষ্ক্রিয়)'"} করা হয়েছে।"
+                                    snackbarMessage = if (isActive) {
+                                        "✅ গ্রুপের স্ট্যাটাস 'অন (সক্রিয়)' করা হয়েছে।"
+                                    } else {
+                                        "🔒 গ্রুপটি বন্ধ করা হয়েছে — আপনি (Niyon Islam Sohag) চালু না করা পর্যন্ত চালু হবে না।"
+                                    }
                                 }
                             )
                         }
@@ -1058,7 +1092,7 @@ fun RightManagerFidaDialog(
                                     snackbarMessage = if (enabled) {
                                         "🗜️ অটো কম্প্রেশন চালু: ১০০ MB ভিডিও → ৩০ MB, ছবি → ৩০০ KB ✓"
                                     } else {
-                                        "অটো কম্প্রেশন সাময়িক বন্ধ করা হয়েছে"
+                                        "🔒 অটো কম্প্রেশন বন্ধ করা হয়েছে — আপনি চালু না করা পর্যন্ত চালু হবে না"
                                     }
                                 },
                                 onToggleDailyLimit = { enabled ->
@@ -1066,7 +1100,7 @@ fun RightManagerFidaDialog(
                                     snackbarMessage = if (enabled) {
                                         "📊 দৈনিক ৪৩.১ MB ফ্রি কোটা নিয়ম চালু করা হয়েছে ✓"
                                     } else {
-                                        "দৈনিক ৪৩.১ MB কোটা লিমিট সাময়িক শিথিল করা হয়েছে"
+                                        "🔒 দৈনিক ৪৩.১ MB কোটা লিমিট বন্ধ করা হয়েছে — আপনি চালু না করা পর্যন্ত চালু হবে না"
                                     }
                                 },
                                 onResetUserQuota = { userId ->
@@ -1076,6 +1110,47 @@ fun RightManagerFidaDialog(
                                 onResetAllQuota = {
                                     viewModel.resetAllUsersDailyQuota()
                                     snackbarMessage = "সকল ব্যবহারকারীর আজকের ৪৩.১ MB কোটা রিসেট হয়েছে ↻"
+                                }
+                            )
+                        }
+                        26 -> {
+                            // Tab 27: বন্ধুদের সাথে আড্ডা গ্রুপ (যারা গ্রুপ খুলবে তাদের গ্রুপের নাম ও প্রোফাইল আইকন সহ অন/অফ সুইচ)
+                            AdminHangoutGroupsControlView(
+                                allGroups = allGroups,
+                                presetRooms = hangoutPresetRooms,
+                                onToggleGroup = { groupId, groupName, isActive ->
+                                    viewModel.toggleGroupStatus(groupId, isActive)
+                                    snackbarMessage = if (isActive) {
+                                        "✅ \"$groupName\" বন্ধুদের সাথে আড্ডা গ্রুপ চালু (অন) করা হয়েছে!"
+                                    } else {
+                                        "🔒 \"$groupName\" আড্ডা গ্রুপ বন্ধ করা হয়েছে — আপনি চালু না করা পর্যন্ত চালু হবে না!"
+                                    }
+                                },
+                                onTogglePresetRoom = { roomKey, roomTitle, isActive ->
+                                    viewModel.toggleHangoutPresetRoomStatus(roomKey, isActive)
+                                    snackbarMessage = if (isActive) {
+                                        "✅ \"$roomTitle\" আড্ডা গ্রুপ চালু (অন) করা হয়েছে!"
+                                    } else {
+                                        "🔒 \"$roomTitle\" আড্ডা গ্রুপ বন্ধ করা হয়েছে — আপনি চালু না করা পর্যন্ত চালু হবে না!"
+                                    }
+                                }
+                            )
+                        }
+                        27 -> {
+                            // Tab 28: ফেইক আইডি ডিটেক্টর ও ব্লক (১ ব্যক্তি ৩ আইডি, অন্যের ছবি, ছেলে->মেয়ে / মেয়ে->ছেলে)
+                            AdminFakeIdDetectorView(
+                                reports = fakeIdReports,
+                                onPermanentBan = { report ->
+                                    viewModel.markFakeIdReportPermanentBanned(report.id)
+                                    snackbarMessage = "⛔ \"${report.attemptedName}\" স্থায়ীভাবে নিষিদ্ধ (Permanent Ban) করা হয়েছে!"
+                                },
+                                onDeleteReport = { report ->
+                                    viewModel.deleteFakeIdReport(report.id)
+                                    snackbarMessage = "রিপোর্টটি তালিকা থেকে মুছে ফেলা হয়েছে ✓"
+                                },
+                                onClearAll = {
+                                    viewModel.clearAllFakeIdReports()
+                                    snackbarMessage = "সকল ফেইক আইডি লগ পরিষ্কার করা হয়েছে ✓"
                                 }
                             )
                         }
@@ -1346,10 +1421,10 @@ private fun UserAdminRow(
             ) {
                 // Avatar with online/active indicator
                 Box(contentAlignment = Alignment.BottomEnd) {
-                    AsyncImage(
-                        model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                    FotoFilmAvatar(
+                        imageUrl = user.avatarUrl,
+                        name = user.fullName,
                         contentDescription = user.fullName,
-                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
@@ -1461,9 +1536,9 @@ private fun UserAdminRow(
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (user.isVerified) "Fida Verified সক্রিয় 🔵" else "ভেরিফাইড নেই",
+                        text = if (user.isVerified) "Fida Verified সক্রিয় ✅" else "ভেরিফাইড নেই",
                         fontSize = 11.sp,
-                        color = if (user.isVerified) FacebookBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (user.isVerified) BangladeshGreen else MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = if (user.isVerified) FontWeight.Bold else FontWeight.Normal
                     )
                 }
@@ -1491,7 +1566,7 @@ private fun UserAdminRow(
                     Button(
                         onClick = onGrantFreeVerified,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (user.isVerified) MaterialTheme.colorScheme.surfaceVariant else FacebookBlue
+                            containerColor = if (user.isVerified) MaterialTheme.colorScheme.surfaceVariant else BangladeshGreen
                         ),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                         shape = RoundedCornerShape(12.dp),
@@ -2674,6 +2749,7 @@ fun AdminFirebaseCloudView(
     onTriggerSync: () -> Unit
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val serviceQuota by com.example.data.ServiceQuotaTracker.snapshot.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -2682,7 +2758,7 @@ fun AdminFirebaseCloudView(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
-        // Cloud Connection Status Banner
+        // Cloud Connection Status Banner + Firebase Daily Free Read/Write Quota Meter
         item {
             Surface(
                 shape = RoundedCornerShape(14.dp),
@@ -2690,56 +2766,147 @@ fun AdminFirebaseCloudView(
                 modifier = Modifier.fillMaxWidth(),
                 shadowElevation = 2.dp
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CloudQueue,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "Firebase ক্লাউড ডাটাবেজ",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(46.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudQueue,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = Color.White
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Firebase ক্লাউড ডাটাবেজ",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color.White
+                                ) {
+                                    Text(
+                                        text = if (isCloudConnected) "অনলাইন" else "লোকাল",
+                                        color = if (isCloudConnected) Color(0xFF1B5E20) else Color(0xFFE65100),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (isCloudConnected)
+                                    "গুগল ফায়ারবেস ক্লাউড সংযুক্ত • ৩০-পোস্ট পেজিনেশন ও রিয়েল-টাইম সিঙ্ক সক্রিয়"
+                                else
+                                    cloudMessage,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Firebase Daily Read/Write Limit Used vs Remaining Box
+                    val readFraction = (serviceQuota.firebaseReadsUsed.toDouble() / serviceQuota.firebaseReadLimit.toDouble())
+                        .toFloat().coerceIn(0f, 1f)
+                    val writeFraction = (serviceQuota.firebaseWritesUsed.toDouble() / serviceQuota.firebaseWriteLimit.toDouble())
+                        .toFloat().coerceIn(0f, 1f)
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White.copy(alpha = 0.14f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (isCloudConnected) "অনলাইন" else "লোকাল",
-                                    color = if (isCloudConnected) Color(0xFF1B5E20) else Color(0xFFE65100),
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    text = "📊 আজকের লিমিট (${if (isBlazeCardEnabled) "Blaze" else "ফ্রি ৫০K Read / ২০K Write"})",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "মোট শেষ: ${serviceQuota.firebaseReadsUsed + serviceQuota.firebaseWritesUsed}",
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
+
+                            // Reads Used vs Remaining
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Read শেষ: ${serviceQuota.firebaseReadsUsed} টি",
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 10.5.sp
+                                )
+                                Text(
+                                    text = "বাকি: ${serviceQuota.firebaseReadsRemaining} টি",
+                                    color = Color(0xFFB9F6CA),
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { readFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = Color(0xFFB9F6CA),
+                                trackColor = Color.White.copy(alpha = 0.22f)
+                            )
+
+                            // Writes Used vs Remaining
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Write শেষ: ${serviceQuota.firebaseWritesUsed} টি",
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = 10.5.sp
+                                )
+                                Text(
+                                    text = "বাকি: ${serviceQuota.firebaseWritesRemaining} টি",
+                                    color = Color(0xFFB9F6CA),
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { writeFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = Color(0xFFFFE082),
+                                trackColor = Color.White.copy(alpha = 0.22f)
+                            )
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = if (isCloudConnected)
-                                "গুগল ফায়ারবেস ক্লাউড সংযুক্ত • ৩০-পোস্ট পেজিনেশন ও রিয়েল-টাইম সিঙ্ক সক্রিয়"
-                            else
-                                cloudMessage,
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 12.sp
-                        )
                     }
                 }
             }
@@ -2830,7 +2997,7 @@ fun AdminFirebaseCloudView(
                         text = if (cloudinaryStatus.isConfigured)
                             "✅ সংযুক্ত: ${cloudinaryStatus.cloudName} (Preset: ${cloudinaryStatus.uploadPreset}) • এই সেশনে আপলোড: ${cloudinaryStatus.uploadedCount}টি ফাইল"
                         else
-                            "কার্ড ছাড়াই ফ্রি চালু করতে Cloudinary-তে ফ্রি অ্যাকাউন্ট খুলে AI Studio Secrets প্যানেলে CLOUDINARY_CLOUD_NAME ও CLOUDINARY_UPLOAD_PRESET (Unsigned) যোগ করুন।",
+                            "চালু করতে Cloudinary (Unsigned Preset) খুলে AI Studio Secrets এবং GitHub-এ APK বানালে GitHub Repo -> Settings -> Secrets -> Actions-এ CLOUDINARY_CLOUD_NAME ও CLOUDINARY_UPLOAD_PRESET যোগ করুন।",
                         fontSize = 11.5.sp,
                         lineHeight = 16.sp,
                         color = Color(0xFF0D47A1)
@@ -2842,6 +3009,71 @@ fun AdminFirebaseCloudView(
                             fontSize = 10.5.sp,
                             color = BangladeshRed
                         )
+                    }
+
+                    // Cloudinary Monthly Limit Used vs Remaining Box (25 GB / Month)
+                    val cloudFraction = (serviceQuota.cloudinaryBytesUsed.toDouble() / serviceQuota.cloudinaryMonthlyLimitBytes.toDouble())
+                        .toFloat().coerceIn(0f, 1f)
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White.copy(alpha = 0.78f),
+                        border = BorderStroke(0.8.dp, Color(0xFF90CAF9)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "📦 মাসিক লিমিট: ২৫.০০ GB",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0D47A1)
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = BangladeshGreen.copy(alpha = 0.14f)
+                                ) {
+                                    Text(
+                                        text = "বাকি: ${com.example.data.ServiceQuotaTracker.formatBytesCompact(serviceQuota.cloudinaryBytesRemaining)}",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = BangladeshGreen,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "শেষ হয়েছে: ${com.example.data.ServiceQuotaTracker.formatBytesCompact(serviceQuota.cloudinaryBytesUsed)} (${String.format(java.util.Locale.US, "%.2f", serviceQuota.cloudinaryUsedPercent)}%)",
+                                    fontSize = 10.5.sp,
+                                    color = Color(0xFF1565C0)
+                                )
+                                Text(
+                                    text = "মোট ফাইল: ${serviceQuota.cloudinaryFilesUploadedMonth}টি",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF0D47A1)
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { cloudFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = Color(0xFF1976D2),
+                                trackColor = Color(0xFFBBDEFB)
+                            )
+                        }
                     }
 
                     Row(
@@ -2944,11 +3176,76 @@ fun AdminFirebaseCloudView(
                     }
 
                     Text(
-                        text = "ChatFilm ১-টু-১ অডিও/ভিডিও কল, গ্রুপ কল, বন্ধুদের আড্ডা ভয়েস রুম এবং লুডু কিং লাইভ ভয়েসে Agora SDK যুক্ত করা হয়েছে। ফ্রি ব্যবহার করতে AI Studio Secrets প্যানেলে AGORA_APP_ID দিন।",
+                        text = "ChatFilm ১-টু-১ অডিও/ভিডিও কল, গ্রুপ কল, বন্ধুদের আড্ডা ভয়েস রুম এবং লুডু কিং লাইভ ভয়েসে Agora SDK যুক্ত করা হয়েছে। ফ্রি ব্যবহার করতে AI Studio Secrets (এবং GitHub-এ APK বানালে GitHub Actions Secrets)-এ AGORA_APP_ID দিন।",
                         fontSize = 11.5.sp,
                         lineHeight = 16.sp,
                         color = Color(0xFF4A148C)
                     )
+
+                    // Agora Monthly Free Minutes Used vs Remaining Box (10,000 mins / month)
+                    val agoraFraction = (serviceQuota.agoraSecondsUsed.toDouble() / serviceQuota.agoraMonthlyLimitSeconds.toDouble())
+                        .toFloat().coerceIn(0f, 1f)
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Color.White.copy(alpha = 0.78f),
+                        border = BorderStroke(0.8.dp, Color(0xFFCE93D8)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "⏱️ মাসিক লিমিট: ১০,০০০ মিনিট",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4A148C)
+                                )
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color(0xFF6A1B9A).copy(alpha = 0.14f)
+                                ) {
+                                    Text(
+                                        text = "বাকি: ${com.example.data.ServiceQuotaTracker.formatMinutesCompact(serviceQuota.agoraSecondsRemaining)}",
+                                        fontSize = 10.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4A148C),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "শেষ হয়েছে: ${com.example.data.ServiceQuotaTracker.formatMinutesCompact(serviceQuota.agoraSecondsUsed)} (${String.format(java.util.Locale.US, "%.2f", serviceQuota.agoraUsedPercent)}%)",
+                                    fontSize = 10.5.sp,
+                                    color = Color(0xFF6A1B9A)
+                                )
+                                Text(
+                                    text = "মোট কল: ${serviceQuota.agoraCallsCountMonth} বার",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF4A148C)
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { agoraFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
+                                color = Color(0xFF6A1B9A),
+                                trackColor = Color(0xFFE1BEE7)
+                            )
+                        }
+                    }
 
                     Button(
                         onClick = {
@@ -3435,10 +3732,10 @@ fun AdminFidaVerifiedReviewView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // User profile picture
-                            AsyncImage(
-                                model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                            FotoFilmAvatar(
+                                imageUrl = user.avatarUrl,
+                                name = user.fullName,
                                 contentDescription = user.fullName,
-                                contentScale = ContentScale.Crop,
                                 modifier = Modifier
                                     .size(44.dp)
                                     .clip(CircleShape)
@@ -3808,7 +4105,7 @@ fun AdminGroupsManagerView(
             ) {
                 Column {
                     Text(
-                        text = "👥 সকল ফেসবুক গ্রুপ নিয়ন্ত্রণ ও মডারেশন",
+                        text = "👥 সকল FotoFilm গ্রুপ নিয়ন্ত্রণ ও মডারেশন",
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
                         color = Color(0xFF5D4037)
@@ -4955,10 +5252,10 @@ fun AdminAppUpdateBroadcasterView(
     onBroadcast: (String, String, String) -> Unit
 ) {
     var versionInput by remember { mutableStateOf("v3.0.0 (Right Manager Fida ১৩ মাস্টার সংস্করণ)") }
-    var titleInput by remember { mutableStateOf("FaceFeed নতুন ১৩টি মাস্টার ফিচার ও মেগা বুস্ট আপডেট!") }
+    var titleInput by remember { mutableStateOf("FotoFilm নতুন ১৩টি মাস্টার ফিচার ও মেগা বুস্ট আপডেট!") }
     var descInput by remember {
         mutableStateOf(
-            "সম্মানিত ব্যবহারকারীগণ, FaceFeed অ্যাপে এখন ওনার ফ্রী মেগা বুস্ট (১M+ রিচ), সাইবার অপরাধী আইনি ট্র্যাকার, নেশা ও জুয়া বিরোধী কড়া সিকিউরিটি এবং অ্যাপ আপডেট ব্রডকাস্টার সিস্টেম সফলভাবে চালু হয়েছে!"
+            "সম্মানিত ব্যবহারকারীগণ, FotoFilm অ্যাপে এখন ওনার ফ্রী মেগা বুস্ট (১M+ রিচ), সাইবার অপরাধী আইনি ট্র্যাকার, নেশা ও জুয়া বিরোধী কড়া সিকিউরিটি এবং অ্যাপ আপডেট ব্রডকাস্টার সিস্টেম সফলভাবে চালু হয়েছে!"
         )
     }
     val context = LocalContext.current
@@ -5109,15 +5406,15 @@ fun AdminAppUpdateBroadcasterView(
                                 }
                             }
                             // Owner Profile Avatar overlay
-                            AsyncImage(
-                                model = currentUser.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300" },
+                            FotoFilmAvatar(
+                                imageUrl = currentUser.avatarUrl,
+                                name = currentUser.fullName,
                                 contentDescription = "Owner Profile Icon",
                                 modifier = Modifier
                                     .size(24.dp)
                                     .align(Alignment.BottomEnd)
                                     .clip(CircleShape)
-                                    .border(1.5.dp, Color.White, CircleShape),
-                                contentScale = ContentScale.Crop
+                                    .border(1.5.dp, Color.White, CircleShape)
                             )
                         }
 
@@ -5126,7 +5423,7 @@ fun AdminAppUpdateBroadcasterView(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "FaceFeed • ${currentUser.fullName}",
+                                    text = "FotoFilm • ${currentUser.fullName}",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -6665,7 +6962,7 @@ fun AdminFreePostBoostManagerView(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "আপনি FaceFeed-এর যেকোনো ব্যবহারকারীর যেকোনো পোস্ট সম্পূর্ণ বিনামূল্যে (০ টাকা খরচে) আনলিমিটেড রিচ, অডিয়েন্স ও মেয়াদের জন্য বুস্ট ও প্রমোট করতে পারবেন।",
+                    text = "আপনি FotoFilm-এর যেকোনো ব্যবহারকারীর যেকোনো পোস্ট সম্পূর্ণ বিনামূল্যে (০ টাকা খরচে) আনলিমিটেড রিচ, অডিয়েন্স ও মেয়াদের জন্য বুস্ট ও প্রমোট করতে পারবেন।",
                     fontSize = 12.sp,
                     color = Color.White.copy(alpha = 0.9f),
                     lineHeight = 17.sp
@@ -6804,13 +7101,13 @@ fun AdminFreePostBoostManagerView(
                     Column(modifier = Modifier.padding(14.dp)) {
                         // User Info row
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(
-                                model = post.author.avatarUrl.ifEmpty { user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400" } },
+                            FotoFilmAvatar(
+                                imageUrl = post.author.avatarUrl.ifEmpty { user.avatarUrl },
+                                name = post.author.fullName,
                                 contentDescription = post.author.fullName,
                                 modifier = Modifier
                                     .size(42.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                                    .clip(CircleShape)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -7173,9 +7470,10 @@ fun AdminFaceAdAdminHubView(
     onOpenFullFaceAdDialog: () -> Unit
 ) {
     val context = LocalContext.current
-    var isAdMobBannerEnabled by remember { mutableStateOf(true) }
-    var isAdMobInterstitialEnabled by remember { mutableStateOf(true) }
-    var isAdMobRewardedEnabled by remember { mutableStateOf(true) }
+    val isAdMobMasterEnabled by viewModel.isAdMobMasterEnabled.collectAsState()
+    val isAdMobBannerEnabled by viewModel.isAdMobBannerEnabled.collectAsState()
+    val isAdMobInterstitialEnabled by viewModel.isAdMobInterstitialEnabled.collectAsState()
+    val isAdMobRewardedEnabled by viewModel.isAdMobRewardedEnabled.collectAsState()
 
     LazyColumn(
         modifier = Modifier
@@ -7241,7 +7539,7 @@ fun AdminFaceAdAdminHubView(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "• সকল বাণিজ্যিক স্পনসর্ড পোস্ট পর্যবেক্ষণ ও অনুমোদন\n• টার্গেটেড পৌঁছানো (Reach) ও বাজেট ক্যালকুলেটর\n• ফেসবুক ফিডে প্রমোটেড ব্যাজ প্রদর্শন",
+                        text = "• সকল বাণিজ্যিক স্পনসর্ড পোস্ট পর্যবেক্ষণ ও অনুমোদন\n• টার্গেটেড পৌঁছানো (Reach) ও বাজেট ক্যালকুলেটর\n• FotoFilm ফিডে প্রমোটেড ব্যাজ প্রদর্শন",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -7250,7 +7548,7 @@ fun AdminFaceAdAdminHubView(
             }
         }
 
-        // Section 2: AdMob Monetization Controls
+        // Section 2: AdMob Monetization Controls (Persistent Owner Locks)
         item {
             Card(
                 shape = RoundedCornerShape(14.dp),
@@ -7270,12 +7568,37 @@ fun AdminFaceAdAdminHubView(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Text("সকল Google AdMob বিজ্ঞাপন (Master)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Switch(
+                            checked = isAdMobMasterEnabled,
+                            onCheckedChange = {
+                                if (viewModel.toggleAdMobMaster(it)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (it) "✅ সব AdMob বিজ্ঞাপন চালু হয়েছে" else "🔒 সব AdMob বিজ্ঞাপন বন্ধ — আপনি চালু না করা পর্যন্ত চালু হবে না",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text("ব্যানার বিজ্ঞাপন (Banner Ads)", fontSize = 13.sp)
                         Switch(
                             checked = isAdMobBannerEnabled,
                             onCheckedChange = {
-                                isAdMobBannerEnabled = it
-                                Toast.makeText(context, if (it) "ব্যানার অ্যাড চালু হয়েছে" else "ব্যানার অ্যাড বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                if (viewModel.toggleAdMobBanner(it)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (it) "✅ ব্যানার অ্যাড চালু হয়েছে" else "🔒 ব্যানার অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত চালু হবে না",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         )
                     }
@@ -7289,8 +7612,13 @@ fun AdminFaceAdAdminHubView(
                         Switch(
                             checked = isAdMobInterstitialEnabled,
                             onCheckedChange = {
-                                isAdMobInterstitialEnabled = it
-                                Toast.makeText(context, if (it) "ইন্টারস্টিশিয়াল অ্যাড চালু হয়েছে" else "ইন্টারস্টিশিয়াল অ্যাড বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                if (viewModel.toggleAdMobInterstitial(it)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (it) "✅ ইন্টারস্টিশিয়াল অ্যাড চালু হয়েছে" else "🔒 ইন্টারস্টিশিয়াল অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত চালু হবে না",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         )
                     }
@@ -7304,8 +7632,13 @@ fun AdminFaceAdAdminHubView(
                         Switch(
                             checked = isAdMobRewardedEnabled,
                             onCheckedChange = {
-                                isAdMobRewardedEnabled = it
-                                Toast.makeText(context, if (it) "রিওয়ার্ডেড অ্যাড চালু হয়েছে" else "রিওয়ার্ডেড অ্যাড বন্ধ করা হয়েছে", Toast.LENGTH_SHORT).show()
+                                if (viewModel.toggleAdMobRewarded(it)) {
+                                    Toast.makeText(
+                                        context,
+                                        if (it) "✅ রিওয়ার্ডেড অ্যাড চালু হয়েছে" else "🔒 রিওয়ার্ডেড অ্যাড বন্ধ — আপনি চালু না করা পর্যন্ত চালু হবে না",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         )
                     }
@@ -7328,7 +7661,7 @@ fun AdminFaceAdAdminHubView(
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "• স্টোরির জন্য গান, গজল, বাঁশির সুর, ডিজে ও দেশাত্মবোধক ট্র্যাকের সেন্ট্রাল অডিট\n• ফেসবুক অডিও প্লেয়ার ও ব্যবহারকারীদের আপলোডকৃত সুর পর্যালোচনা\n• ব্যাকগ্রাউন্ড মিউজিক প্লেব্যাকের সামগ্রিক নিয়ন্ত্রণ",
+                        text = "• স্টোরির জন্য গান, গজল, বাঁশির সুর, ডিজে ও দেশাত্মবোধক ট্র্যাকের সেন্ট্রাল অডিট\n• FotoFilm অডিও প্লেয়ার ও ব্যবহারকারীদের আপলোডকৃত সুর পর্যালোচনা\n• ব্যাকগ্রাউন্ড মিউজিক প্লেব্যাকের সামগ্রিক নিয়ন্ত্রণ",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
@@ -7514,13 +7847,13 @@ private fun AdminSecretSurveillanceVaultView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AsyncImage(
-                                    model = if (msg.isFromMe) "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" else msg.contactAvatarUrl,
+                                FotoFilmAvatar(
+                                    imageUrl = senderUser?.avatarUrl ?: msg.contactAvatarUrl,
+                                    name = msg.senderName,
                                     contentDescription = msg.senderName,
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
+                                        .clip(CircleShape)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column {
@@ -8444,7 +8777,7 @@ private fun AdminFreeVideoBoosterView(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
-                        text = "আপনি অ্যাপের প্রধান মালিক Niyon Islam Sohag হিসেবে যেকোনো ব্যবহারকারীর আপলোড করা ভিডিও বা রিলস সম্পূর্ণ বিনামূল্যে (0 ৳) বুস্ট করে ১M+ ভাইরাল ভিউ, ট্রেন্ডিং #১ ব্যাজ এবং আনলিমিটেড লাইক ও শেয়ার প্রদান করতে পারেন!",
+                        text = "আপনি অ্যাপের প্রধান মালিক Niyon Islam Sohag হিসেবে যেকোনো ব্যবহারকারীর আপলোড করা ভিডিও বা শর্ট ভিডিও সম্পূর্ণ বিনামূল্যে (0 ৳) বুস্ট করে ১M+ ভাইরাল ভিউ, ট্রেন্ডিং #১ ব্যাজ এবং আনলিমিটেড লাইক ও শেয়ার প্রদান করতে পারেন!",
                         fontSize = 11.sp,
                         color = Color.LightGray,
                         lineHeight = 16.sp
@@ -8474,7 +8807,7 @@ private fun AdminFreeVideoBoosterView(
         // 2. Video List Header
         item {
             Text(
-                text = "ভিডিও ও রিলস তালিকা (${filteredVideos.size} টি)",
+                text = "ভিডিও ও শর্ট ভিডিও তালিকা (${filteredVideos.size} টি)",
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurface
@@ -8509,13 +8842,13 @@ private fun AdminFreeVideoBoosterView(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            AsyncImage(
-                                model = post.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                            FotoFilmAvatar(
+                                imageUrl = post.author.avatarUrl,
+                                name = post.author.fullName,
                                 contentDescription = post.author.fullName,
                                 modifier = Modifier
                                     .size(42.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                                    .clip(CircleShape)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -8670,8 +9003,9 @@ fun AdminSupportTeamInboxView(
                     ticket.message.contains(searchQuery, ignoreCase = true) ||
                     ticket.profileUrl.contains(searchQuery, ignoreCase = true)
             val matchesFilter = when (selectedFilter) {
-                "PENDING" -> ticket.status == "PENDING"
-                "RESOLVED" -> ticket.status == "RESOLVED"
+                "PENDING" -> ticket.status.equals("PENDING", ignoreCase = true) ||
+                        ticket.status.equals("Open", ignoreCase = true)
+                "RESOLVED" -> ticket.status.equals("RESOLVED", ignoreCase = true)
                 else -> true
             }
             matchesSearch && matchesFilter
@@ -9481,5 +9815,683 @@ fun AdminUserAdAnalyticsView(
         }
     }
 }
+
+// ==============================================================================
+// ২৭. বন্ধুদের সাথে আড্ডা গ্রুপ ম্যানেজার (গ্রুপের নাম + প্রোফাইল আইকন + অন/অফ বাটন + এড)
+// ==============================================================================
+@Composable
+fun AdminHangoutGroupsControlView(
+    allGroups: List<SocialGroup>,
+    presetRooms: List<HangoutRoomControlEntry>,
+    onToggleGroup: (String, String, Boolean) -> Unit,
+    onTogglePresetRoom: (String, String, Boolean) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredGroups = remember(allGroups, searchQuery) {
+        allGroups.filter {
+            searchQuery.isBlank() ||
+                it.name.contains(searchQuery, ignoreCase = true) ||
+                it.creatorName.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    val filteredPresetRooms = remember(presetRooms, searchQuery) {
+        presetRooms.filter {
+            searchQuery.isBlank() ||
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.creatorName.contains(searchQuery, ignoreCase = true)
+        }
+    }
+
+    val totalCount = allGroups.size + presetRooms.size
+    val activeCount = allGroups.count { it.isActive } + presetRooms.count { it.isActive }
+    val pausedCount = totalCount - activeCount
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        // Header Summary Card
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = Color(0xFF00838F).copy(alpha = 0.09f),
+            border = BorderStroke(1.dp, Color(0xFF00838F).copy(alpha = 0.3f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🎙️ বন্ধুদের সাথে আড্ডা গ্রুপ নিয়ন্ত্রণ",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color(0xFF006064)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "মোট আড্ডা গ্রুপ: $totalCount টি • 🟢 চালু: $activeCount টি • 🔴 বন্ধ: $pausedCount টি",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Surface(
+                    color = Color(0xFF00838F),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "অন / অফ প্যানেল",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Search box
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("গ্রুপের নাম বা যে খুলেছে তার নাম খুঁজুন...", fontSize = 12.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(16.dp))
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("hangout_admin_search_input")
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(top = 4.dp, bottom = 100.dp)
+        ) {
+            if (filteredGroups.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "🌟 ইউজারদের খোলা বন্ধুদের সাথে আড্ডা গ্রুপ (${filteredGroups.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00838F),
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+                items(filteredGroups, key = { "hangout_grp_${it.id}" }) { group ->
+                    HangoutGroupSwitchCard(
+                        avatarUrl = group.coverUrl,
+                        groupName = group.name,
+                        creatorLabel = "খুলেছেন: ${group.creatorName}",
+                        subInfo = "${if (group.isPrivate) "🔒 প্রাইভেট" else "🌐 উন্মুক্ত"} • ${group.memberCount} জন • ${group.createdAt}",
+                        isActive = group.isActive,
+                        testTagKey = "hangout_switch_${group.id}",
+                        onToggle = { enabled ->
+                            onToggleGroup(group.id, group.name, enabled)
+                        }
+                    )
+                }
+            }
+
+            if (filteredPresetRooms.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "🎧 লাইভ পার্টি ও আড্ডা রুমসমূহ (${filteredPresetRooms.size})",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1565C0),
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+                }
+                items(filteredPresetRooms, key = { "hangout_room_${it.roomKey}" }) { room ->
+                    HangoutGroupSwitchCard(
+                        avatarUrl = room.avatarUrl,
+                        groupName = room.title,
+                        creatorLabel = "খুলেছেন: ${room.creatorName}",
+                        subInfo = "${room.category} • ${room.memberCount} জন • ${room.createdAt}",
+                        isActive = room.isActive,
+                        testTagKey = "hangout_switch_${room.roomKey}",
+                        onToggle = { enabled ->
+                            onTogglePresetRoom(room.roomKey, room.title, enabled)
+                        }
+                    )
+                }
+            }
+
+            if (filteredGroups.isEmpty() && filteredPresetRooms.isEmpty()) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 20.dp)
+                    ) {
+                        Text(
+                            text = "কোনো বন্ধুদের সাথে আড্ডা গ্রুপ খুঁজে পাওয়া যায়নি",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(20.dp)
+                        )
+                    }
+                }
+            }
+
+            // Google AdMob Banner inside Hangout Groups Manager tab
+            item {
+                AdBanner(creativeIndex = 2)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HangoutGroupSwitchCard(
+    avatarUrl: String,
+    groupName: String,
+    creatorLabel: String,
+    subInfo: String,
+    isActive: Boolean,
+    testTagKey: String,
+    onToggle: (Boolean) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = if (isActive) MaterialTheme.colorScheme.surface else Color(0xFFFFEBEE).copy(alpha = 0.7f),
+        border = BorderStroke(
+            1.dp,
+            if (isActive) Color(0xFF00838F).copy(alpha = 0.32f) else Color.Red.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 1.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Group Profile Icon with Live On/Off Dot
+            Box(contentAlignment = Alignment.BottomEnd) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = groupName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            color = if (isActive) BangladeshGreen else Color.Red,
+                            shape = CircleShape
+                        )
+                )
+                Box(
+                    modifier = Modifier
+                        .size(13.dp)
+                        .clip(CircleShape)
+                        .background(if (isActive) OnlineGreen else Color.Red)
+                        .border(2.dp, Color.White, CircleShape)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Group Name & Creator Info
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = groupName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = creatorLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF006064),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = subInfo,
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // On / Off Switch right in front of the group row
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = if (isActive) "অন (চালু)" else "অফ (বন্ধ)",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isActive) BangladeshGreen else Color.Red
+                )
+                Switch(
+                    checked = isActive,
+                    onCheckedChange = onToggle,
+                    modifier = Modifier.testTag(testTagKey),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = BangladeshGreen,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = Color.Red
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminFakeIdDetectorView(
+    reports: List<FakeIdReport>,
+    onPermanentBan: (FakeIdReport) -> Unit,
+    onDeleteReport: (FakeIdReport) -> Unit,
+    onClearAll: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf("ALL") }
+
+    val maleToFemaleCount = remember(reports) { reports.count { it.violationType == "MALE_TO_FEMALE_FAKE" } }
+    val femaleToMaleCount = remember(reports) { reports.count { it.violationType == "FEMALE_TO_MALE_FAKE" } }
+    val stolenPhotoCount = remember(reports) { reports.count { it.violationType == "STOLEN_PHOTO" } }
+    val limit3Count = remember(reports) { reports.count { it.violationType == "LIMIT_3_ACCOUNTS" } }
+
+    val filteredReports = remember(reports, selectedCategory) {
+        when (selectedCategory) {
+            "ALL" -> reports
+            else -> reports.filter { it.violationType == selectedCategory }
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 12.dp)
+    ) {
+        // Active Rules Overview Card
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFFB71C1C),
+                shadowElevation = 4.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.GppBad,
+                            contentDescription = "ফেইক আইডি শিল্ড",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "২৮. ফেইক আইডি ডিটেক্টর ও অটো-ব্লক 🕵️",
+                                color = Color.White,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 15.sp
+                            )
+                            Text(
+                                text = "কেউ ফেইক আইডি খোলার চেষ্টা করলে সাথে সাথে ব্লক হয়ে এখানে দেখাবে",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        color = Color.White.copy(alpha = 0.14f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "✅ নিয়ম ১: ১ ব্যক্তি সর্বোচ্চ ৩টি আইডি সীমা চালু (৪র্থ আইডি ব্লক)",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "✅ নিয়ম ২: অন্যের ছবি (SHA-256 + Perceptual dHash) চুরি করে ফেইক আইডি ব্লক",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "✅ নিয়ম ৩: ছেলে -> মেয়ের নামে/ছবি ও মেয়ে -> ছেলের নামে/ছবি ফেইক আইডি ব্লক",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    if (reports.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            OutlinedButton(
+                                onClick = onClearAll,
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "সব লগ ক্লিয়ার করুন",
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Category Filter Chips
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val chips = listOf(
+                    "ALL" to "সব (${reports.size})",
+                    "MALE_TO_FEMALE_FAKE" to "ছেলে→মেয়ে ($maleToFemaleCount)",
+                    "FEMALE_TO_MALE_FAKE" to "মেয়ে→ছেলে ($femaleToMaleCount)",
+                    "STOLEN_PHOTO" to "অন্যের ছবি ($stolenPhotoCount)",
+                    "LIMIT_3_ACCOUNTS" to "৩+ আইডি ($limit3Count)"
+                )
+                chips.forEach { (key, label) ->
+                    val isSelected = selectedCategory == key
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { selectedCategory = key },
+                        label = {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    )
+                }
+            }
+        }
+
+        if (filteredReports.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = "সুরক্ষিত",
+                            tint = BangladeshGreen,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "এখন পর্যন্ত কোনো ফেইক আইডি ধরা পড়েনি",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "কেউ অন্যের ছবি, ছেলে হয়ে মেয়ের নাম/ছবি, মেয়ে হয়ে ছেলের নাম/ছবি বা ৩টির বেশি আইডি খোলার চেষ্টা করলে অটো-ব্লক হয়ে এখানে তালিকায় জমা হবে।",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            items(filteredReports, key = { it.id }) { report ->
+                FakeIdAttemptCard(
+                    report = report,
+                    onPermanentBan = { onPermanentBan(report) },
+                    onDelete = { onDeleteReport(report) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FakeIdAttemptCard(
+    report: FakeIdReport,
+    onPermanentBan: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val violationLabel = when (report.violationType) {
+        "MALE_TO_FEMALE_FAKE" -> "ছেলে হয়ে মেয়ের নাম/ছবি (ফেইক)"
+        "FEMALE_TO_MALE_FAKE" -> "মেয়ে হয়ে ছেলের নাম/ছবি (ফেইক)"
+        "STOLEN_PHOTO" -> "অন্যের ছবি চুরি করে ফেইক আইডি"
+        "LIMIT_3_ACCOUNTS" -> "৩+ আইডি খোলার চেষ্টা"
+        else -> "ফেইক আইডি নীতি লঙ্ঘন"
+    }
+    val isPermBanned = report.status == "PERMANENT_BANNED"
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.2.dp,
+            if (isPermBanned) Color(0xFFB71C1C) else Color(0xFFEF5350).copy(alpha = 0.6f)
+        ),
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFEBEE)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (report.attemptedAvatarUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = report.attemptedAvatarUrl,
+                            contentDescription = report.attemptedName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PersonOff,
+                            contentDescription = report.attemptedName,
+                            tint = Color(0xFFC62828),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = report.attemptedName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "@${report.attemptedUsername.removePrefix("@")} • ${report.attemptedEmail}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "লিঙ্গ নির্বাচন: ${report.selectedGender} • সময়: ${report.timestamp}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    color = if (isPermBanned) Color(0xFF880E4F) else Color(0xFFD32F2F),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (isPermBanned) "স্থায়ী নিষিদ্ধ ⛔" else "অটো-ব্লকড 🚫",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Surface(
+                color = Color(0xFFFFEBEE),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = "শনাক্তকৃত ধরন: $violationLabel",
+                        color = Color(0xFFB71C1C),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    if (report.detectedSignal.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "সিগন্যাল: ${report.detectedSignal}",
+                            color = Color(0xFFC62828),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    if (report.matchedExistingUser.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "আসল ছবির মালিক: ${report.matchedExistingUser}",
+                            color = Color(0xFF1565C0),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = report.violationDetails,
+                        color = Color(0xFF3E2723),
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "ডিভাইস: ${report.deviceModel}",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!isPermBanned) {
+                    Button(
+                        onClick = onPermanentBan,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Block,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "স্থায়ী নিষিদ্ধ করুন",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                OutlinedButton(
+                    onClick = onDelete,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "লগ মুছুন",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+
 
 

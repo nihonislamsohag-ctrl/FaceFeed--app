@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -30,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +57,7 @@ fun MediaGalleryPickerDialog(
     initialTarget: MediaPickerTarget,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val currentLang by viewModel.currentLanguage.collectAsState()
     val strings = Translations.get(currentLang)
     val currentUser by viewModel.currentUser.collectAsState()
@@ -83,7 +86,7 @@ fun MediaGalleryPickerDialog(
                 showSuccessToast = true
             }
             MediaPickerTarget.STORY -> {
-                viewModel.addStory(uriStr, postCaption.ifBlank { "FaceFeed Story ✨" })
+                viewModel.addStory(uriStr, postCaption.ifBlank { "FotoFilm Story ✨" })
                 successMessage = "স্টোরি ফোন থেকে সফলভাবে আপলোড হয়েছে!"
                 showSuccessToast = true
             }
@@ -205,7 +208,7 @@ fun MediaGalleryPickerDialog(
                                         MediaPickerTarget.PROFILE_PHOTO -> "প্রোফাইল ফটো নির্বাচন"
                                         MediaPickerTarget.COVER_PHOTO -> "কভার ফটো নির্বাচন"
                                         MediaPickerTarget.LONG_VIDEO -> "লং ভিডিও আপলোড"
-                                        MediaPickerTarget.SHORT_VIDEO -> "শর্ট ভিডিও / রিলস"
+                                        MediaPickerTarget.SHORT_VIDEO -> "শর্ট ভিডিও"
                                         MediaPickerTarget.STORY -> "স্টোরি তৈরি করুন"
                                         MediaPickerTarget.FEED_PHOTO -> "ছবি পোস্ট করুন"
                                         MediaPickerTarget.TEXT_POST -> "রঙিন স্ট্যাটাস / টেক্সট"
@@ -295,13 +298,13 @@ fun MediaGalleryPickerDialog(
                         onClick = { activeTarget = MediaPickerTarget.FEED_PHOTO }
                     )
                     FeatureTabChip(
-                        title = "ইস্টুরি",
+                        title = "স্টোরি",
                         icon = Icons.Default.AutoStories,
                         isSelected = activeTarget == MediaPickerTarget.STORY,
                         onClick = { activeTarget = MediaPickerTarget.STORY }
                     )
                     FeatureTabChip(
-                        title = "সট ভিডিও",
+                        title = "শর্ট ভিডিও",
                         icon = Icons.Default.SlowMotionVideo,
                         isSelected = activeTarget == MediaPickerTarget.SHORT_VIDEO,
                         onClick = { activeTarget = MediaPickerTarget.SHORT_VIDEO }
@@ -397,9 +400,13 @@ fun MediaGalleryPickerDialog(
                                     singleFilePicker.launch("video/*")
                                 },
                                 onPublish = {
-                                    val videoToPost = selectedMediaUrl ?: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=800"
-                                    viewModel.publishReel(videoToPost, videoTitle.ifBlank { "FaceFeed Shorts 🇧🇩 #Reels" })
-                                    onDismiss()
+                                    val videoToPost = selectedMediaUrl
+                                    if (videoToPost.isNullOrBlank()) {
+                                        Toast.makeText(context, "আগে ফোনের গ্যালারি থেকে ভিডিও সিলেক্ট করুন", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.publishReel(videoToPost, videoTitle.ifBlank { "FotoFilm Short Video 🇧🇩 #ShortVideo" })
+                                        onDismiss()
+                                    }
                                 }
                             )
                         }
@@ -419,13 +426,17 @@ fun MediaGalleryPickerDialog(
                                     singleFilePicker.launch("video/*")
                                 },
                                 onPublish = {
-                                    val videoToPost = selectedMediaUrl ?: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800"
-                                    viewModel.publishLongVideo(
-                                        title = videoTitle.ifBlank { "লোং ভিডিও: FaceFeed Watch ডকুমেন্টারি" },
-                                        videoUrl = videoToPost,
-                                        description = postCaption
-                                    )
-                                    onDismiss()
+                                    val videoToPost = selectedMediaUrl
+                                    if (videoToPost.isNullOrBlank()) {
+                                        Toast.makeText(context, "আগে ফোনের গ্যালারি থেকে ভিডিও সিলেক্ট করুন", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        viewModel.publishLongVideo(
+                                            title = videoTitle.ifBlank { "লোং ভিডিও: FotoFilm Watch ডকুমেন্টারি" },
+                                            videoUrl = videoToPost,
+                                            description = postCaption
+                                        )
+                                        onDismiss()
+                                    }
                                 }
                             )
                         }
@@ -444,16 +455,20 @@ fun MediaGalleryPickerDialog(
                                     singleFilePicker.launch("image/*")
                                 },
                                 onPublish = { selectedAudio ->
-                                    val storyMedia = selectedMediaUrl ?: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800"
-                                    AppSoundManager.stopAudio()
-                                    viewModel.addStory(
-                                        mediaUrl = storyMedia,
-                                        caption = postCaption.ifBlank { "FotoFilm Story ✨" },
-                                        musicTrack = selectedAudio?.title,
-                                        musicArtist = selectedAudio?.artist,
-                                        audioUrl = selectedAudio?.audioUrl
-                                    )
-                                    onDismiss()
+                                    val storyMedia = selectedMediaUrl
+                                    if (storyMedia.isNullOrBlank()) {
+                                        Toast.makeText(context, "আগে ফোনের গ্যালারি থেকে স্টোরির ছবি বা ভিডিও দিন", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        AppSoundManager.stopAudio()
+                                        viewModel.addStory(
+                                            mediaUrl = storyMedia,
+                                            caption = postCaption.ifBlank { "FotoFilm Story ✨" },
+                                            musicTrack = selectedAudio?.title,
+                                            musicArtist = selectedAudio?.artist,
+                                            audioUrl = selectedAudio?.audioUrl
+                                        )
+                                        onDismiss()
+                                    }
                                 },
                                 onDismiss = {
                                     AppSoundManager.stopAudio()
@@ -519,8 +534,8 @@ fun MediaGalleryPickerDialog(
                                 },
                                 onPublish = {
                                     viewModel.createPost(
-                                        text = postCaption.ifBlank { "FaceFeed এ নতুন পোস্ট 📸" },
-                                        hashtags = listOf("#FaceFeed", "#GalleryPhotos", "#Bangladesh"),
+                                        text = postCaption.ifBlank { "FotoFilm এ নতুন পোস্ট 📸" },
+                                        hashtags = listOf("#FotoFilm", "#GalleryPhotos", "#Bangladesh"),
                                         images = selectedMediaList,
                                         isVideo = false
                                     )
@@ -539,7 +554,7 @@ fun MediaGalleryPickerDialog(
                 title = when (activeTarget) {
                     MediaPickerTarget.PROFILE_PHOTO -> "প্রোফাইল ছবি গ্যালারি কালেকশন"
                     MediaPickerTarget.COVER_PHOTO -> "কভার ফটো গ্যালারি কালেকশন"
-                    MediaPickerTarget.SHORT_VIDEO -> "সট ভিডিও ও রিলস কালেকশন"
+                    MediaPickerTarget.SHORT_VIDEO -> "শর্ট ভিডিও কালেকশন"
                     MediaPickerTarget.LONG_VIDEO -> "লোং ভিডিও কালেকশন"
                     MediaPickerTarget.STORY -> "স্টোরি মিডিয়া কালেকশন"
                     else -> "ফোন ক্যামেরা ও গ্যালারি কালেকশন"
@@ -750,7 +765,7 @@ private fun VideoUploadContent(
                     Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = FacebookBlue, modifier = Modifier.size(28.dp))
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        if (isShortVideo) "ফোন গ্যালারি (রিলস)" else "ফোন গ্যালারি (ভিডিও)",
+                        if (isShortVideo) "ফোন গ্যালারি (শর্ট ভিডিও)" else "ফোন গ্যালারি (ভিডিও)",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
@@ -847,7 +862,7 @@ private fun VideoUploadContent(
 
                     Column(modifier = Modifier.weight(1f)) {
                         Text(videoItem.title, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (isShortVideo) "রিলস ভিডিও • FaceFeed Shorts" else "এইচডি ভিডিও • FaceFeed Watch", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (isShortVideo) "শর্ট ভিডিও • FotoFilm" else "এইচডি ভিডিও • FotoFilm Watch", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
 
                     RadioButton(
@@ -863,7 +878,7 @@ private fun VideoUploadContent(
         OutlinedTextField(
             value = title,
             onValueChange = onTitleChange,
-            placeholder = { Text(if (isShortVideo) "ক্যাপশন ও হ্যাশট্যাগ (#Reels)..." else "ভিডিওর টাইটেল ও শিরোনাম...") },
+            placeholder = { Text(if (isShortVideo) "ক্যাপশন ও হ্যাশট্যাগ (#ShortVideo)..." else "ভিডিওর টাইটেল ও শিরোনাম...") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -878,7 +893,7 @@ private fun VideoUploadContent(
         ) {
             Icon(Icons.Default.CloudUpload, contentDescription = null)
             Spacer(modifier = Modifier.width(6.dp))
-            Text(if (isShortVideo) "শর্ট ভিডিও / রিলস শেয়ার করুন" else "লোং ভিডিও পাবলিশ করুন", fontWeight = FontWeight.Bold)
+            Text(if (isShortVideo) "শর্ট ভিডিও শেয়ার করুন" else "লোং ভিডিও পাবলিশ করুন", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -1472,12 +1487,28 @@ private fun StoryCreatorContent(
                                             .clip(RoundedCornerShape(8.dp))
                                             .background(MaterialTheme.colorScheme.surfaceVariant)
                                     ) {
-                                        AsyncImage(
-                                            model = track.coverArtUrl ?: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150",
-                                            contentDescription = track.title,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = ContentScale.Crop
-                                        )
+                                        if (!track.coverArtUrl.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = track.coverArtUrl,
+                                                contentDescription = track.title,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(FacebookBlue.copy(alpha = 0.2f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.MusicNote,
+                                                    contentDescription = track.title,
+                                                    tint = FacebookBlue,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()

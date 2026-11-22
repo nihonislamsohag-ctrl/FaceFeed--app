@@ -42,6 +42,7 @@ import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
 import com.example.util.AppSoundManager
+import com.example.util.LiveMicHelper
 import com.example.viewmodel.FaceFeedViewModel
 import kotlinx.coroutines.delay
 
@@ -130,14 +131,13 @@ fun IncomingCallDialog(
                             .clip(CircleShape)
                             .background(BangladeshGreen.copy(alpha = 0.2f))
                     )
-                    AsyncImage(
-                        model = signal.callerAvatar.ifBlank { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
-                        contentDescription = signal.callerName,
+                    FotoFilmAvatar(
+                        imageUrl = signal.callerAvatar,
+                        name = signal.callerName,
                         modifier = Modifier
                             .size(134.dp)
-                            .clip(CircleShape)
                             .border(3.dp, BangladeshGreen, CircleShape),
-                        contentScale = ContentScale.Crop
+                        iconSize = 54.dp
                     )
                 }
 
@@ -202,7 +202,12 @@ fun CallingOverlay(
     val currentLang by viewModel.currentLanguage.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val agoraState by AgoraCallManager.callState.collectAsState()
+    val isSoundEnabled by viewModel.isNotificationSoundEnabled.collectAsState()
     val strings = Translations.get(currentLang)
+
+    LaunchedEffect(Unit) {
+        AppSoundManager.init(context)
+    }
 
     val needsCamera = activeCall.callType != CallType.AUDIO
     val channelName = remember(activeCall.channelName, activeCall.callType, activeCall.user?.id, activeCall.groupName, currentUser.id) {
@@ -256,8 +261,37 @@ fun CallingOverlay(
         }
     }
 
-    DisposableEffect(Unit) {
+    val micLevel by LiveMicHelper.micLevel.collectAsState()
+    val isHardwareMicActive by LiveMicHelper.isMicActive.collectAsState()
+    val callMicOwnerTag = remember(channelName, activeCall.callId) { "call_${activeCall.callId.ifBlank { channelName }}" }
+
+    LaunchedEffect(hasAudioPermission, activeCall.isMuted, agoraState.isJoinedChannel, callMicOwnerTag) {
+        if (hasAudioPermission && !activeCall.isMuted && !agoraState.isJoinedChannel) {
+            LiveMicHelper.startMonitoring(context, callMicOwnerTag)
+        } else {
+            LiveMicHelper.stopMonitoring(callMicOwnerTag)
+        }
+    }
+
+    val isOutgoingRinging = when {
+        activeCall.isIncoming -> false
+        activeCall.callType == CallType.GROUP -> agoraState.remoteUids.isEmpty() && activeCall.durationSeconds < 6
+        else -> !activeCall.isAccepted && agoraState.remoteUids.isEmpty() && activeCall.durationSeconds < 45
+    }
+    val shouldPlayDialTone = isSoundEnabled && isOutgoingRinging
+
+    LaunchedEffect(shouldPlayDialTone, activeCall.callId) {
+        if (shouldPlayDialTone) {
+            AppSoundManager.startCallDialingTone()
+        } else {
+            AppSoundManager.stopCallDialingTone()
+        }
+    }
+
+    DisposableEffect(callMicOwnerTag, activeCall.callId) {
         onDispose {
+            AppSoundManager.stopCallDialingTone()
+            LiveMicHelper.stopMonitoring(callMicOwnerTag)
             AgoraCallManager.leaveCall()
         }
     }
@@ -281,6 +315,9 @@ fun CallingOverlay(
                     AudioCallContent(
                         activeCall = activeCall,
                         agoraState = agoraState,
+                        hasAudioPermission = hasAudioPermission,
+                        isHardwareMicActive = isHardwareMicActive,
+                        micLevel = micLevel,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
@@ -290,7 +327,10 @@ fun CallingOverlay(
                     VideoCallContent(
                         activeCall = activeCall,
                         agoraState = agoraState,
+                        hasAudioPermission = hasAudioPermission,
                         hasCameraPermission = hasCameraPermission,
+                        isHardwareMicActive = isHardwareMicActive,
+                        micLevel = micLevel,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
@@ -300,6 +340,10 @@ fun CallingOverlay(
                     GroupCallContent(
                         activeCall = activeCall,
                         agoraState = agoraState,
+                        hasAudioPermission = hasAudioPermission,
+                        hasCameraPermission = hasCameraPermission,
+                        isHardwareMicActive = isHardwareMicActive,
+                        micLevel = micLevel,
                         timerFormatted = timerFormatted,
                         strings = strings,
                         viewModel = viewModel
@@ -352,6 +396,9 @@ fun CallingOverlay(
 fun AudioCallContent(
     activeCall: ActiveCallState,
     agoraState: AgoraRtcState,
+    hasAudioPermission: Boolean,
+    isHardwareMicActive: Boolean,
+    micLevel: Float,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
@@ -406,13 +453,28 @@ fun AudioCallContent(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium
             )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "🎙️ ${agoraState.statusText}",
-                color = Color(0xFF90CAF9),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Spacer(modifier = Modifier.height(8.dp))
+            val micStatusText = when {
+                !hasAudioPermission -> "⚠️ মাইক্রোফোন অনুমতি প্রয়োজন"
+                activeCall.isMuted -> "🔇 মাইক্রোফোন মিউট করা আছে"
+                agoraState.isJoinedChannel || isHardwareMicActive -> "🎙️ আসল মাইক চালু • ভয়েস: ${(micLevel * 100).toInt().coerceAtLeast(12)}%"
+                else -> "🎙️ ${agoraState.statusText}"
+            }
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = when {
+                    !hasAudioPermission || activeCall.isMuted -> BangladeshRed.copy(alpha = 0.25f)
+                    else -> BangladeshGreen.copy(alpha = 0.22f)
+                }
+            ) {
+                Text(
+                    text = micStatusText,
+                    color = if (!hasAudioPermission || activeCall.isMuted) Color(0xFFFFCDD2) else Color(0xFFA5D6A7),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
         }
 
         Box(contentAlignment = Alignment.Center) {
@@ -428,11 +490,11 @@ fun AudioCallContent(
                     .clip(CircleShape)
                     .border(3.dp, FacebookBlue, CircleShape)
             ) {
-                AsyncImage(
-                    model = activeCall.user?.avatarUrl ?: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500",
-                    contentDescription = activeCall.user?.fullName,
+                FotoFilmAvatar(
+                    imageUrl = activeCall.user?.avatarUrl,
+                    name = activeCall.user?.fullName ?: "Friend",
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                    iconSize = 52.dp
                 )
             }
         }
@@ -497,7 +559,10 @@ fun AudioCallContent(
 fun VideoCallContent(
     activeCall: ActiveCallState,
     agoraState: AgoraRtcState,
+    hasAudioPermission: Boolean,
     hasCameraPermission: Boolean,
+    isHardwareMicActive: Boolean,
+    micLevel: Float,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
@@ -519,12 +584,10 @@ fun VideoCallContent(
                 )
             }
         } else {
-            AsyncImage(
-                model = activeCall.user?.coverUrl?.ifEmpty { "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200" }
-                    ?: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200",
+            FotoFilmCoverBackground(
+                imageUrl = activeCall.user?.coverUrl?.ifBlank { activeCall.user?.avatarUrl },
                 contentDescription = "Video Feed",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                modifier = Modifier.fillMaxSize()
             )
         }
 
@@ -540,6 +603,7 @@ fun VideoCallContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            val isRemoteJoined = agoraState.remoteUids.isNotEmpty() || activeCall.isAccepted
             Column {
                 Text(
                     text = activeCall.user?.fullName ?: "Friend",
@@ -548,19 +612,19 @@ fun VideoCallContent(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "$timerFormatted • ${agoraState.statusText}",
-                    color = Color(0xFF31A24C),
-                    fontSize = 13.sp,
+                    text = "${if (isRemoteJoined) timerFormatted else strings.calling} • ${if (!hasAudioPermission) "মাইক অনুমতি দিন" else if (activeCall.isMuted) "🔇 মিউট" else if (agoraState.isJoinedChannel || isHardwareMicActive) "🎙️ মাইক চালু" else agoraState.statusText}",
+                    color = if (!hasAudioPermission || activeCall.isMuted) Color(0xFFFF8A80) else Color(0xFF81C784),
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )
             }
 
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = if (agoraState.isJoinedChannel) BangladeshGreen.copy(alpha = 0.85f) else BangladeshRed.copy(alpha = 0.7f)
+                color = if (agoraState.isJoinedChannel || (hasAudioPermission && !activeCall.isMuted)) BangladeshGreen.copy(alpha = 0.85f) else BangladeshRed.copy(alpha = 0.75f)
             ) {
                 Text(
-                    text = if (agoraState.isSdkActive) "AGORA HD" else "LIVE HD",
+                    text = if (agoraState.isSdkActive) "AGORA HD" else if (hasAudioPermission && !activeCall.isMuted) "🎙️ MIC ON" else "LIVE HD",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
@@ -594,11 +658,12 @@ fun VideoCallContent(
                         )
                     }
                 } else {
-                    AsyncImage(
-                        model = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500",
-                        contentDescription = "My Camera",
+                    val selfUser = viewModel.currentUser.collectAsState().value
+                    FotoFilmAvatar(
+                        imageUrl = selfUser.avatarUrl,
+                        name = selfUser.fullName,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        iconSize = 36.dp
                     )
                 }
                 Text(
@@ -686,6 +751,10 @@ fun VideoCallContent(
 fun GroupCallContent(
     activeCall: ActiveCallState,
     agoraState: AgoraRtcState,
+    hasAudioPermission: Boolean,
+    hasCameraPermission: Boolean,
+    isHardwareMicActive: Boolean,
+    micLevel: Float,
     timerFormatted: String,
     strings: com.example.model.AppTranslations,
     viewModel: FaceFeedViewModel
@@ -710,8 +779,8 @@ fun GroupCallContent(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "$timerFormatted • ${activeCall.groupMembers.size} participants • ${agoraState.statusText}",
-                color = Color(0xFF31A24C),
+                text = "$timerFormatted • ${activeCall.groupMembers.size} participants • ${if (!hasAudioPermission) "মাইক অনুমতি প্রয়োজন" else if (activeCall.isMuted) "🔇 মাইক মিউট" else if (agoraState.isJoinedChannel || isHardwareMicActive) "🎙️ আসল মাইক চালু" else agoraState.statusText}",
+                color = if (!hasAudioPermission || activeCall.isMuted) Color(0xFFFF8A80) else Color(0xFF81C784),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -844,13 +913,11 @@ fun GroupParticipantTile(
                     )
                 }
             } else {
-                AsyncImage(
-                    model = member.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
-                    contentDescription = member.fullName,
-                    modifier = Modifier
-                        .size(70.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                FotoFilmAvatar(
+                    imageUrl = member.avatarUrl,
+                    name = member.fullName,
+                    modifier = Modifier.size(70.dp),
+                    iconSize = 32.dp
                 )
             }
 

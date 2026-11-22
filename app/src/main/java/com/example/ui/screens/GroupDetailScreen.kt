@@ -21,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,6 +43,8 @@ import com.example.R
 import com.example.data.SampleData
 import com.example.model.Post
 import com.example.model.PostAudioTrack
+import com.example.ui.components.FotoFilmAvatar
+import com.example.ui.components.FotoFilmCoverBackground
 import com.example.model.SocialGroup
 import com.example.model.User
 import com.example.ui.theme.BangladeshGreen
@@ -91,41 +95,8 @@ fun GroupDetailScreen(
         }
     }
 
-    // Local group posts list
-    val groupPosts = remember {
-        mutableStateListOf(
-            Post(
-                id = "grp_post_1",
-                author = User(
-                    id = "usr_maruf",
-                    username = "maruf_maruf",
-                    fullName = "Maruf Maruf",
-                    avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200"
-                ),
-                timestamp = "3d • 🌐",
-                text = "নিদ্রা ডিসি পয়েন্টের অপরূপ রাতের দৃশ্য! ক্যাম্পিং এবং বন্ধুদের সাথে চমৎকার স্মৃতি। সবাইকে ভ্রমণের আমন্ত্রণ রইল! 🏕️✨ #NidraDCPoint #Taltali #Barguna",
-                images = listOf("https://images.unsplash.com/photo-1510312305653-8ed496efae75?w=800"),
-                audioTrack = SampleData.sampleAudioTracks.find { it.category == "বাঁশির সুর" },
-                musicInfo = "পল্লী সুর - দূর গাঁয়ের মায়াবী বাঁশির তান • ওস্তাদ আলাউদ্দিন খাঁ স্মৃতি বাদক",
-                shareCount = 15
-            ),
-            Post(
-                id = "grp_post_2",
-                author = User(
-                    id = "usr_tasmim",
-                    username = "tasmim_tinni",
-                    fullName = "Tasmim Tinni",
-                    avatarUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200"
-                ),
-                timestamp = "17 hours ago • 🌐",
-                text = "বরগুনার তালতলী নিদ্রার চরের সূর্যাস্ত ও সমুদ্রের গর্জন। অসাধারণ এক অভিজ্ঞতা! 🌊🌴 সবাই কেমন আছেন?",
-                images = listOf("https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800"),
-                audioTrack = SampleData.sampleAudioTracks.find { it.category == "গজল" },
-                musicInfo = "হাসবি রাব্বি জাল্লাল্লাহ • সামি ইউসুফ ও বাংলা শিল্পীগোষ্ঠী",
-                shareCount = 28
-            )
-        )
-    }
+    // Local group posts list (real user posts only)
+    val groupPosts = remember { mutableStateListOf<Post>() }
 
     BackHandler {
         onBack()
@@ -229,11 +200,10 @@ fun GroupDetailScreen(
                                 contentScale = ContentScale.Crop
                             )
                         } else {
-                            AsyncImage(
-                                model = group.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=800" },
+                            FotoFilmCoverBackground(
+                                imageUrl = group.coverUrl,
                                 contentDescription = group.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
 
@@ -313,26 +283,20 @@ fun GroupDetailScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            // Overlapping circular member avatars
-                            val memberAvatars = listOf(
-                                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100",
-                                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100",
-                                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100",
-                                "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100",
-                                "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100"
-                            )
-
+                            val realMemberAvatars = remember(group.admins, group.moderators) {
+                                (group.admins + group.moderators).distinctBy { it.id }.take(5)
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                memberAvatars.forEachIndexed { idx, avatarUrl ->
-                                    AsyncImage(
-                                        model = avatarUrl,
-                                        contentDescription = null,
+                                realMemberAvatars.forEachIndexed { idx, memberUser ->
+                                    FotoFilmAvatar(
+                                        imageUrl = memberUser.avatarUrl,
+                                        name = memberUser.fullName,
+                                        contentDescription = memberUser.fullName,
                                         modifier = Modifier
                                             .offset(x = (-idx * 10).dp)
                                             .size(34.dp)
                                             .clip(CircleShape)
-                                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape),
-                                        contentScale = ContentScale.Crop
+                                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
                                     )
                                 }
                             }
@@ -436,13 +400,13 @@ fun GroupDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            AsyncImage(
-                                model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200" },
+                            FotoFilmAvatar(
+                                imageUrl = currentUser.avatarUrl,
+                                name = currentUser.fullName,
                                 contentDescription = currentUser.fullName,
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                                    .clip(CircleShape)
                             )
 
                             Spacer(modifier = Modifier.width(10.dp))
@@ -754,6 +718,21 @@ fun GroupPostCard(
     onShare: () -> Unit
 ) {
     var isLiked by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val currentPlayingTrackId by AppSoundManager.currentPlayingTrackId.collectAsState()
+    val isAudioEnginePlaying by AppSoundManager.isAudioPlaying.collectAsState()
+    val attachedAudio = remember(post.id, post.audioTrack, post.musicInfo) {
+        post.audioTrack ?: post.musicInfo?.takeIf { it.isNotBlank() }?.let { info ->
+            PostAudioTrack("aud_group_${post.id}", info, "শিল্পীগোষ্ঠী", "অডিও গান", "৩:৩০")
+        }
+    }
+    val isThisAudioPlaying = attachedAudio != null && isAudioEnginePlaying && (currentPlayingTrackId == attachedAudio.id)
+    val toggleAttachedAudio = {
+        if (attachedAudio != null) {
+            if (isThisAudioPlaying) AppSoundManager.pauseAudio()
+            else AppSoundManager.playAudio(attachedAudio, context)
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -763,18 +742,18 @@ fun GroupPostCard(
         shape = RoundedCornerShape(0.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Post Author Header (Author Name • Follow, + Add topic, 3d • 🌐)
+            // Post Author Header (Author Name • Follow, timestamp • 🎵 Music • 🌐)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = post.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100" },
+                FotoFilmAvatar(
+                    imageUrl = post.author.avatarUrl,
+                    name = post.author.fullName,
                     contentDescription = post.author.fullName,
                     modifier = Modifier
                         .size(42.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
                 )
 
                 Spacer(modifier = Modifier.width(10.dp))
@@ -800,12 +779,51 @@ fun GroupPostCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = "+ Add topic",
+                            text = post.timestamp,
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (attachedAudio != null) {
+                            val musicHeaderText = remember(post.musicInfo, attachedAudio) {
+                                post.musicInfo?.takeIf { it.isNotBlank() } ?: listOfNotNull(
+                                    attachedAudio.artist.takeIf { it.isNotBlank() && it != "শিল্পীগোষ্ঠী" },
+                                    attachedAudio.title.takeIf { it.isNotBlank() }
+                                ).joinToString(" • ")
+                            }
+                            if (musicHeaderText.isNotBlank()) {
+                                Text("•", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .clickable { toggleAttachedAudio() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MusicNote,
+                                        contentDescription = "Attached Audio",
+                                        tint = if (isThisAudioPlaying) BangladeshGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(2.dp))
+                                    Text(
+                                        text = musicHeaderText,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isThisAudioPlaying) BangladeshGreen else FacebookBlue,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = "• + Add topic",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Text(
-                            text = "• ${post.timestamp}",
+                            text = "• 🌐",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -830,21 +848,44 @@ fun GroupPostCard(
             // Post Image
             if (post.images.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(10.dp))
-                AsyncImage(
-                    model = post.images.first(),
-                    contentDescription = "Post image",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(230.dp)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    AsyncImage(
+                        model = post.images.first(),
+                        contentDescription = "Post image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(230.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                    if (attachedAudio != null) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isThisAudioPlaying) BangladeshGreen.copy(alpha = 0.88f) else Color.Black.copy(alpha = 0.65f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(10.dp)
+                                .size(34.dp)
+                                .clickable { toggleAttachedAudio() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isThisAudioPlaying) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                    contentDescription = if (isThisAudioPlaying) "Mute post audio" else "Play post audio",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Post Attached Audio Track (Audio songs, Gojol, Music, Flute, DJ, Hindi, Birthday)
-            if (post.audioTrack != null) {
+            if (attachedAudio != null) {
                 Spacer(modifier = Modifier.height(10.dp))
-                GroupPostAudioPlayer(audioTrack = post.audioTrack)
+                GroupPostAudioPlayer(audioTrack = attachedAudio)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -945,14 +986,9 @@ fun GroupInviteMembersDialog(
 ) {
     val selectedFriends = remember { mutableStateListOf<String>() }
 
-    val friends = listOf(
-        SampleData.friendMdMohiuddin,
-        SampleData.friendRahim,
-        SampleData.friendJoyAhmed,
-        SampleData.friendTanvir,
-        SampleData.friendSamrat,
-        SampleData.friendSadia
-    )
+    val friends = remember(group.admins, group.moderators) {
+        (group.admins + group.moderators).distinctBy { it.id }
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1320,14 +1356,26 @@ fun GroupAudioTracksShelf(
                     ) {
                         Column(modifier = Modifier.padding(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                AsyncImage(
-                                    model = track.coverArtUrl ?: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200",
-                                    contentDescription = track.title,
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
+                                if (!track.coverArtUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = track.coverArtUrl,
+                                        contentDescription = track.title,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF137333).copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.MusicNote, contentDescription = track.title, tint = Color(0xFF137333))
+                                    }
+                                }
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -1558,14 +1606,26 @@ fun GroupAudioPickerSheet(
                                     .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AsyncImage(
-                                    model = track.coverArtUrl ?: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=200",
-                                    contentDescription = track.title,
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
+                                if (!track.coverArtUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = track.coverArtUrl,
+                                        contentDescription = track.title,
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(46.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFF137333).copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.MusicNote, contentDescription = track.title, tint = Color(0xFF137333))
+                                    }
+                                }
 
                                 Spacer(modifier = Modifier.width(10.dp))
 

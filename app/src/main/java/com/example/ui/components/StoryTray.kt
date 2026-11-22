@@ -139,12 +139,20 @@ private fun CreateStoryCard(
                         .fillMaxWidth()
                         .height(115.dp)
                 ) {
-                    AsyncImage(
-                        model = avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
-                        contentDescription = "My Photo",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (avatarUrl.isNotBlank()) {
+                        AsyncImage(
+                            model = avatarUrl,
+                            contentDescription = "My Photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        FotoFilmCoverBackground(
+                            imageUrl = "",
+                            contentDescription = "My Photo",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 // Bottom part: White / Surface background with label
@@ -223,11 +231,10 @@ private fun FriendStoryCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // 1. Full 4-cornered Story Background Media
-            AsyncImage(
-                model = story.mediaUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=800" },
+            FotoFilmCoverBackground(
+                imageUrl = story.mediaUrl,
                 contentDescription = story.caption.ifBlank { story.author.fullName },
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+                modifier = Modifier.fillMaxSize()
             )
 
             // 2. Subtle Dark Gradient Overlays (Top for profile icon & bottom for user name)
@@ -285,13 +292,11 @@ private fun FriendStoryCard(
                         .background(Color.White),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = story.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300" },
-                        contentDescription = story.author.fullName,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = story.author.avatarUrl,
+                        name = story.author.fullName,
+                        modifier = Modifier.fillMaxSize(),
+                        iconSize = 18.dp
                     )
                 }
             }
@@ -555,13 +560,11 @@ private fun MessengerMyStoryCircle(
                         .background(Color(0xFFE2E8F0)),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400" },
-                        contentDescription = "My Profile Photo",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = avatarUrl,
+                        name = "You",
+                        modifier = Modifier.fillMaxSize(),
+                        iconSize = 26.dp
                     )
                 }
 
@@ -671,13 +674,11 @@ private fun MessengerFriendStoryCircle(
                         .background(Color(0xFFF1F5F9)),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = story.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400" },
-                        contentDescription = story.author.fullName,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = story.author.avatarUrl,
+                        name = story.author.fullName,
+                        modifier = Modifier.fillMaxSize(),
+                        iconSize = 26.dp
                     )
                 }
 
@@ -776,13 +777,11 @@ private fun MessengerNotedFriendCircle(
                         .clip(CircleShape)
                         .background(Color(0xFFF1F5F9))
                 ) {
-                    AsyncImage(
-                        model = friend.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400" },
-                        contentDescription = friend.fullName,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                    FotoFilmAvatar(
+                        imageUrl = friend.avatarUrl,
+                        name = friend.fullName,
+                        modifier = Modifier.fillMaxSize(),
+                        iconSize = 26.dp
                     )
                 }
 

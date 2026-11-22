@@ -55,7 +55,9 @@ object CloudinaryManager {
 
     fun initialize(context: Context) {
         appContext = context.applicationContext
-        _status.value = readBuildConfigStatus(isEnabled = _status.value.isEnabled)
+        NiyonOwnerControlStore.initialize(appContext!!)
+        ServiceQuotaTracker.initialize(appContext!!)
+        _status.value = readBuildConfigStatus(isEnabled = NiyonOwnerControlStore.isCloudinaryEnabled.value)
     }
 
     fun getAppContext(): Context? = appContext
@@ -90,11 +92,16 @@ object CloudinaryManager {
 
     fun isEnabled(): Boolean = _status.value.isEnabled
 
-    fun setEnabled(enabled: Boolean) {
+    fun setEnabled(enabled: Boolean, isOwner: Boolean = true): Boolean {
+        if (!NiyonOwnerControlStore.setCloudinaryEnabled(enabled, isOwner)) {
+            return false
+        }
         _status.value = _status.value.copy(isEnabled = enabled)
+        return true
     }
 
     fun refreshStatus() {
+        ServiceQuotaTracker.refreshSnapshot()
         val prevCount = _status.value.uploadedCount
         val prevUrl = _status.value.lastUploadedUrl
         _status.value = readBuildConfigStatus(isEnabled = _status.value.isEnabled).copy(
@@ -112,6 +119,8 @@ object CloudinaryManager {
         folder: String = "fotofilm",
         contextOverride: Context? = null,
         compressionKind: CompressionMediaKind? = null,
+        isAudioOnly: Boolean = false,
+        onProgress: ((Int) -> Unit)? = null,
         onSuccess: (String) -> Unit,
         onFailure: (Exception) -> Unit
     ) {
@@ -144,13 +153,14 @@ object CloudinaryManager {
         ioScope.launch {
             try {
                 // Automatic pre-upload compression when enabled (100 MB -> 30 MB video, <= 300 KB photo)
+                // Skip video compression for voice/audio-only files so voice audio stays crystal clear.
                 val effectiveKind = compressionKind ?: if (isVideoOrAudio) {
                     CompressionMediaKind.LONG_VIDEO
                 } else {
                     CompressionMediaKind.PHOTO
                 }
                 val isAutoCompressionOn = DailyQuotaCompressionStore.config.value.isAutoCompressionEnabled
-                val uploadUri = if (isAutoCompressionOn && uri.scheme != "https" && uri.scheme != "http") {
+                val uploadUri = if (!isAudioOnly && isAutoCompressionOn && uri.scheme != "https" && uri.scheme != "http") {
                     if (isVideoOrAudio) {
                         MediaCompressionManager.compressAndTrimVideo(ctx, uri, effectiveKind).outputUri
                     } else {
@@ -160,15 +170,36 @@ object CloudinaryManager {
                     uri
                 }
 
-                val resourceType = if (isVideoOrAudio) "video" else "image"
+                val resourceType = if (isVideoOrAudio || isAudioOnly) "video" else "image"
                 val endpoint = "https://api.cloudinary.com/v1_1/$cloudName/$resourceType/upload"
-                val mimeType = ctx.contentResolver.getType(uploadUri)
-                    ?: if (isVideoOrAudio) "video/mp4" else "image/jpeg"
-                val fileName = if (isVideoOrAudio) "fotofilm_${System.currentTimeMillis()}.mp4"
-                else "fotofilm_${System.currentTimeMillis()}.jpg"
+                val mimeType = if (isAudioOnly) {
+                    ctx.contentResolver.getType(uploadUri) ?: "audio/mp4"
+                } else {
+                    ctx.contentResolver.getType(uploadUri)
+                        ?: if (isVideoOrAudio) "video/mp4" else "image/jpeg"
+                }
+                val fileName = when {
+                    isAudioOnly -> "fotofilm_voice_${System.currentTimeMillis()}.m4a"
+                    isVideoOrAudio -> "fotofilm_${System.currentTimeMillis()}.mp4"
+                    else -> "fotofilm_${System.currentTimeMillis()}.jpg"
+                }
+
+                val knownTotalBytes: Long = try {
+                    if (uploadUri.scheme == "file" && uploadUri.path != null) {
+                        File(uploadUri.path!!).length()
+                    } else {
+                        ctx.contentResolver.openAssetFileDescriptor(uploadUri, "r")?.use { it.length } ?: -1L
+                    }
+                } catch (_: Exception) {
+                    -1L
+                }
+
+                var actualStreamedBytes = 0L
 
                 val requestBodyFile = object : RequestBody() {
                     override fun contentType() = mimeType.toMediaTypeOrNull()
+
+                    override fun contentLength(): Long = if (knownTotalBytes > 0L) knownTotalBytes else -1L
 
                     override fun writeTo(sink: BufferedSink) {
                         val stream = if (uploadUri.scheme == "file" && uploadUri.path != null) {
@@ -178,7 +209,27 @@ object CloudinaryManager {
                         } ?: throw IllegalStateException("মিডিয়া ফাইল পড়া যায়নি")
 
                         stream.use { input ->
-                            sink.writeAll(input.source())
+                            val fallbackTotal = try {
+                                if (knownTotalBytes > 0L) knownTotalBytes else input.available().toLong().coerceAtLeast(1L)
+                            } catch (_: Exception) {
+                                1L
+                            }
+                            val buffer = ByteArray(8192)
+                            var uploadedBytes = 0L
+                            var lastReportedPercent = -1
+                            var read: Int
+                            while (input.read(buffer).also { read = it } != -1) {
+                                sink.write(buffer, 0, read)
+                                uploadedBytes += read
+                                actualStreamedBytes = uploadedBytes
+                                if (onProgress != null && fallbackTotal > 0L) {
+                                    val pct = ((uploadedBytes * 98L) / fallbackTotal).toInt().coerceIn(1, 98)
+                                    if (pct != lastReportedPercent) {
+                                        lastReportedPercent = pct
+                                        onProgress(pct)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -213,7 +264,17 @@ object CloudinaryManager {
                         throw IllegalStateException("Cloudinary did not return secure_url")
                     }
 
-                    val compressedCloudUrl = if (isAutoCompressionOn) {
+                    val reportedBytes = json.optLong("bytes", 0L).let {
+                        when {
+                            it > 0L -> it
+                            actualStreamedBytes > 0L -> actualStreamedBytes
+                            knownTotalBytes > 0L -> knownTotalBytes
+                            else -> 128L * 1024L
+                        }
+                    }
+                    ServiceQuotaTracker.recordCloudinaryUpload(reportedBytes)
+
+                    val compressedCloudUrl = if (!isAudioOnly && isAutoCompressionOn) {
                         MediaCompressionManager.applyCloudinaryAutoCompressionUrl(secureUrl, effectiveKind)
                     } else {
                         secureUrl

@@ -1,13 +1,23 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,8 +45,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.compose.AsyncImage
 import com.example.data.SampleData
 import com.example.model.LiveCommentItem
@@ -78,7 +92,7 @@ fun LiveStreamStudioDialog(
     val configuration = LocalConfiguration.current
 
     // Studio Stage
-    var currentStage by remember { mutableStateOf(LiveStudioStage.PRE_LIVE) }
+    var currentStage by rememberSaveable { mutableStateOf(LiveStudioStage.PRE_LIVE) }
 
     // Orientation state: Portrait (লাম্বা) vs Landscape (দিগলা)
     var isManualLandscape by remember { mutableStateOf(false) }
@@ -93,6 +107,39 @@ fun LiveStreamStudioDialog(
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
     var showStickersDialog by remember { mutableStateOf(false) }
 
+    // Runtime Camera & Audio Permissions
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        hasCameraPermission = results[Manifest.permission.CAMERA] ?: (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+        )
+        hasAudioPermission = results[Manifest.permission.RECORD_AUDIO] ?: (
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+        if (!hasCameraPermission) {
+            Toast.makeText(context, "লাইভ ক্যামেরা ব্যবহার করতে ক্যামেরা পারমিশন দিন", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission || !hasAudioPermission) {
+            cameraPermissionLauncher.launch(
+                arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+            )
+        }
+    }
+
     // Privacy & Audience
     var livePrivacy by remember { mutableStateOf(LivePrivacy.PUBLIC) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
@@ -101,14 +148,16 @@ fun LiveStreamStudioDialog(
     // Title & Description
     var liveDescription by remember { mutableStateOf("") }
     var liveTitle by remember { mutableStateOf("🔴 সবার সাথে সরাসরি আড্ডা ও গানবাজনা ✨") }
-    var liveHashtags by remember { mutableStateOf(listOf("#FaceFeed", "#Live", "#Bangladesh", "#NiyonIslamSohag", "#Viral")) }
+    var liveHashtags by remember { mutableStateOf(listOf("#FotoFilm", "#Live", "#Bangladesh", "#NiyonIslamSohag", "#Viral")) }
     var showEditDescriptionDialog by remember { mutableStateOf(false) }
 
-    // Timer & Viewers
-    var liveSeconds by remember { mutableIntStateOf(18) } // Matching Screenshot 2: 0:18
-    var isLiveTimerRunning by remember { mutableStateOf(false) }
-    var viewerCount by remember { mutableIntStateOf(5840) }
-    var recentJoinNotice by remember { mutableStateOf("🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!") }
+    // Timer & Viewers (rememberSaveable so a 20-min event break won't lose elapsed time)
+    var liveSeconds by rememberSaveable { mutableIntStateOf(18) } // Matching Screenshot 2: 0:18
+    var isLiveTimerRunning by rememberSaveable { mutableStateOf(false) }
+    var isLivePaused by rememberSaveable { mutableStateOf(false) }
+    var showEndLiveConfirmDialog by remember { mutableStateOf(false) }
+    var viewerCount by remember { mutableIntStateOf(0) }
+    var recentJoinNotice by remember { mutableStateOf("") }
 
     // 5 Social Advertisements
     var activeLiveAd by remember { mutableStateOf<SocialAd?>(null) }
@@ -131,29 +180,13 @@ fun LiveStreamStudioDialog(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var showEndedMenuOptions by remember { mutableStateOf(false) }
 
-    // Initialize initial comments
-    LaunchedEffect(Unit) {
-        liveComments.addAll(SampleData.sampleLiveComments)
-    }
-
-    // Active Live timer & viewer counter
-    LaunchedEffect(isLiveTimerRunning) {
-        if (isLiveTimerRunning) {
-            val joiners = listOf(
-                "🎉 তানভীর হাসান, রিয়া আক্তার ও আরও ১,২৫০ জন লাইভে যুক্ত হয়েছেন!",
-                "🔥 সাকিব আল হাসান ও আরও ৩,৪০০ জন দর্শক লাইভ দেখছেন!",
-                "✨ ঢাকা ও চট্টগ্রাম থেকে আরও ২,১০০ জন লাইভে জয়েন করেছেন!",
-                "👏 নাজমুল, সুমাইয়া ও আরও ৯৮০ জন লাইভে লাইক দিয়েছেন!"
-            )
-            var noticeIndex = 0
-            while (isLiveTimerRunning) {
+    // Active Live timer & viewer counter (freezes cleanly during event pause & resumes from same second)
+    LaunchedEffect(isLiveTimerRunning, isLivePaused) {
+        if (isLiveTimerRunning && !isLivePaused) {
+            while (isLiveTimerRunning && !isLivePaused) {
                 delay(1000)
+                if (!isLiveTimerRunning || isLivePaused) break
                 liveSeconds++
-                viewerCount += (-5..25).random()
-                if (liveSeconds % 12 == 0) {
-                    recentJoinNotice = joiners[noticeIndex % joiners.size]
-                    noticeIndex++
-                }
 
                 // Google AdMob Ads at 3 min (180s) and 8 min (480s)
                 if (liveSeconds >= 180 && !triggeredLiveAdSlots.contains(180)) {
@@ -162,44 +195,6 @@ fun LiveStreamStudioDialog(
                 } else if (liveSeconds >= 480 && !triggeredLiveAdSlots.contains(480)) {
                     triggeredLiveAdSlots = triggeredLiveAdSlots + 480
                     showGoogleLiveMidAd = true
-                }
-
-                // Social advertisements scheduling
-                if (activeLiveAd == null && !showGoogleLiveMidAd) {
-                    if (liveSeconds >= 35 && !shownLiveAdIndices.contains(0)) {
-                        shownLiveAdIndices = shownLiveAdIndices + 0
-                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (১/৫): রক্তদান কর্মসূচি"
-                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(0)
-                    } else if (liveSeconds >= 70 && !shownLiveAdIndices.contains(1)) {
-                        shownLiveAdIndices = shownLiveAdIndices + 1
-                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (২/৫): বৃক্ষরোপণ অভিযান"
-                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(1)
-                    } else if (liveSeconds >= 105 && !shownLiveAdIndices.contains(2)) {
-                        shownLiveAdIndices = shownLiveAdIndices + 2
-                        activeLiveAdSlotTitle = "লাইভ সামাজিক বিজ্ঞাপন (৩/৫): পথশিশু শিক্ষা তহবিল"
-                        activeLiveAd = SampleData.sampleSocialAds.getOrNull(2)
-                    }
-                }
-            }
-        }
-    }
-
-    // Extra incoming comments during live
-    LaunchedEffect(isLiveTimerRunning) {
-        if (isLiveTimerRunning) {
-            val extraComments = listOf(
-                LiveCommentItem(UUID.randomUUID().toString(), "Kamrul Hasan", "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200", "ভাইয়া সাউন্ড একদম পরিষ্কার ও ক্লিয়ার 👏"),
-                LiveCommentItem(UUID.randomUUID().toString(), "Fatema Khatun", "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200", "মাশাআল্লাহ, অনেক সুন্দর লাইভ ❤️"),
-                LiveCommentItem(UUID.randomUUID().toString(), "Biplob Kumar", "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=200", "লাইভ লিঙ্ক ফেসবুক ও মেসেঞ্জারে শেয়ার করলাম ভাই 🔥"),
-                LiveCommentItem(UUID.randomUUID().toString(), "Nusrat Jahan", "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200", "কেমন আছেন ভাইয়া? সিলেট থেকে দেখছি 🇧🇩"),
-                LiveCommentItem(UUID.randomUUID().toString(), "Arif Hossain", "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200", "হাজার হাজার মানুষ লাইভ দেখছে! দারুন 🤩"),
-                LiveCommentItem(UUID.randomUUID().toString(), "Sohag Fan Club", "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=200", "Niyon Islam Sohag ভাই এগিয়ে যান ❤️")
-            )
-            for (item in extraComments) {
-                delay(3000)
-                if (isLiveTimerRunning) {
-                    liveComments.add(item)
-                    floatingHearts.add(System.currentTimeMillis())
                 }
             }
         }
@@ -210,21 +205,15 @@ fun LiveStreamStudioDialog(
     val secs = liveSeconds % 60
     val timeFormatted = if (hours > 0) String.format("%02d:%02d:%02d", hours, minutes, secs) else String.format("%02d:%02d", minutes, secs)
 
-    // Camera feed image simulation
-    val cameraBackgroundModel = remember(isFrontCamera) {
-        if (isFrontCamera) {
-            currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=1000" }
-        } else {
-            // Rear camera feed: lush green trees, backyard outdoor scene from user screenshot
-            "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200"
-        }
+    val cameraBackgroundModel = remember(isFrontCamera, currentUser.avatarUrl) {
+        if (isFrontCamera) currentUser.avatarUrl else ""
     }
 
     Dialog(
         onDismissRequest = {
             if (currentStage == LiveStudioStage.ACTIVE_BROADCAST) {
-                isLiveTimerRunning = false
-                currentStage = LiveStudioStage.ENDED_SUMMARY
+                // Prevent accidental cut-off during an ongoing event live! Ask Pause vs End explicitly
+                showEndLiveConfirmDialog = true
             } else {
                 onDismiss()
             }
@@ -236,16 +225,19 @@ fun LiveStreamStudioDialog(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // 1. Camera Stream Background (Supports Portrait & Landscape seamlessly)
-            AsyncImage(
-                model = cameraBackgroundModel,
-                contentDescription = "Camera Feed",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .then(
-                        if (isFlashOn) Modifier.background(Color.White.copy(alpha = 0.25f)) else Modifier
-                    ),
-                contentScale = ContentScale.Crop
+            // 1. Real Hardware CameraX Feed (Supports Front <-> Rear Rotate Camera & Torch Flash)
+            LiveCameraPreviewBox(
+                hasCameraPermission = hasCameraPermission,
+                isFrontCamera = isFrontCamera,
+                isFlashOn = isFlashOn,
+                isActiveStage = currentStage != LiveStudioStage.ENDED_SUMMARY,
+                fallbackModel = cameraBackgroundModel,
+                onRequestPermission = {
+                    cameraPermissionLauncher.launch(
+                        arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                    )
+                },
+                modifier = Modifier.fillMaxSize()
             )
 
             // Enhancement overlay if active
@@ -315,14 +307,14 @@ fun LiveStreamStudioDialog(
                                 Spacer(modifier = Modifier.width(8.dp))
 
                                 // Profile Avatar
-                                AsyncImage(
-                                    model = currentUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200" },
+                                FotoFilmAvatar(
+                                    imageUrl = currentUser.avatarUrl,
+                                    name = currentUser.fullName,
                                     contentDescription = currentUser.fullName,
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .border(1.5.dp, Color.White, CircleShape),
-                                    contentScale = ContentScale.Crop
+                                        .border(1.5.dp, Color.White, CircleShape)
                                 )
 
                                 Spacer(modifier = Modifier.width(10.dp))
@@ -405,7 +397,7 @@ fun LiveStreamStudioDialog(
                                 // Help '?' icon
                                 IconButton(
                                     onClick = {
-                                        Toast.makeText(context, "Facebook Live: সরাসরি দর্শকদের সাথে সংযোগ স্থাপন করুন", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, "FotoFilm Live: সরাসরি দর্শকদের সাথে সংযোগ স্থাপন করুন", Toast.LENGTH_LONG).show()
                                     },
                                     modifier = Modifier.size(34.dp)
                                 ) {
@@ -453,9 +445,15 @@ fun LiveStreamStudioDialog(
                                         LiveToolButton(
                                             label = if (isFrontCamera) "Front cam" else "Rotate",
                                             icon = Icons.Default.Cameraswitch,
-                                            isActive = false,
+                                            isActive = isFrontCamera,
                                             onClick = {
+                                                if (!hasCameraPermission) {
+                                                    cameraPermissionLauncher.launch(
+                                                        arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                                                    )
+                                                }
                                                 isFrontCamera = !isFrontCamera
+                                                if (isFrontCamera) isFlashOn = false
                                                 Toast.makeText(
                                                     context,
                                                     if (isFrontCamera) "সামনের ক্যামেরা চালু হয়েছে 🤳" else "পিছনের ক্যামেরা চালু হয়েছে 📷",
@@ -574,9 +572,10 @@ fun LiveStreamStudioDialog(
                             Button(
                                 onClick = {
                                     liveSeconds = 1
+                                    isLivePaused = false
                                     isLiveTimerRunning = true
                                     currentStage = LiveStudioStage.ACTIVE_BROADCAST
-                                    Toast.makeText(context, "লাইভ ব্রডকাস্ট শুরু হয়েছে! 🔴", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "FotoFilm Live শুরু হয়েছে! 🔴", Toast.LENGTH_SHORT).show()
                                 },
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
@@ -638,56 +637,79 @@ fun LiveStreamStudioDialog(
                             .statusBarsPadding()
                             .navigationBarsPadding()
                     ) {
-                        // Top Bar matching Screenshot 2: Red LIVE 0:18 badge, Public indicator, Orientation toggle
+                        // Top Bar matching Screenshot 2: Red LIVE / Amber PAUSED clickable badge, Public indicator, Viewers, Orientation & ? Help
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Red LIVE badge with timer (LIVE 0:18)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // Clickable LIVE / PAUSED badge at the top:
+                                // When paused, tapping this top badge immediately resumes from the exact paused second!
                                 Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = Color(0xFFE53935)
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isLivePaused) Color(0xFFFF8F00) else Color(0xFFE53935),
+                                    border = if (isLivePaused) BorderStroke(1.dp, Color.White.copy(alpha = 0.8f)) else null,
+                                    modifier = Modifier.clickable {
+                                        isLivePaused = !isLivePaused
+                                        if (isLivePaused) {
+                                            Toast.makeText(
+                                                context,
+                                                "⏸️ লাইভ বিরতিতে রাখা হয়েছে ($timeFormatted) • আবার উপরে চাপ দিলে এখান থেকেই শুরু হবে",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "▶️ ঠিক $timeFormatted থেকে লাইভ পুনরায় শুরু হয়েছে!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "LIVE",
+                                            text = if (isLivePaused) "⏸️ বিরতি • চালু করুন" else "LIVE",
                                             color = Color.White,
                                             fontWeight = FontWeight.Black,
-                                            fontSize = 13.sp
+                                            fontSize = 12.sp
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = timeFormatted,
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold,
-                                            fontSize = 13.sp
+                                            fontSize = 12.sp
                                         )
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                if (!isLivePaused) {
+                                    Spacer(modifier = Modifier.width(6.dp))
 
-                                // Privacy Indicator: 🌐 Public
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color.Black.copy(alpha = 0.5f)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    // Privacy Indicator: 🌐 Public
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = Color.Black.copy(alpha = 0.5f)
                                     ) {
-                                        Text("🌐 Public", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("🌐 Public", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        }
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.width(8.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
 
                                 // Viewers
                                 Surface(
@@ -695,11 +717,11 @@ fun LiveStreamStudioDialog(
                                     color = Color.Black.copy(alpha = 0.5f)
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Visibility, contentDescription = null, tint = Color.Red, modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Icon(Icons.Default.Visibility, contentDescription = null, tint = if (isLivePaused) Color(0xFFFFCA28) else Color.Red, modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
                                         Text(
                                             text = if (viewerCount >= 1000) String.format("%.1fK", viewerCount / 1000.0) else "$viewerCount",
                                             color = Color.White,
@@ -710,41 +732,121 @@ fun LiveStreamStudioDialog(
                                 }
                             }
 
-                            // Orientation toggle (লাম্বা / দিগলা)
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isLandscape) Color(0xFF00E676) else Color.White.copy(alpha = 0.2f),
-                                modifier = Modifier.clickable {
-                                    isManualLandscape = !isManualLandscape
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Orientation toggle (লাম্বা / দিগলা)
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (isLandscape) Color(0xFF00E676) else Color.White.copy(alpha = 0.2f),
+                                    modifier = Modifier.clickable {
+                                        isManualLandscape = !isManualLandscape
+                                    }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isLandscape) Icons.Default.ScreenRotation else Icons.Default.StayCurrentPortrait,
+                                            contentDescription = "Orientation",
+                                            tint = if (isLandscape) Color.Black else Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = if (isLandscape) "দিগলা" else "লাম্বা",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isLandscape) Color.Black else Color.White
+                                        )
+                                    }
                                 }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+
+                                Spacer(modifier = Modifier.width(4.dp))
+
+                                IconButton(
+                                    onClick = {
+                                        Toast.makeText(
+                                            context,
+                                            "FotoFilm Live: সরাসরি দর্শকদের সাথে সংযোগ স্থাপন করুন (বিরতি নিতে নিচের ⏸️ বিরতি ও পুনরায় চালাতে উপরে চাপ দিন)",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    },
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
-                                        imageVector = if (isLandscape) Icons.Default.ScreenRotation else Icons.Default.StayCurrentPortrait,
-                                        contentDescription = "Orientation",
-                                        tint = if (isLandscape) Color.Black else Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(
-                                        text = if (isLandscape) "দিগলা" else "লাম্বা",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isLandscape) Color.Black else Color.White
+                                        imageVector = Icons.Default.HelpOutline,
+                                        contentDescription = "FotoFilm Live Help",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
                                     )
                                 }
                             }
                         }
 
-                        // Middle Viewport: Live feed with right overlay controls
+                        // Middle Viewport: Live feed with right overlay controls + Pause Break Banner
                         Box(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
                         ) {
+                            // Centered Event Pause / Break Banner when paused (e.g., 20-min ceremony break)
+                            if (isLivePaused) {
+                                Surface(
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = Color.Black.copy(alpha = 0.78f),
+                                    border = BorderStroke(1.5.dp, Color(0xFFFFB300)),
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .padding(horizontal = 24.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(18.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "⏸️ অনুষ্ঠানের লাইভ বিরতি চলছে",
+                                            color = Color(0xFFFFCA28),
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 16.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "সময় সংরক্ষিত: $timeFormatted • লাইভ কাটবে না",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = "২০ মিনিট বা যেকোনো বিরতির পর উপরে 'বিরতি • চালু করুন' বা নিচের বাটনে চাপ দিলে ঠিক এখান থেকেই লাইভ শুরু হবে।",
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            fontSize = 11.sp,
+                                            lineHeight = 16.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Spacer(modifier = Modifier.height(14.dp))
+                                        Button(
+                                            onClick = {
+                                                isLivePaused = false
+                                                Toast.makeText(
+                                                    context,
+                                                    "▶️ ঠিক $timeFormatted থেকে লাইভ পুনরায় শুরু হয়েছে!",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            },
+                                            shape = RoundedCornerShape(10.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen)
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("এখান থেকে লাইভ চালু করুন", fontWeight = FontWeight.Bold, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+
                             // Right side buttons matching Screenshot 2: Flash, Rotate, Stickers, Collapse
                             Column(
                                 modifier = Modifier
@@ -774,7 +876,13 @@ fun LiveStreamStudioDialog(
                                 // Rotate Camera: Front ↔ Rear (সামনের ও পিছনের ক্যামেরা)
                                 IconButton(
                                     onClick = {
+                                        if (!hasCameraPermission) {
+                                            cameraPermissionLauncher.launch(
+                                                arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+                                            )
+                                        }
                                         isFrontCamera = !isFrontCamera
+                                        if (isFrontCamera) isFlashOn = false
                                         Toast.makeText(
                                             context,
                                             if (isFrontCamera) "সামনের ক্যামেরা চালু হয়েছে 🤳" else "পিছনের ক্যামেরা চালু হয়েছে 📷",
@@ -784,11 +892,11 @@ fun LiveStreamStudioDialog(
                                     modifier = Modifier
                                         .size(38.dp)
                                         .clip(CircleShape)
-                                        .background(Color.Black.copy(alpha = 0.5f))
+                                        .background(if (isFrontCamera) Color(0xFF1877F2).copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.5f))
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Cameraswitch,
-                                        contentDescription = "Rotate",
+                                        contentDescription = "Rotate Camera",
                                         tint = Color.White,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -925,17 +1033,19 @@ fun LiveStreamStudioDialog(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Bottom Action Icons matching Screenshot 2: Link, Equalizer, Q&A, Stars, Co-host, Share, Capture, FINISH
+                            // Bottom Action Icons + Event Pause/Resume Button + FINISH Button
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                // Group of toolbar icons
+                                // Group of toolbar icons (horizontally scrollable so Pause + Finish never clip)
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .horizontalScroll(rememberScrollState())
                                 ) {
                                     // 1. Link icon
                                     IconButton(
@@ -1002,11 +1112,53 @@ fun LiveStreamStudioDialog(
 
                                 Spacer(modifier = Modifier.width(6.dp))
 
-                                // Finish Button (Red / White Button matching Screenshot 2)
+                                // Pause / Resume Event Live Button ("লাইভ থামানোর অপশন — কাটবে না, উপরে চাপ দিলে এখান থেকে শুরু হবে")
                                 Button(
                                     onClick = {
-                                        isLiveTimerRunning = false
-                                        currentStage = LiveStudioStage.ENDED_SUMMARY
+                                        isLivePaused = !isLivePaused
+                                        if (isLivePaused) {
+                                            Toast.makeText(
+                                                context,
+                                                "⏸️ লাইভ সাময়িক বিরতিতে আছে ($timeFormatted) • পরে উপরে চাপ দিয়ে এখান থেকেই শুরু করুন",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "▶️ ঠিক $timeFormatted থেকে লাইভ আবার শুরু হয়েছে!",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isLivePaused) BangladeshGreen else Color(0xFFFF8F00),
+                                        contentColor = Color.White
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(34.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isLivePaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                        contentDescription = if (isLivePaused) "লাইভ চালু করুন" else "লাইভ বিরতি দিন",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(3.dp))
+                                    Text(
+                                        text = if (isLivePaused) "চালু" else "বিরতি",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp,
+                                        color = Color.White
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(6.dp))
+
+                                // Finish Button (Protected: asks Pause vs End so accidental tap won't cut the live!)
+                                Button(
+                                    onClick = {
+                                        showEndLiveConfirmDialog = true
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
@@ -1272,7 +1424,7 @@ fun LiveStreamStudioDialog(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            Toast.makeText(context, "রিলসে রূপান্তর করার প্রসেসিং শুরু হয়েছে 🎬", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "শর্ট ভিডিওতে রূপান্তর করার প্রসেসিং শুরু হয়েছে 🎬", Toast.LENGTH_SHORT).show()
                                         }
                                 ) {
                                     Row(
@@ -1283,7 +1435,7 @@ fun LiveStreamStudioDialog(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(Icons.Default.VideoLibrary, contentDescription = null, tint = Color(0xFFAB47BC), modifier = Modifier.size(22.dp))
                                             Spacer(modifier = Modifier.width(12.dp))
-                                            Text("Turn this live into a reel", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                            Text("Turn this live into a Short Video", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
                                         }
                                         Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
                                     }
@@ -1302,7 +1454,7 @@ fun LiveStreamStudioDialog(
                                             viewModel.createPost(
                                                 text = if (liveDescription.isNotBlank()) liveDescription else "🔴 লাইভ সম্পন্ন: $liveTitle",
                                                 hashtags = liveHashtags,
-                                                images = listOf(if (isFrontCamera) currentUser.avatarUrl else "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1000"),
+                                                images = listOfNotNull(currentUser.avatarUrl.ifBlank { null }),
                                                 isVideo = true,
                                                 videoTitle = liveTitle
                                             )
@@ -1353,6 +1505,73 @@ fun LiveStreamStudioDialog(
             // =========================================================================
             // DIALOGS & OVERLAYS
             // =========================================================================
+
+            // End Live Protection Confirmation Dialog ("লাইভ না কাটলে কেটে যাবে না")
+            if (showEndLiveConfirmDialog) {
+                AlertDialog(
+                    onDismissRequest = { showEndLiveConfirmDialog = false },
+                    title = {
+                        Text(
+                            "লাইভ শেষ করবেন নাকি বিরতি নিবেন?",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "অনুষ্ঠানের বিরতি (যেমন ২০ মিনিটের বিরতি) হলে লাইভ না কেটে 'বিরতি নিন' চাপুন। পরে উপরে চাপ দিলেই ঠিক $timeFormatted থেকে আবার শুরু হবে।",
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp
+                            )
+                            Button(
+                                onClick = {
+                                    isLivePaused = true
+                                    showEndLiveConfirmDialog = false
+                                    Toast.makeText(
+                                        context,
+                                        "⏸️ লাইভ বিরতিতে আছে ($timeFormatted) — উপরে চাপ দিলে এখান থেকেই শুরু হবে",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8F00)),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("⏸️ সাময়িক বিরতি নিন (লাইভ কাটবে না)", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = {
+                                    isLivePaused = false
+                                    showEndLiveConfirmDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("▶️ লাইভ চালিয়ে যান", color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showEndLiveConfirmDialog = false
+                                isLivePaused = false
+                                isLiveTimerRunning = false
+                                currentStage = LiveStudioStage.ENDED_SUMMARY
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
+                        ) {
+                            Text("⏹️ হ্যাঁ, লাইভ শেষ করুন", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showEndLiveConfirmDialog = false }) {
+                            Text("ফিরে যান")
+                        }
+                    }
+                )
+            }
 
             // Delete Confirm Dialog
             if (showDeleteConfirmDialog) {
@@ -1673,3 +1892,168 @@ private fun LiveToolButton(
         )
     }
 }
+
+@Composable
+private fun LiveCameraPreviewBox(
+    hasCameraPermission: Boolean,
+    isFrontCamera: Boolean,
+    isFlashOn: Boolean,
+    isActiveStage: Boolean,
+    fallbackModel: String,
+    onRequestPermission: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val previewView = remember {
+        PreviewView(context).apply {
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
+    var cameraProviderRef by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var boundCamera by remember { mutableStateOf<Camera?>(null) }
+    var isCameraBound by remember { mutableStateOf(false) }
+
+    LaunchedEffect(hasCameraPermission, isFrontCamera, isActiveStage, lifecycleOwner) {
+        if (!hasCameraPermission || !isActiveStage) {
+            try {
+                cameraProviderRef?.unbindAll()
+            } catch (_: Exception) {}
+            boundCamera = null
+            isCameraBound = false
+            return@LaunchedEffect
+        }
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
+        cameraProviderFuture.addListener(
+            {
+                try {
+                    val provider = cameraProviderFuture.get()
+                    cameraProviderRef = provider
+                    val desiredSelector = if (isFrontCamera) {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    } else {
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    }
+                    val fallbackSelector = if (isFrontCamera) {
+                        CameraSelector.DEFAULT_BACK_CAMERA
+                    } else {
+                        CameraSelector.DEFAULT_FRONT_CAMERA
+                    }
+                    val activeSelector = when {
+                        provider.hasCamera(desiredSelector) -> desiredSelector
+                        provider.hasCamera(fallbackSelector) -> {
+                            Toast.makeText(
+                                context,
+                                if (isFrontCamera) "সামনের ক্যামেরা পাওয়া যায়নি, পিছনের ক্যামেরা চালু" else "পিছনের ক্যামেরা পাওয়া যায়নি, সামনের ক্যামেরা চালু",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            fallbackSelector
+                        }
+                        else -> null
+                    }
+                    if (activeSelector != null) {
+                        provider.unbindAll()
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
+                        boundCamera = provider.bindToLifecycle(lifecycleOwner, activeSelector, preview)
+                        isCameraBound = true
+                    } else {
+                        boundCamera = null
+                        isCameraBound = false
+                    }
+                } catch (_: Exception) {
+                    boundCamera = null
+                    isCameraBound = false
+                }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
+
+    LaunchedEffect(boundCamera, isFlashOn, isFrontCamera) {
+        val cam = boundCamera ?: return@LaunchedEffect
+        try {
+            if (cam.cameraInfo.hasFlashUnit() && !isFrontCamera) {
+                cam.cameraControl.enableTorch(isFlashOn)
+            } else if (cam.cameraInfo.hasFlashUnit()) {
+                cam.cameraControl.enableTorch(false)
+            }
+        } catch (_: Exception) {}
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                cameraProviderRef?.unbindAll()
+            } catch (_: Exception) {}
+        }
+    }
+
+    Box(modifier = modifier) {
+        if (hasCameraPermission && isActiveStage) {
+            AndroidView(
+                factory = { previewView },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        if (!isCameraBound) {
+            if (fallbackModel.isNotBlank()) {
+                AsyncImage(
+                    model = fallbackModel,
+                    contentDescription = "Camera Feed",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(
+                            if (isFlashOn) Modifier.background(Color.White.copy(alpha = 0.2f)) else Modifier
+                        ),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xFF0E1B16), Color(0xFF101820), Color(0xFF000000))
+                            )
+                        )
+                )
+            }
+        }
+
+        if (!hasCameraPermission && isActiveStage) {
+            Surface(
+                onClick = onRequestPermission,
+                shape = RoundedCornerShape(20.dp),
+                color = Color.Black.copy(alpha = 0.72f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Videocam,
+                        contentDescription = "Enable Camera",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "ফোনের ক্যামেরা চালু করতে ট্যাপ করুন",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+    }
+}
+

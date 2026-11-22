@@ -460,7 +460,10 @@ fun LudoGroupPolicyDialog(
     // Sub-dialog 4: 4. বন্ধুদের ইনভাইট করুন
     // ----------------------------------------------------
     if (showInviteFriendsDialog) {
+        val currentUser by viewModel.currentUser.collectAsState()
+        val allUsers by viewModel.allAppUsers.collectAsState()
         LudoInviteFriendsDialog(
+            realUsers = allUsers.filter { it.id != currentUser.id },
             onDismiss = { showInviteFriendsDialog = false },
             onInviteSent = { friendName ->
                 Toast.makeText(context, "🎉 $friendName-কে লুডু খেলার আমন্ত্রণ পাঠানো হয়েছে! 🎲", Toast.LENGTH_SHORT).show()
@@ -476,8 +479,16 @@ fun LudoGroupPolicyDialog(
     // Sub-dialog 5: 5. Help & Support
     // ----------------------------------------------------
     if (showHelpSupportDialog) {
+        val currentUser by viewModel.currentUser.collectAsState()
         HelpSupportDialog(
-            onDismiss = { showHelpSupportDialog = false }
+            onDismiss = { showHelpSupportDialog = false },
+            onSubmitSupportMessage = { messageText ->
+                viewModel.submitSupportTicket(
+                    message = "[লুডু কিং গ্রুপ - হেল্পলাইন সাপোর্ট]\n$messageText",
+                    profileUrl = "https://fotofilm.app/u/${currentUser.username}",
+                    screenshotUrls = emptyList()
+                )
+            }
         )
     }
 
@@ -695,6 +706,7 @@ fun LudoModeInfoDialog(
  */
 @Composable
 fun LudoInviteFriendsDialog(
+    realUsers: List<User> = emptyList(),
     onDismiss: () -> Unit,
     onInviteSent: (String) -> Unit,
     onStartOnlineRoom: () -> Unit
@@ -703,17 +715,8 @@ fun LudoInviteFriendsDialog(
     var searchQuery by remember { mutableStateOf("") }
     val invitedSet = remember { mutableStateListOf<String>() }
 
-    val friendsList = remember {
-        listOf(
-            Triple("1", "Rahim Aly", true),
-            Triple("2", "Joy Ahmed", true),
-            Triple("3", "Yousuf Farazi", false),
-            Triple("4", "হাসান মাহমুদ সাইফুল্লাহ", true),
-            Triple("5", "Mohammad Ali", true),
-            Triple("6", "MD Mohiuddin", true),
-            Triple("7", "Rafi Islam", false),
-            Triple("8", "Tanvir Hasan", true)
-        )
+    val friendsList = remember(realUsers) {
+        realUsers.map { Triple(it.id, it.fullName, it.isOnline) }
     }
 
     val filtered = friendsList.filter {
@@ -779,7 +782,21 @@ fun LudoInviteFriendsDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    filtered.forEach { (id, name, isOnline) ->
+                    if (filtered.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 28.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "কোনো অনলাইন বন্ধু খুঁজে পাওয়া যায়নি",
+                                fontSize = 13.sp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                        }
+                    } else {
+                        filtered.forEach { (id, name, isOnline) ->
                         val isInvited = invitedSet.contains(id)
                         Surface(
                             shape = RoundedCornerShape(10.dp),
@@ -860,6 +877,7 @@ fun LudoInviteFriendsDialog(
                                 }
                             }
                         }
+                    }
                     }
                 }
 

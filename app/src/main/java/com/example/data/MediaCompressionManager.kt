@@ -24,7 +24,7 @@ enum class CompressionMediaKind(
     val maxDurationMs: Long
 ) {
     LONG_VIDEO("লং ভিডিও (৩ মিনিট)", 30L * 1024L * 1024L, 180_000L),
-    REEL_VIDEO("রিল ভিডিও (৩০ সেকেন্ড)", 8L * 1024L * 1024L, 30_000L),
+    REEL_VIDEO("শর্ট ভিডিও (৩০ সেকেন্ড)", 8L * 1024L * 1024L, 30_000L),
     STORY_VIDEO("ভিডিও স্টোরি (১৫ সেকেন্ড)", 3L * 1024L * 1024L, 15_000L),
     CHAT_VIDEO("ChatFilm ফ্রি ভিডিও", 15L * 1024L * 1024L, 180_000L),
     PHOTO("ছবি (৩০০ KB)", 300L * 1024L, 0L)

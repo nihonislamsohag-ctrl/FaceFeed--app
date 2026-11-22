@@ -1,5 +1,8 @@
 package com.example.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -145,10 +148,10 @@ fun FidaVerifiedDialog(
                     // Status Card
                     Surface(
                         shape = RoundedCornerShape(16.dp),
-                        color = if (isVerified) FacebookBlue.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        color = if (isVerified) BangladeshGreen.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
                         border = androidx.compose.foundation.BorderStroke(
                             1.dp,
-                            if (isVerified) FacebookBlue else MaterialTheme.colorScheme.outlineVariant
+                            if (isVerified) BangladeshGreen else MaterialTheme.colorScheme.outlineVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -169,13 +172,13 @@ fun FidaVerifiedDialog(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = if (isVerified) "ভেরিফিকেশন সক্রিয় আছে 🔵" else "ভেরিফিকেশন নিষ্ক্রিয়",
+                                    text = if (isVerified) "ভেরিফিকেশন সক্রিয় আছে ✅" else "ভেরিফিকেশন নিষ্ক্রিয়",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 15.sp,
-                                    color = if (isVerified) FacebookBlue else MaterialTheme.colorScheme.onSurface
+                                    color = if (isVerified) BangladeshGreen else MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = if (isVerified) "${currentUser.fullName}-এর প্রোফাইলে নীল ব্যাজ দৃশ্যমান" else "ব্লু ব্যাজ চালু করতে সাবস্ক্রাইব করুন",
+                                    text = if (isVerified) "${currentUser.fullName}-এর প্রোফাইলে সবুজ-হলুদ ভেরিফাই ব্যাজ দৃশ্যমান" else "ভেরিফাইড ব্যাজ চালু করতে সাবস্ক্রাইব করুন",
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -185,7 +188,7 @@ fun FidaVerifiedDialog(
                                 onCheckedChange = { viewModel.toggleFidaVerified() },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = FacebookBlue
+                                    checkedTrackColor = BangladeshGreen
                                 )
                             )
                         }
@@ -624,9 +627,9 @@ fun FidaVerifiedDialog(
 
                     BenefitItem(
                         icon = Icons.Default.Verified,
-                        iconTint = FacebookBlue,
-                        title = "অফিশিয়াল নীল ভেরিফাইড ব্যাজ",
-                        description = "আপনার প্রোফাইল নামের পাশে অফিশিয়াল ভেরিফাইড নীল ব্যাজ থাকবে।"
+                        iconTint = BangladeshGreen,
+                        title = "অফিশিয়াল সবুজ-হলুদ ভেরিফাইড ব্যাজ",
+                        description = "আপনার প্রোফাইল নামের পাশে অফিশিয়াল সবুজ-হলুদ ভেরিফাইড ব্যাজ থাকবে।"
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -643,7 +646,7 @@ fun FidaVerifiedDialog(
                     BenefitItem(
                         icon = Icons.Default.HeadsetMic,
                         iconTint = Color(0xFFFF9800),
-                        title = "সরাসরি FaceFeed সাপোর্ট",
+                        title = "সরাসরি FotoFilm সাপোর্ট",
                         description = "যেকোনো কারিগরি সাহায্য বা সমস্যার দ্রুত সমাধানের জন্য ডেডিকেটেড সাপোর্ট দল।"
                     )
 
@@ -722,11 +725,18 @@ fun FidaVerifiedDialog(
     // DIALOG 3: NID Photo Upload / Camera Selector Dialog
     // =========================================================================
     if (showNidUploadSheet && currentNidTarget != null) {
-        val sampleNidPhotos = listOf(
-            "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=600&auto=format&fit=crop&q=80",
-            "https://images.unsplash.com/photo-1557804506-669a67965ba0?w=600&auto=format&fit=crop&q=80"
-        )
+        val nidPhotoLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickVisualMedia()
+        ) { uri ->
+            if (uri != null) {
+                if (currentNidTarget == "front") {
+                    viewModel.setNidFront(uri.toString())
+                } else {
+                    viewModel.setNidBack(uri.toString())
+                }
+                showNidUploadSheet = false
+            }
+        }
         AlertDialog(
             onDismissRequest = { showNidUploadSheet = false },
             title = {
@@ -737,40 +747,24 @@ fun FidaVerifiedDialog(
                 )
             },
             text = {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
-                        text = "ক্যামেরা বা গ্যালারি থেকে ছবি নির্বাচন করুন:",
-                        fontSize = 12.sp,
+                        text = "ভেরিফিকেশনের জন্য আপনার ফোনের গ্যালারি থেকে আসল জাতীয় পরিচয়পত্রের ছবি আপলোড করুন:",
+                        fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Row(
+                    Button(
+                        onClick = {
+                            nidPhotoLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        colors = ButtonDefaults.buttonColors(containerColor = FacebookBlue)
                     ) {
-                        sampleNidPhotos.forEachIndexed { index, url ->
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(60.dp)
-                                    .clickable {
-                                        if (currentNidTarget == "front") {
-                                            viewModel.setNidFront(url)
-                                        } else {
-                                            viewModel.setNidBack(url)
-                                        }
-                                        showNidUploadSheet = false
-                                    }
-                            ) {
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = "Sample $index",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
-                        }
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("গ্যালারি থেকে ছবি নির্বাচন করুন", fontWeight = FontWeight.Bold)
                     }
                 }
             },
@@ -796,10 +790,10 @@ private fun BkashNagadPaymentDialog(
     onPaymentComplete: (method: String, pin: String) -> Unit
 ) {
     var selectedGateway by remember { mutableStateOf("bKash") } // "bKash" or "Nagad"
-    var mobileNumber by remember { mutableStateOf("01789123456") }
+    var mobileNumber by remember { mutableStateOf("") }
     var pinNumber by remember { mutableStateOf("") }
     var step by remember { mutableStateOf(1) } // 1: Number & OTP, 2: PIN
-    var otpCode by remember { mutableStateOf("1234") }
+    var otpCode by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val gatewayColor = when (selectedGateway) {

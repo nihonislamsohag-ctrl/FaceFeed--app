@@ -44,7 +44,7 @@ fun AppDownloadWebDialog(
 
     // Official Web Application URL
     val webAppUrl = "https://ais-pre-uxxbqekxfrv4arrv2ck4ma-461492489791.asia-southeast1.run.app"
-    val shareText = "🔥 FaceFeed - সোশ্যাল মিডিয়া অ্যাপ!\nক্রোম ব্রাউজার ও গুগলে সরাসরি ব্যবহার করুন অথবা অ্যাপ ডাউনলোড করুন:\n$webAppUrl\n\nপ্রতিষ্ঠাতা: Niyon Islam Sohag"
+    val shareText = "🔥 FotoFilm - সোশ্যাল মিডিয়া অ্যাপ!\nক্রোম ব্রাউজার ও গুগলে সরাসরি ব্যবহার করুন অথবা অ্যাপ ডাউনলোড করুন:\n$webAppUrl\n\nপ্রতিষ্ঠাতা: Niyon Islam Sohag"
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -231,7 +231,7 @@ fun AppDownloadWebDialog(
                             putExtra(Intent.EXTRA_TEXT, shareText)
                             type = "text/plain"
                         }
-                        val shareIntent = Intent.createChooser(sendIntent, "FaceFeed অ্যাপ লিংক শেয়ার করুন")
+                        val shareIntent = Intent.createChooser(sendIntent, "FotoFilm অ্যাপ লিংক শেয়ার করুন")
                         context.startActivity(shareIntent)
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -267,7 +267,7 @@ fun AppDownloadWebDialog(
                         }
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "১. ক্রোম ব্রাউজার বা গুগলে সার্চবারে এই লিংকটি লিখলেই যে কেউ সরাসরি FaceFeed-এ প্রবেশ করতে পারবে।\n" +
+                            text = "১. ক্রোম ব্রাউজার বা গুগলে সার্চবারে এই লিংকটি লিখলেই যে কেউ সরাসরি FotoFilm-এ প্রবেশ করতে পারবে।\n" +
                                     "২. ব্রাউজারে অ্যাপ চলাকালে ৩-ডট মেন্যু থেকে 'Install App' বা 'Add to Home screen' চাপলেই হোমস্ক্রিনে অ্যাপ ইনস্টল হয়ে যাবে।\n" +
                                     "৩. কোনো ডাউনলোড ছাড়াই মোবাইল বা কম্পিউটার থেকে ফুল স্পিডে ব্যবহার করা যাবে!",
                             fontSize = 11.sp,

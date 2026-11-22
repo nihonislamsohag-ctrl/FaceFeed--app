@@ -164,11 +164,10 @@ fun ProfileMoreOptionsDialog(
                         .fillMaxWidth()
                         .height(90.dp)
                 ) {
-                    AsyncImage(
-                        model = user.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1200" },
+                    FotoFilmCoverBackground(
+                        imageUrl = user.coverUrl,
                         contentDescription = "Cover preview",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize()
                     )
                     Box(
                         modifier = Modifier
@@ -297,7 +296,7 @@ fun ProfileMoreOptionsDialog(
             title = { Text("প্রোফাইল ও পোস্ট Advertise (বিজ্ঞাপন)", fontWeight = FontWeight.Bold) },
             text = {
                 Column {
-                    Text("আপনার প্রোফাইল ও পোস্ট বেশি মানুষের কাছে পৌঁছাতে মেটা স্টাইল ক্যাম্পেইন চালু করুন।", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("আপনার প্রোফাইল ও পোস্ট বেশি মানুষের কাছে পৌঁছাতে FotoFilm স্টাইল ক্যাম্পেইন চালু করুন।", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text("বাজেট নির্বাচন করুন:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     Row(
@@ -358,7 +357,7 @@ fun ProfileMoreOptionsDialog(
                         }
                     }
                     Text("• Profile is recommendable ✅ (সুপারিশযোগ্য)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("• Fida Verified সুরক্ষাপ্রাপ্ত 🔵", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("• Fida Verified সুরক্ষাপ্রাপ্ত ✅", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text("• কমিউনিটি স্ট্যান্ডার্ড ১০০% মেনে চলা হয়েছে 🛡️", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             },
@@ -579,7 +578,7 @@ fun ProfileMoreOptionsDialog(
             title = { Text("Invite people to connect", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("আপনার বন্ধু ও পরিচিতদের FaceFeed-এ যুক্ত হতে আমন্ত্রণ জানান:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("আপনার বন্ধু ও পরিচিতদের FotoFilm-এ যুক্ত হতে আমন্ত্রণ জানান:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(
                         onClick = {
                             val profileLink = "https://facefeed.app/${user.username.ifEmpty { "niyonislamsohag" }}"

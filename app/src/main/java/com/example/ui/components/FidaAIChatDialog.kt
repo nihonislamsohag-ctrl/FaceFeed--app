@@ -1,6 +1,10 @@
 package com.example.ui.components
 
+import android.Manifest
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,12 +26,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.ui.theme.BangladeshGreen
+import com.example.ui.theme.BangladeshRed
 import com.example.ui.theme.FacebookBlue
+import com.example.util.FidaSpeechSession
+import com.example.util.LiveMicHelper
 import com.example.viewmodel.FaceFeedViewModel
 import kotlinx.coroutines.launch
 
@@ -37,11 +46,36 @@ fun FidaAIChatDialog(
     viewModel: FaceFeedViewModel,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     val messages by viewModel.fidaAIMessages.collectAsState()
     val isTyping by viewModel.isFidaAITyping.collectAsState()
     var inputText by remember { mutableStateOf("") }
+    var isVoiceListening by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+
+    val speechSession = remember {
+        FidaSpeechSession(
+            context = context,
+            onPartialOrFinalText = { spoken -> inputText = spoken },
+            onListeningChanged = { listening -> isVoiceListening = listening },
+            onErrorMessage = { msg -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() }
+        )
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted || LiveMicHelper.hasMicPermission(context)) {
+            speechSession.start()
+        } else {
+            Toast.makeText(context, "ফিদা এআই-তে ভয়েস দিতে মাইক্রোফোন অনুমতি দিন", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { speechSession.stop() }
+    }
 
     LaunchedEffect(messages.size, isTyping) {
         if (messages.isNotEmpty()) {
@@ -132,7 +166,7 @@ fun FidaAIChatDialog(
                                 }
                             }
                             Text(
-                                text = "ভদ্র, আন্তরিক ও সর্বদা প্রস্তুত FaceFeed সহকারী",
+                                text = "ভদ্র, আন্তরিক ও সর্বদা প্রস্তুত FotoFilm সহকারী",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -231,7 +265,7 @@ fun FidaAIChatDialog(
                                 "🌾 বাংলাদেশের ইতিহাস বলো",
                                 "💡 সুন্দর একটি স্ট্যাটাস লিখে দাও",
                                 "💖 ভালো ব্যবহারের উপদেশ দাও",
-                                "📱 FaceFeed ফিচারসমূহ কী কী?",
+                                "📱 FotoFilm ফিচারসমূহ কী কী?",
                                 "🟢 সবুজ ভেরিফাইড টিক কীভাবে পাব?"
                             )
                             promptChips.forEach { chipText ->
@@ -364,10 +398,34 @@ fun FidaAIChatDialog(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(
+                            onClick = {
+                                if (isVoiceListening) {
+                                    speechSession.stop()
+                                } else if (LiveMicHelper.hasMicPermission(context)) {
+                                    speechSession.start()
+                                } else {
+                                    micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(if (isVoiceListening) Color(0xFFFFEBEE) else Color(0xFFE8F5E9))
+                        ) {
+                            Icon(
+                                imageVector = if (isVoiceListening) Icons.Default.Stop else Icons.Default.Mic,
+                                contentDescription = "Voice Input",
+                                tint = if (isVoiceListening) BangladeshRed else BangladeshGreen
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(6.dp))
+
                         TextField(
                             value = inputText,
                             onValueChange = { inputText = it },
-                            placeholder = { Text("Fida AI-কে যে কোনো প্রশ্ন করুন...", fontSize = 14.sp) },
+                            placeholder = { Text(if (isVoiceListening) "শুনছি... কথা বলুন" else "Fida AI-কে প্রশ্ন করুন বা মাইকে বলুন...", fontSize = 13.5.sp) },
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp, max = 100.dp),
@@ -385,6 +443,7 @@ fun FidaAIChatDialog(
                         IconButton(
                             onClick = {
                                 if (inputText.isNotBlank()) {
+                                    speechSession.stop()
                                     val msg = inputText
                                     inputText = ""
                                     viewModel.sendFidaAIMessage(msg)

@@ -36,6 +36,8 @@ import com.example.model.Translations
 import com.example.ui.components.CreateGroupImage2Dialog
 import com.example.ui.components.CreatePageImage2Dialog
 import com.example.ui.components.FidaVerifiedBadge
+import com.example.ui.components.FotoFilmAvatar
+import com.example.ui.components.FotoFilmCoverBackground
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
 import com.example.viewmodel.AppTab
@@ -204,127 +206,8 @@ fun GroupsPagesScreen(
             var searchQuery by remember { mutableStateOf("") }
             var isSearching by remember { mutableStateOf(false) }
 
-            // Preset Most Visited Groups from Screenshot 3
-            val screenshotGroups = remember {
-                listOf(
-                    SocialGroup(
-                        id = "grp_tasmim",
-                        name = "Tasmim Tinni",
-                        description = "Tasmim Tinni Personal Community & Updates",
-                        coverUrl = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400",
-                        memberCount = 4200,
-                        isPrivate = false,
-                        creatorName = "Tasmim Tinni",
-                        createdAt = "Updated 17 hours ago."
-                    ),
-                    SocialGroup(
-                        id = "grp_nidra_dc",
-                        name = "নিদ্রা ডিসি পয়েন্ট (তালতলী উপজেলা বরগুনা)",
-                        description = "নিদ্রা ডিসি পয়েন্ট তালতলী উপজেলা বরগুনা পর্যটন ও ক্যাম্পিং কেন্দ্রিক সাধারণ গ্রুপ।",
-                        coverUrl = "", // Uses R.drawable.img_nidra_dc_point_cover
-                        memberCount = 1000,
-                        isPrivate = false,
-                        creatorName = "Niyon Islam Sohag",
-                        createdAt = "Updated on Sunday."
-                    ),
-                    SocialGroup(
-                        id = "grp_love_color",
-                        name = "❤️ভালোবাসার রং কী কেউ জানে❤️",
-                        description = "ভালোবাসার কবিতা, গল্প ও অনুভূতি প্রকাশ করার সুন্দর গ্রুপ।",
-                        coverUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400",
-                        memberCount = 15400,
-                        isPrivate = false,
-                        creatorName = "Community Admin",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_nidra_beach",
-                        name = "নিদ্রার চর সমুদ্র সৈকত ফটো গ্রাফার ইউনিট",
-                        description = "বরগুনা তালতলী নিদ্রার চরের প্রাকৃতিক সৌন্দর্য ও আলোকচিত্র প্রদর্শনী।",
-                        coverUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=400",
-                        memberCount = 6800,
-                        isPrivate = false,
-                        creatorName = "Photo Admin",
-                        createdAt = "Updated about 3 weeks ago."
-                    ),
-                    SocialGroup(
-                        id = "grp_sheikh_hasina",
-                        name = "মাননীয় প্রধানমন্ত্রী শেখ হাসিনা",
-                        description = "উন্নয়ন ও অগ্রযাত্রার বাংলাদেশ ভিত্তিক গ্রুপ।",
-                        coverUrl = "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400",
-                        memberCount = 52000,
-                        isPrivate = false,
-                        creatorName = "Admin",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_al",
-                        name = "বাংলাদেশ আওয়ামীলীগ",
-                        description = "বাংলাদেশ আওয়ামী লীগ দলীয় সমর্থক ও কর্মী ফোরাম।",
-                        coverUrl = "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=400",
-                        memberCount = 78000,
-                        isPrivate = false,
-                        creatorName = "AL Central",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_64_district",
-                        name = "৬৪ জেলা আওয়ামীলীগ পরিবার",
-                        description = "৬৪ জেলার সকল সদস্য ও কর্মীদের ঐক্য ফোরাম।",
-                        coverUrl = "https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400",
-                        memberCount = 36000,
-                        isPrivate = false,
-                        creatorName = "District Admin",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_school",
-                        name = "প্রিয় কায়রীরহাট ৩৩ নং ডিগ্রিচর উচ্চ বিদ্যালয়",
-                        description = "প্রাক্তন ও বর্তমান শিক্ষার্থীদের মিলনমেলা ও স্মৃতিচারণ।",
-                        coverUrl = "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=400",
-                        memberCount = 2800,
-                        isPrivate = false,
-                        creatorName = "School Alumni",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_followers_boost",
-                        name = "ফলোয়ার বাড়ানোর গ্রুপ",
-                        description = "সবার প্রোফাইল ও পেইজের ফলোয়ার বাড়ানোর প্ল্যাটফর্ম।",
-                        coverUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400",
-                        memberCount = 92000,
-                        isPrivate = false,
-                        creatorName = "Growth Admin",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_f2f",
-                        name = "Follow To Follow",
-                        description = "সরাসরি একে অপরকে ফলো ব্যাক করুন ও রিচ বৃদ্ধি করুন।",
-                        coverUrl = "https://images.unsplash.com/photo-1557683316-973673baf926?w=400",
-                        memberCount = 45000,
-                        isPrivate = false,
-                        creatorName = "F2F Team",
-                        createdAt = "25+ new posts"
-                    ),
-                    SocialGroup(
-                        id = "grp_volunteer",
-                        name = "বাংলাদেশ আওয়ামী স্বেচ্ছাসেবক লীগ...",
-                        description = "স্বেচ্ছাসেবক লীগ কর্মী ও সমাজসেবা কার্যক্রম।",
-                        coverUrl = "https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=400",
-                        memberCount = 21000,
-                        isPrivate = false,
-                        creatorName = "Volunteer League",
-                        createdAt = "25+ new posts"
-                    )
-                )
-            }
-
-            // Combine predefined groups with dynamic user-created groups from ViewModel
-            val combinedGroups = remember(groups, screenshotGroups) {
-                val userCreated = groups.filter { g -> screenshotGroups.none { it.id == g.id } }
-                userCreated + screenshotGroups
-            }
+            // Real user-created & synced groups only
+            val combinedGroups = groups
 
             val filteredList = if (searchQuery.isBlank()) {
                 combinedGroups
@@ -592,11 +475,12 @@ fun GroupsPagesScreen(
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
-                                AsyncImage(
-                                    model = groupItem.coverUrl.ifEmpty { "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400" },
+                                FotoFilmAvatar(
+                                    imageUrl = groupItem.coverUrl,
+                                    name = groupItem.name,
                                     contentDescription = groupItem.name,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
+                                    isGroup = true,
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             }
                         }
@@ -750,7 +634,7 @@ fun GroupsPagesScreen(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Meta Business Suite",
+                                    text = "FotoFilm Business Suite",
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -948,289 +832,37 @@ fun GroupsPagesScreen(
                     }
                 }
 
-                // =========================================================================
-                // করিমের ৩টি পেইজ আইডি (অন্য কারো আইডি আসবে না) + সামনে "লগইন করুন" বাটন
-                // =========================================================================
-
-                // ১. Nihon Islam Sohag (Personal blog • 15.4K followers • Purple 'N' logo)
-                item {
-                    val nihonPage = remember {
-                        SocialPage(
-                            id = "page_nihon_islam_sohag",
-                            name = "Nihon Islam Sohag",
-                            category = "Personal blog",
-                            avatarUrl = "", // triggers purple circle with letter N
-                            coverUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200",
-                            followerCount = 15400,
-                            creatorName = "Nihon Islam Sohag"
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { activePageHomeFeed = nihonPage }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Purple circle with white letter "N"
-                        Box(
+                // User Created / Real Pages Only
+                if (pages.isEmpty()) {
+                    item {
+                        Column(
                             modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFF8E24AA)),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                text = "N",
-                                color = Color.White,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(44.dp)
                             )
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Nihon Islam Sohag",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                FidaVerifiedBadge(size = 14.dp)
-                            }
+                            Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "Personal blog · 15.4K followers",
+                                text = "এখনো কোনো পেইজ তৈরি বা ফলো করা হয়নি",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "উপরের + Create Page বাটনে চাপ দিয়ে আপনার নিজস্ব পেইজ তৈরি করুন।",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-
-                        // "লগইন করুন" বাটন (চাপ দিলে পেইজে লগইন হবে ও হোম ফিড চালু হবে)
-                        Button(
-                            onClick = { activePageHomeFeed = nihonPage },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Login,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "লগইন করুন",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = Color.White
-                            )
-                        }
                     }
-                }
-
-                // ২. করিম অফিসিয়াল পেইজ (Karim Official)
-                item {
-                    val karimPage = remember {
-                        SocialPage(
-                            id = "page_karim_official",
-                            name = "করিম অফিসিয়াল পেইজ",
-                            category = "Digital creator",
-                            avatarUrl = "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
-                            coverUrl = "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1200",
-                            followerCount = 24800,
-                            creatorName = "Karim Official"
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { activePageHomeFeed = karimPage }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = karimPage.avatarUrl,
-                            contentDescription = karimPage.name,
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = karimPage.name,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                FidaVerifiedBadge(size = 14.dp)
-                            }
-                            Text(
-                                text = "Digital creator · 24.8K followers",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // "লগইন করুন" বাটন
-                        Button(
-                            onClick = { activePageHomeFeed = karimPage },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Login,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "লগইন করুন",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-
-                // ৩. সোনার বাংলা এন্টারটেইনমেন্ট (Sonar Bangla Media)
-                item {
-                    val sonarBanglaPage = remember {
-                        SocialPage(
-                            id = "page_sonar_bangla_media",
-                            name = "সোনার বাংলা এন্টারটেইনমেন্ট",
-                            category = "Media & News Company",
-                            avatarUrl = "https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=400",
-                            coverUrl = "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1200",
-                            followerCount = 52000,
-                            creatorName = "Sonar Bangla Media"
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { activePageHomeFeed = sonarBanglaPage }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AsyncImage(
-                            model = sonarBanglaPage.avatarUrl,
-                            contentDescription = sonarBanglaPage.name,
-                            modifier = Modifier
-                                .size(50.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = sonarBanglaPage.name,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 15.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                FidaVerifiedBadge(size = 14.dp)
-                            }
-                            Text(
-                                text = "Media & News · 52K followers",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // "লগইন করুন" বাটন
-                        Button(
-                            onClick = { activePageHomeFeed = sonarBanglaPage },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = BangladeshGreen),
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Login,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "লগইন করুন",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
-
-                // Section: Suggested Pages
-                item {
-                    Text(
-                        text = "Suggested Pages",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
-                    )
-                }
-
-                // Suggested Page 1: Arisha Noor
-                item {
-                    val arishaPage = remember {
-                        SocialPage(
-                            id = "page_arisha_noor",
-                            name = "Arisha Noor",
-                            category = "Public figure",
-                            avatarUrl = "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=300",
-                            coverUrl = "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=1200",
-                            followerCount = 1426,
-                            creatorName = "Arisha Noor"
-                        )
-                    }
-                    SuggestedPageCard(
-                        page = arishaPage,
-                        followerText = "1,426 people follow this",
-                        onClick = { activePageDetail = arishaPage }
-                    )
-                }
-
-                // Suggested Page 2: সুমাইয়া ফ্যাশন
-                item {
-                    val sumaiyaPage = remember {
-                        SocialPage(
-                            id = "page_sumaiya_fashion",
-                            name = "সুমাইয়া ফ্যাশন",
-                            category = "Clothing & Fashion",
-                            avatarUrl = "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=300",
-                            coverUrl = "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1200",
-                            followerCount = 3000,
-                            creatorName = "সুমাইয়া ফ্যাশন"
-                        )
-                    }
-                    SuggestedPageCard(
-                        page = sumaiyaPage,
-                        followerText = "3K others follow this",
-                        onClick = { activePageDetail = sumaiyaPage }
-                    )
-                }
-
-                // User Created Pages
-                if (pages.isNotEmpty()) {
+                } else {
                     item {
                         Text(
                             text = "আপনার পেইজসমূহ",
@@ -1285,7 +917,7 @@ fun GroupsPagesScreen(
                 val newPage = viewModel.createPage(
                     name = pageName,
                     category = pageCategory.ifBlank { "Personal blog" },
-                    avatarUrl = imageUri?.toString() ?: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&auto=format&fit=crop&q=80"
+                    avatarUrl = imageUri?.toString() ?: ""
                 )
                 // Immediately open the newly created page in Screenshot 4 & 5 (PageDetailScreen)
                 activePageDetail = newPage
@@ -1317,13 +949,12 @@ fun GroupCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            AsyncImage(
-                model = group.coverUrl,
+            FotoFilmCoverBackground(
+                imageUrl = group.coverUrl,
                 contentDescription = group.name,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp),
-                contentScale = ContentScale.Crop
+                    .height(110.dp)
             )
 
             Column(modifier = Modifier.padding(12.dp)) {
@@ -1448,13 +1079,13 @@ fun PageCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = page.avatarUrl,
+            FotoFilmAvatar(
+                imageUrl = page.avatarUrl,
+                name = page.name,
                 contentDescription = page.name,
                 modifier = Modifier
                     .size(56.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                    .clip(CircleShape)
             )
 
             Spacer(modifier = Modifier.width(12.dp))

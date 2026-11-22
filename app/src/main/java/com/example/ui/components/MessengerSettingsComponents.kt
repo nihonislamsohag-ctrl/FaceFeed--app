@@ -629,13 +629,11 @@ private fun VaultMessageCard(msg: DeliveredVaultMessage) {
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                AsyncImage(
-                    model = msg.contactAvatarUrl.ifBlank { "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500" },
-                    contentDescription = msg.contactName,
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                FotoFilmAvatar(
+                    imageUrl = msg.contactAvatarUrl,
+                    name = msg.contactName,
+                    modifier = Modifier.size(38.dp),
+                    iconSize = 18.dp
                 )
 
                 Spacer(modifier = Modifier.width(10.dp))
@@ -722,13 +720,15 @@ private fun VaultMessageCard(msg: DeliveredVaultMessage) {
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = msg.mediaUrl ?: "https://images.unsplash.com/photo-1536240478700-b869070f9279?w=800",
-                        contentDescription = "Video Thumbnail",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.8f
-                    )
+                    if (!msg.mediaUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = msg.mediaUrl,
+                            contentDescription = "Video Thumbnail",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            alpha = 0.8f
+                        )
+                    }
                     Box(
                         modifier = Modifier
                             .size(44.dp)
@@ -1009,13 +1009,11 @@ private fun RestrictedUserItemCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = user.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=500" },
-                contentDescription = user.fullName,
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+            FotoFilmAvatar(
+                imageUrl = user.avatarUrl,
+                name = user.fullName,
+                modifier = Modifier.size(46.dp),
+                iconSize = 22.dp
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -1211,13 +1209,11 @@ private fun BlockedUserItemCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = user.avatarUrl.ifBlank { "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=500" },
-                contentDescription = user.fullName,
-                modifier = Modifier
-                    .size(46.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop
+            FotoFilmAvatar(
+                imageUrl = user.avatarUrl,
+                name = user.fullName,
+                modifier = Modifier.size(46.dp),
+                iconSize = 22.dp
             )
 
             Spacer(modifier = Modifier.width(12.dp))

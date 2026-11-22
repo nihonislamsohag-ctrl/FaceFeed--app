@@ -167,11 +167,11 @@ fun PageCreatePostDialog(
                             border = BorderStroke(2.dp, BangladeshGreen),
                             modifier = Modifier.size(46.dp)
                         ) {
-                            AsyncImage(
-                                model = page.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                            com.example.ui.components.FotoFilmAvatar(
+                                imageUrl = page.avatarUrl,
+                                name = page.name,
                                 contentDescription = page.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
 

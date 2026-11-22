@@ -44,3 +44,15 @@ data class FidaVerifiedApplication(
     val nidOrDocText: String = "জাতীয় পরিচয়পত্র (NID) ও ছবি যাচাই সম্পন্ন",
     val isFreeQuota: Boolean = false
 )
+
+data class HangoutRoomControlEntry(
+    val roomKey: String,
+    val title: String,
+    val creatorName: String,
+    val avatarUrl: String,
+    val memberCount: Int,
+    val category: String,
+    val createdAt: String = "আজ সক্রিয়",
+    val isActive: Boolean = true
+)
+

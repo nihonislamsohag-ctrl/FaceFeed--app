@@ -23,6 +23,7 @@ import coil.compose.AsyncImage
 import com.example.model.Translations
 import com.example.model.User
 import com.example.ui.components.FidaVerifiedBadge
+import com.example.ui.components.FotoFilmAvatar
 import com.example.ui.theme.BangladeshGreen
 import com.example.ui.theme.FacebookBlue
 import com.example.ui.theme.OnlineGreen
@@ -59,7 +60,7 @@ fun FriendsScreen(
                     fontWeight = FontWeight.Black
                 )
                 IconButton(onClick = { /* Search */ }) {
-                    Icon(Icons.Default.Search, contentDescription = "Search Friends")
+                    Icon(Icons.Default.Search, contentDescription = "Search Friend")
                 }
             }
 
@@ -132,13 +133,13 @@ fun FriendsScreen(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    AsyncImage(
-                        model = reqUser.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500" },
+                    FotoFilmAvatar(
+                        imageUrl = reqUser.avatarUrl,
+                        name = reqUser.fullName,
                         contentDescription = reqUser.fullName,
                         modifier = Modifier
                             .size(64.dp)
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
+                            .clip(CircleShape)
                     )
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -230,13 +231,13 @@ fun SuggestedFriendRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.BottomEnd) {
-                AsyncImage(
-                    model = user.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
+                FotoFilmAvatar(
+                    imageUrl = user.avatarUrl,
+                    name = user.fullName,
                     contentDescription = user.fullName,
                     modifier = Modifier
                         .size(60.dp)
-                        .clip(CircleShape),
-                    contentScale = ContentScale.Crop
+                        .clip(CircleShape)
                 )
                 if (user.isOnline) {
                     Box(

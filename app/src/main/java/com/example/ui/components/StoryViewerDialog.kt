@@ -121,13 +121,11 @@ fun StoryViewerDialog(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        AsyncImage(
-                            model = story.author.avatarUrl.ifEmpty { "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=500" },
-                            contentDescription = story.author.fullName,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                        FotoFilmAvatar(
+                            imageUrl = story.author.avatarUrl,
+                            name = story.author.fullName,
+                            modifier = Modifier.size(40.dp),
+                            iconSize = 20.dp
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
