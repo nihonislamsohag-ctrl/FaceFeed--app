@@ -166,6 +166,18 @@ jobs:
           path: release-assets/*
           retention-days: 30
 
+      - name: Refresh latest tag & release timestamp
+        continue-on-error: true
+        if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest --yes || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest "${{ github.sha }}"
+          git push origin refs/tags/latest --force
+
       - name: Create or Update Latest Release
         id: publish_release
         continue-on-error: true
@@ -173,8 +185,8 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
           tag_name: latest
-          name: "FotoFilm App Release (APK ${{ steps.prep_assets.outputs.apk_mb }} MB • AAB ${{ steps.prep_assets.outputs.aab_mb }} MB)"
-          body: "আপনার নতুন FotoFilm অ্যান্ড্রয়েড অ্যাপের আপডেটেড APK ফাইল (~${{ steps.prep_assets.outputs.apk_mb }} MB) এবং AAB ফাইল (~${{ steps.prep_assets.outputs.aab_mb }} MB)। নিচে Assets থেকে FotoFilm.apk অথবা FotoFilm.aab ডাউনলোড করে নিন।"
+          name: "FotoFilm v2.0 App Release (APK ${{ steps.prep_assets.outputs.apk_mb }} MB • AAB ${{ steps.prep_assets.outputs.aab_mb }} MB)"
+          body: "আপনার নতুন FotoFilm v2.0 অ্যান্ড্রয়েড অ্যাপের সর্বশেষ আপডেটেড APK ফাইল (~${{ steps.prep_assets.outputs.apk_mb }} MB) এবং AAB ফাইল (~${{ steps.prep_assets.outputs.aab_mb }} MB)। নিচে Assets থেকে FotoFilm.apk অথবা FotoFilm.aab ডাউনলোড করে নিন। (বিঃদ্রঃ ফোনে আগে পুরানো v1.0 ইনস্টল করা থাকলে 'App not installed' এড়াতে সেটি একবার Uninstall করে নতুন v2.0 ইনস্টল করুন।)"
           files: release-assets/*
           make_latest: 'true'
         env:

@@ -4,27 +4,28 @@
 
 ---
 
-## 📥 নতুন APK ও AAB ডাউনলোড করুন (APK: ১২০–১২৬ MB • AAB: ~৭৬–৮০ MB):
+## 📥 নতুন APK ও AAB ডাউনলোড করুন (FotoFilm v2.0 • APK: ~১২২.৪ MB • AAB: ~৭৯.৭ MB):
 
-আপনার ফোনে নতুন **FotoFilm** অ্যাপটি (গ্রিন ভেরিফাইড ব্যাজ, ChatFilm, ফিদা এআই, লাইভ আড্ডা ও লুডু কিং গ্রুপসহ) ইনস্টল করতে অথবা **App Bundle (.aab)** নিতে নিচের **GitHub Releases** লিংকে ক্লিক করে সরাসরি ডাউনলোড করুন:
+আপনার ফোনে নতুন **FotoFilm v2.0** অ্যাপটি (গ্রিন ভেরিফাইড ব্যাজ, ChatFilm, ফিদা এআই, লাইভ আড্ডা ও লুডু কিং গ্রুপসহ) ইনস্টল করতে অথবা **App Bundle (.aab)** নিতে নিচের **GitHub Releases** লিংকে ক্লিক করে সরাসরি ডাউনলোড করুন:
 
-👉 **[FotoFilm.apk সরাসরি ডাউনলোড করুন (১২২ MB / ১২০–১২৬ MB)](../../releases/latest/download/FotoFilm.apk)**
+👉 **[FotoFilm.apk সরাসরি ডাউনলোড করুন (v2.0 • ~১২২.৪ MB / GitHub-এ 117 MB)](../../releases/latest/download/FotoFilm.apk)**
 
-👉 **[FotoFilm.aab সরাসরি ডাউনলোড করুন (~৭৬–৮০ MB)](../../releases/latest/download/FotoFilm.aab)**
+👉 **[FotoFilm.aab সরাসরি ডাউনলোড করুন (v2.0 • ~৭৯.৭ MB / GitHub-এ 76 MB)](../../releases/latest/download/FotoFilm.aab)**
 
 👉 **[সব রিলিজ দেখুন (GitHub Releases পেজ)](../../releases)**
 
-*(দ্রষ্টব্য: কোড GitHub-এ Push করার ৩–৫ মিনিট পর GitHub Actions স্বয়ংক্রিয়ভাবে নতুন **FotoFilm.apk (১২০–১২৬ MB)** ও **FotoFilm.aab (~৭৬–৮০ MB)** তৈরি করে **Releases ➜ Assets** পেজে আপলোড করে দেয়। এছাড়া Google AI Studio-র **Settings ➜ Generate APK/AAB** থেকেও নতুন বিল্ড নামানো যায়।)*
+*(দ্রষ্টব্য: কোড GitHub-এ Push করার ৩–৫ মিনিট পর GitHub Actions ক্লিন বিল্ডের মাধ্যমে নতুন **FotoFilm v2.0** তৈরি করে **Releases ➜ Assets** পেজে আপলোড করে দেয়। ক্লিন বিল্ড হওয়ায় ফাইল সাইজ ~১২২.৪ MB (GitHub Assets-এ 117 MiB হিসেবে দেখায়), তবে এর মধ্যে সব নতুন ফিচার সম্পূর্ণভাবে রয়েছে।)*
 
 *(প্লে স্টোরে আপলোডের জন্য Signed Release AAB চাইলে রিপোজিটরির Settings ➜ Secrets and variables ➜ Actions-এ `UPLOAD_KEYSTORE_BASE64`, `STORE_PASSWORD` ও `KEY_PASSWORD` যোগ করলে `FotoFilm-PlayStore-Signed.aab` ও তৈরি হয়ে Assets-এ যুক্ত হবে।)*
 
 ---
 
 ### 📱 কীভাবে ফোনে ইনস্টল করবেন:
-1. উপরের লিংকে ক্লিক করে **`FotoFilm.apk`** (প্রায় **১২২ MB / ১২০–১২৬ MB**) ডাউনলোড করুন।
-2. ডাউনলোড শেষ হলে নোটিফিকেশন বার অথবা ফোনের **Downloads** ফোল্ডারে যান।
-3. **`FotoFilm.apk`** ফাইলে চাপ দিন এবং **Install** বাটনে চাপ দিন।
-4. যদি ফোনে *Install unknown apps* পারমিশন চায়, তবে **Allow (অনুমতি)** দিয়ে দিন।
+1. আপনার ফোনে আগে থেকে **পুরানো `v1.0`** ইনস্টল করা থাকলে *App not installed* সমস্যা এড়াতে সেটি একবার **Uninstall** করুন।
+2. উপরের লিংকে ক্লিক করে **`FotoFilm.apk`** (v2.0) ডাউনলোড করুন।
+3. ডাউনলোড শেষ হলে নোটিফিকেশন বার অথবা ফোনের **Downloads** ফোল্ডারে যান।
+4. **`FotoFilm.apk`** ফাইলে চাপ দিন এবং **Install** বাটনে চাপ দিন।
+5. যদি ফোনে *Install unknown apps* পারমিশন চায়, তবে **Allow (অনুমতি)** দিয়ে দিন।
 
 ---
 
