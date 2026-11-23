@@ -1,4 +1,4 @@
-name: Build FotoFilm APK
+name: Build FotoFilm APK & AAB
 
 on:
   push:
@@ -109,10 +109,10 @@ jobs:
       - name: Make Gradlew Executable
         run: chmod +x gradlew
 
-      - name: Build Debug APK
+      - name: Build Debug APK & AAB
         run: |
           set +e
-          ./gradlew assembleDebug --no-daemon --no-configuration-cache --no-parallel --max-workers=1 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee build.log
+          ./gradlew assembleDebug bundleDebug --no-daemon --no-configuration-cache --no-parallel --max-workers=1 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee build.log
           BUILD_EXIT=${PIPESTATUS[0]}
           if [ "$BUILD_EXIT" -ne 0 ]; then
             echo "================ REAL GRADLE ERROR ================"
@@ -124,16 +124,46 @@ jobs:
             exit "$BUILD_EXIT"
           fi
 
-      - name: Prepare FotoFilm APK
+      - name: Build Play Store Signed Release AAB (if Upload Keystore configured)
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk FotoFilm.apk
+          if [ -n "${UPLOAD_KEYSTORE_BASE64:-}" ] && [ -n "${STORE_PASSWORD:-}" ] && [ -n "${KEY_PASSWORD:-}" ]; then
+            printf '%s' "$UPLOAD_KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
+            export KEYSTORE_PATH="$PWD/my-upload-key.jks"
+            ./gradlew bundleRelease --no-daemon --no-configuration-cache --no-parallel --max-workers=1 -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee release-build.log
+          else
+            echo "Upload keystore secrets not configured; skipping Play Store release signing."
+          fi
 
-      - name: Upload APK Artifact
+      - name: Prepare FotoFilm APK & AAB
+        id: prep_assets
+        run: |
+          mkdir -p release-assets
+          ls -lh app/build/outputs/apk/debug/app-debug.apk app/build/outputs/bundle/debug/app-debug.aab
+          cp app/build/outputs/apk/debug/app-debug.apk release-assets/FotoFilm.apk
+          cp app/build/outputs/bundle/debug/app-debug.aab release-assets/FotoFilm.aab
+          if [ -f app/build/outputs/bundle/release/app-release.aab ]; then
+            cp app/build/outputs/bundle/release/app-release.aab release-assets/FotoFilm-PlayStore-Signed.aab
+            SIGNED_STATUS="ready"
+          else
+            SIGNED_STATUS="not_configured"
+          fi
+          APK_BYTES=$(stat -c%s release-assets/FotoFilm.apk)
+          AAB_BYTES=$(stat -c%s release-assets/FotoFilm.aab)
+          APK_MB=$(awk "BEGIN {printf \"%.1f\", $APK_BYTES/1000000}")
+          AAB_MB=$(awk "BEGIN {printf \"%.1f\", $AAB_BYTES/1000000}")
+          echo "apk_mb=$APK_MB" >> "$GITHUB_OUTPUT"
+          echo "aab_mb=$AAB_MB" >> "$GITHUB_OUTPUT"
+          echo "signed_status=$SIGNED_STATUS" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK & AAB Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FotoFilm-APK
-          path: FotoFilm.apk
+          name: FotoFilm-APK-and-AAB
+          path: release-assets/*
           retention-days: 30
 
       - name: Create or Update Latest Release
@@ -143,9 +173,9 @@ jobs:
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
           tag_name: latest
-          name: "FotoFilm App Release (116 MB)"
-          body: "আপনার নতুন FotoFilm অ্যান্ড্রয়েড অ্যাপের রেডি APK ফাইল (প্রায় ১১৬ MB)। নিচে Assets থেকে FotoFilm.apk ডাউনলোড করে ফোনে ইনস্টল করে নিন।"
-          files: FotoFilm.apk
+          name: "FotoFilm App Release (APK ${{ steps.prep_assets.outputs.apk_mb }} MB • AAB ${{ steps.prep_assets.outputs.aab_mb }} MB)"
+          body: "আপনার নতুন FotoFilm অ্যান্ড্রয়েড অ্যাপের আপডেটেড APK ফাইল (~${{ steps.prep_assets.outputs.apk_mb }} MB) এবং AAB ফাইল (~${{ steps.prep_assets.outputs.aab_mb }} MB)। নিচে Assets থেকে FotoFilm.apk অথবা FotoFilm.aab ডাউনলোড করে নিন।"
+          files: release-assets/*
           make_latest: 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -158,12 +188,18 @@ jobs:
           AGORA_APP_ID: ${{ secrets.AGORA_APP_ID }}
         run: |
           {
-            echo "## FotoFilm APK Build Summary"
-            if [ -f FotoFilm.apk ]; then
-              echo "- APK Status: **Ready** ($(du -h FotoFilm.apk | cut -f1))"
-              echo "- Download from **Artifacts -> FotoFilm-APK** below on this page."
+            echo "## FotoFilm APK & AAB Build Summary"
+            if [ -f release-assets/FotoFilm.apk ]; then
+              echo "- APK Status: **Ready** (${{ steps.prep_assets.outputs.apk_mb }} MB / $(du -h release-assets/FotoFilm.apk | cut -f1))"
+              echo "- AAB Status: **Ready** (${{ steps.prep_assets.outputs.aab_mb }} MB / $(du -h release-assets/FotoFilm.aab | cut -f1))"
+              if [ -f release-assets/FotoFilm-PlayStore-Signed.aab ]; then
+                echo "- Play Store Signed Release AAB: **Ready** ($(du -h release-assets/FotoFilm-PlayStore-Signed.aab | cut -f1))"
+              else
+                echo "- Play Store Signed Release AAB: **Not Configured** (Add \`UPLOAD_KEYSTORE_BASE64\`, \`STORE_PASSWORD\`, and \`KEY_PASSWORD\` in GitHub Repo -> Settings -> Secrets and variables -> Actions to auto-sign for Play Store)"
+              fi
+              echo "- Download from **Artifacts -> FotoFilm-APK-and-AAB** or **Releases -> latest -> Assets**."
             else
-              echo "- APK Status: **Build Failed**"
+              echo "- Build Status: **Failed**"
               if [ -f build.log ]; then
                 echo ""
                 echo "### Error Details"
@@ -189,6 +225,6 @@ jobs:
             if [ "${{ steps.publish_release.outcome }}" = "success" ]; then
               echo "- GitHub Release: **Published** under Releases -> latest"
             elif [ "${{ steps.publish_release.outcome }}" = "failure" ]; then
-              echo "- GitHub Release: **Permission blocked** (Enable Settings -> Actions -> General -> Workflow permissions -> Read and write permissions). You can still download the APK from Artifacts below."
+              echo "- GitHub Release: **Permission blocked** (Enable Settings -> Actions -> General -> Workflow permissions -> Read and write permissions). You can still download the APK & AAB from Artifacts below."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
